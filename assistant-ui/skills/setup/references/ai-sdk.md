@@ -1,23 +1,36 @@
-# AI SDK Integration
+# AI SDK v6 Setup
 
-Vercel AI SDK v6 integration with assistant-ui.
+Complete guide for integrating assistant-ui with Vercel AI SDK v6.
+
+## What Changed in v6
+
+AI SDK v6 introduced breaking changes:
+
+| v5 | v6 |
+|----|-----|
+| `import { useChat } from "ai/react"` | `import { useChat } from "@ai-sdk/react"` |
+| `useAISDKRuntime(chat)` | `useChatRuntime({ transport })` |
+| Manual thread management | Built-in thread list |
 
 ## Installation
 
 ```bash
 npm install @assistant-ui/react @assistant-ui/react-ai-sdk @ai-sdk/react ai
-npm install @ai-sdk/openai  # or your preferred provider
+npm install @ai-sdk/openai  # Provider of choice
 ```
 
 ## Basic Setup
 
-### Frontend
+### Frontend Component
 
 ```tsx
+// app/page.tsx
+"use client";
+
 import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
 import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
-function Chat() {
+export default function ChatPage() {
   const runtime = useChatRuntime({
     transport: new AssistantChatTransport({
       api: "/api/chat",
@@ -32,7 +45,7 @@ function Chat() {
 }
 ```
 
-### Backend
+### API Route
 
 ```ts
 // app/api/chat/route.ts
@@ -60,7 +73,6 @@ const runtime = useChatRuntime({
   transport: new AssistantChatTransport({
     api: "/api/chat",
     headers: {
-      "Authorization": `Bearer ${token}`,
       "X-Custom-Header": "value",
     },
   }),
@@ -76,10 +88,10 @@ const runtime = useChatRuntime({
     toast.error("Failed to send message");
   },
 
-  // Cloud persistence
+  // Cloud persistence (optional)
   cloud: assistantCloud,
 
-  // Custom adapters
+  // Custom adapters (advanced)
   adapters: {
     attachments: myAttachmentAdapter,
     feedback: myFeedbackAdapter,
@@ -92,20 +104,21 @@ const runtime = useChatRuntime({
 ### Backend
 
 ```ts
+// app/api/chat/route.ts
 import { openai } from "@ai-sdk/openai";
 import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
 const tools = {
-  search: tool({
-    description: "Search the web for information",
+  get_weather: tool({
+    description: "Get weather for a city",
     inputSchema: z.object({
-      query: z.string().describe("Search query"),
-      limit: z.number().optional().default(5),
+      city: z.string().describe("City name"),
+      unit: z.enum(["celsius", "fahrenheit"]).optional(),
     }),
-    execute: async ({ query, limit }) => {
-      const results = await searchAPI(query, limit);
-      return { results };
+    execute: async ({ city, unit = "celsius" }) => {
+      // Call weather API
+      return { temperature: 22, city, unit };
     },
   }),
 };
@@ -129,62 +142,52 @@ export async function POST(req: Request) {
 ```tsx
 import { makeAssistantToolUI } from "@assistant-ui/react";
 
-const SearchToolUI = makeAssistantToolUI({
-  toolName: "search",
-  render: ({ args, result, status }) => (
-    <div className="border rounded p-4">
-      <div>Searching: {args.query}</div>
-      {status === "running" && <Spinner />}
-      {status === "complete" && (
-        <ul>
-          {result?.results?.map((r: any) => (
-            <li key={r.url}>{r.title}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  ),
+const WeatherToolUI = makeAssistantToolUI({
+  toolName: "get_weather",
+  render: ({ args, result, status }) => {
+    if (status === "running") {
+      return <div>Loading weather for {args.city}...</div>;
+    }
+    return (
+      <div className="p-4 rounded bg-blue-50">
+        <strong>{result?.city}</strong>: {result?.temperature}°{result?.unit}
+      </div>
+    );
+  },
 });
 
-// Register
-<AssistantRuntimeProvider runtime={runtime}>
-  <SearchToolUI />
-  <Thread />
-</AssistantRuntimeProvider>
+// Register in app
+function App() {
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <WeatherToolUI />
+      <Thread />
+    </AssistantRuntimeProvider>
+  );
+}
 ```
 
-## Supported Providers
+## With Different Providers
 
-### OpenAI
-
-```ts
-import { openai } from "@ai-sdk/openai";
-
-streamText({
-  model: openai("gpt-4o"),
-  // or openai("gpt-4o-mini"), openai("o1-preview")
-  messages,
-});
-```
-
-### Anthropic
+### Anthropic (Claude)
 
 ```ts
 import { anthropic } from "@ai-sdk/anthropic";
+import { streamText } from "ai";
 
-streamText({
+const result = streamText({
   model: anthropic("claude-sonnet-4-20250514"),
-  // or anthropic("claude-3-5-haiku-20241022")
   messages,
 });
 ```
 
-### Google
+### Google (Gemini)
 
 ```ts
 import { google } from "@ai-sdk/google";
+import { streamText } from "ai";
 
-streamText({
+const result = streamText({
   model: google("gemini-2.0-flash"),
   messages,
 });
@@ -194,8 +197,9 @@ streamText({
 
 ```ts
 import { bedrock } from "@ai-sdk/amazon-bedrock";
+import { streamText } from "ai";
 
-streamText({
+const result = streamText({
   model: bedrock("anthropic.claude-3-sonnet-20240229-v1:0"),
   messages,
 });
@@ -205,8 +209,9 @@ streamText({
 
 ```ts
 import { azure } from "@ai-sdk/azure";
+import { streamText } from "ai";
 
-streamText({
+const result = streamText({
   model: azure("gpt-4o"),  // Your deployment name
   messages,
 });
@@ -214,33 +219,13 @@ streamText({
 
 ## Advanced Configuration
 
-### System Prompt
-
-```ts
-streamText({
-  model: openai("gpt-4o"),
-  system: "You are a helpful assistant specialized in coding.",
-  messages,
-});
-```
-
-### Temperature and Max Tokens
-
 ```ts
 streamText({
   model: openai("gpt-4o"),
   messages,
+  system: "You are a helpful assistant.",
   temperature: 0.7,
   maxTokens: 1000,
-});
-```
-
-### Stop Sequences
-
-```ts
-streamText({
-  model: openai("gpt-4o"),
-  messages,
   stopSequences: ["END", "STOP"],
 });
 ```
@@ -271,9 +256,7 @@ AI SDK v6 uses `generateText` + `Output.object` for structured output; `generate
 
 ```tsx
 const runtime = useChatRuntime({
-  transport: new AssistantChatTransport({
-    api: "/api/chat",
-  }),
+  transport: new AssistantChatTransport({ api: "/api/chat" }),
   onError: (error) => {
     if (error.message.includes("rate limit")) {
       toast.error("Too many requests. Please wait.");
@@ -290,7 +273,6 @@ const runtime = useChatRuntime({
 
 ```tsx
 import { useSession } from "next-auth/react";
-import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 function Chat() {
   const { data: session } = useSession();
@@ -312,11 +294,9 @@ function Chat() {
 }
 ```
 
-## Dynamic API Selection
+## Dynamic Model Selection
 
 ```tsx
-import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
-
 function Chat({ model }: { model: string }) {
   const runtime = useChatRuntime({
     transport: new AssistantChatTransport({
@@ -344,3 +324,79 @@ export async function POST(req: Request) {
   return result.toUIMessageStreamResponse();
 }
 ```
+
+## With Cloud Persistence
+
+```tsx
+import { AssistantCloud, AssistantRuntimeProvider, Thread, ThreadList } from "@assistant-ui/react";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
+
+const cloud = new AssistantCloud({
+  baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
+  authToken: async () => getAuthToken(),
+});
+
+function ChatPage() {
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
+    cloud,  // Enables thread persistence
+  });
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <ThreadList />  {/* Shows saved threads */}
+      <Thread />
+    </AssistantRuntimeProvider>
+  );
+}
+```
+
+## Migration from v5
+
+### Before (v5)
+
+```tsx
+import { useChat } from "ai/react";
+import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
+
+function Chat() {
+  const chat = useChat({ api: "/api/chat" });
+  const runtime = useAISDKRuntime(chat);
+  // ...
+}
+```
+
+### After (v6)
+
+```tsx
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
+
+function Chat() {
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({ api: "/api/chat" }),
+  });
+  // ...
+}
+```
+
+## Troubleshooting
+
+**"Module not found: @ai-sdk/react"**
+```bash
+npm install @ai-sdk/react
+```
+
+**"useChat is not a function"**
+Mixing v5 and v6. Remove old imports:
+```bash
+npm uninstall ai/react  # if present
+npm install @ai-sdk/react@latest ai@latest
+```
+
+**Streaming stops mid-response**
+Check `stopWhen` when using tools - use `stepCountIs(n)` to allow multi-step.
+
+**Tool results not showing**
+Ensure you return from tool.execute(), not just mutate state.

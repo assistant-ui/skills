@@ -7,7 +7,7 @@ license: MIT
 
 # assistant-ui Streaming
 
-**Always consult [assistant-ui.com/docs](https://assistant-ui.com/docs) for latest API.**
+**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
 
 The `assistant-stream` package handles streaming from AI backends.
 
@@ -17,16 +17,12 @@ The `assistant-stream` package handles streaming from AI backends.
 - [./references/assistant-transport.md](./references/assistant-transport.md) -- Native assistant-ui format
 - [./references/encoders.md](./references/encoders.md) -- Encoders and decoders
 
-## Streaming Format Decision
+## When to Use
 
 ```
 Using Vercel AI SDK?
-├─ Yes → UI Message Stream (toUIMessageStreamResponse)
-└─ No
-   ├─ Want richest features?
-   │  └─ Yes → Assistant Transport format
-   └─ Just text?
-      └─ Plain Text format
+├─ Yes → toUIMessageStreamResponse() (no assistant-stream needed)
+└─ No → assistant-stream for custom backends
 ```
 
 ## Installation
@@ -35,51 +31,7 @@ Using Vercel AI SDK?
 npm install assistant-stream
 ```
 
-## Formats Overview
-
-| Format | Use Case | Features |
-|--------|----------|----------|
-| UI Message Stream | AI SDK + assistant-ui | Tool calls, multi-step, optimized |
-| Assistant Transport | Custom backends | All features, native format |
-| Plain Text | Simple text | Basic streaming |
-
-## AI SDK UI Message Stream (Recommended)
-
-### Backend
-
-```ts
-// app/api/chat/route.ts
-import { openai } from "@ai-sdk/openai";
-import { streamText } from "ai";
-
-export async function POST(req: Request) {
-  const { messages } = await req.json();
-
-  const result = streamText({
-    model: openai("gpt-4o"),
-    messages,
-  });
-
-  return result.toUIMessageStreamResponse();
-}
-```
-
-### Frontend
-
-```tsx
-import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
-
-const runtime = useChatRuntime({
-  transport: new AssistantChatTransport({
-    api: "/api/chat",
-  }),
-  // Automatically handles Data Stream format
-});
-```
-
 ## Custom Streaming Response
-
-### Using AssistantStream helpers (Data Stream SSE)
 
 ```ts
 import { createAssistantStreamResponse } from "assistant-stream";
@@ -89,32 +41,20 @@ export async function POST(req: Request) {
     stream.appendText("Hello ");
     stream.appendText("world!");
 
-    // Optional: tool call
+    // Tool call example
     const tool = stream.addToolCallPart({ toolCallId: "1", toolName: "get_weather" });
     tool.argsText.append('{"city":"NYC"}');
     tool.argsText.close();
-    tool.setResponse({ result: { temperature: 22, unit: "celsius" } });
+    tool.setResponse({ result: { temperature: 22 } });
 
-    stream.close(); // flush + finish message
+    stream.close();
   });
 }
 ```
 
-## Stream Events
+## With useLocalRuntime
 
-AssistantStream chunks (decoded from Data Stream) look like:
-
-- `part-start` with `part.type` = `"text" | "reasoning" | "tool-call" | "source" | "file"`
-- `part-finish` and `tool-call-args-text-finish`
-- `text-delta` with streamed text
-- `result` with tool results (`result`, `artifact?`, `isError`)
-- `annotations` / `data` arrays
-- `step-start`, `step-finish`, `message-finish` (AI SDK bookkeeping)
-- `error` strings
-
-## Using with useLocalRuntime
-
-`useLocalRuntime` expects `ChatModelRunResult` chunks (content parts). Stream by yielding text/tool-call parts:
+`useLocalRuntime` expects `ChatModelRunResult` chunks. Yield content parts for streaming:
 
 ```tsx
 import { useLocalRuntime } from "@assistant-ui/react";
@@ -124,7 +64,6 @@ const runtime = useLocalRuntime({
     async *run({ messages, abortSignal }) {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages }),
         signal: abortSignal,
       });
@@ -138,97 +77,46 @@ const runtime = useLocalRuntime({
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
-        // Plain-text streaming only (not AI SDK Data Stream SSE)
         const parts = buffer.split("\n");
         buffer = parts.pop() ?? "";
 
-        for (const textChunk of parts.filter(Boolean)) {
-          yield { content: [{ type: "text", text: textChunk }] };
+        for (const chunk of parts.filter(Boolean)) {
+          yield { content: [{ type: "text", text: chunk }] };
         }
-      }
-
-      if (buffer) {
-        yield { content: [{ type: "text", text: buffer }] };
       }
     },
   },
 });
 ```
 
-## Tool Handling
-
-```ts
-import { createAssistantStreamResponse } from "assistant-stream";
-
-export async function POST(req: Request) {
-  return createAssistantStreamResponse(async (stream) => {
-    const tool = stream.addToolCallPart({
-      toolCallId: "1",
-      toolName: "get_weather",
-    });
-
-    tool.argsText.append('{"city":"NYC"}');
-    tool.argsText.close();
-
-    const result = await fetchWeather("NYC");
-    tool.setResponse({ result });
-
-    stream.appendText("The weather in NYC is 22°C");
-    stream.close();
-  });
-}
-```
-
 ## Debugging Streams
-
-### Log All Events
 
 ```ts
 import { AssistantStream, DataStreamDecoder } from "assistant-stream";
 
 const stream = AssistantStream.fromResponse(response, new DataStreamDecoder());
-
 for await (const event of stream) {
   console.log("Event:", JSON.stringify(event, null, 2));
 }
 ```
 
-### Check Stream Format
+## Stream Event Types
 
-```ts
-const response = await fetch("/api/chat", { ... });
-const text = await response.text();
-console.log("Raw response:", text);
-```
-
-### Common Response Headers
-
-```ts
-// Correct headers for streaming
-headers: {
-  "Content-Type": "text/event-stream",
-  "Cache-Control": "no-cache",
-  "Connection": "keep-alive",
-}
-```
+- `part-start` with `part.type` = `"text" | "reasoning" | "tool-call" | "source" | "file"`
+- `text-delta` with streamed text
+- `result` with tool results
+- `step-start`, `step-finish`, `message-finish`
+- `error` strings
 
 ## Common Gotchas
 
 **Stream not updating UI**
 - Check Content-Type is `text/event-stream`
-- Verify encoder/decoder format match
-- Check for CORS errors in browser console
+- Check for CORS errors
 
 **Tool calls not rendering**
-- Ensure `addToolCallPart` sets both `toolCallId` and `toolName`
+- `addToolCallPart` needs both `toolCallId` and `toolName`
 - Register tool UI with `makeAssistantToolUI`
-- Check tool name matches exactly
 
 **Partial text not showing**
 - Use `text-delta` events for streaming
-- `text-done` is only for final text
-
-**Stream stops unexpectedly**
-- Check server isn't timing out
-- Verify `abortSignal` is being handled
-- Look for unhandled errors in server logs

@@ -32,7 +32,6 @@ import { useA2ARuntime } from "@assistant-ui/react-a2a";
 function Chat() {
   const runtime = useA2ARuntime({
     stream: async function* (messages, config) {
-      // Your A2A streaming implementation
       const response = await fetch("/api/a2a", {
         method: "POST",
         body: JSON.stringify({ messages, config }),

@@ -7,7 +7,7 @@ license: MIT
 
 # assistant-ui Cloud
 
-**Always consult [assistant-ui.com/docs](https://assistant-ui.com/docs) for latest API.**
+**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
 
 Cloud persistence for threads, messages, and files.
 
@@ -36,9 +36,7 @@ const cloud = new AssistantCloud({
 
 function Chat() {
   const runtime = useChatRuntime({
-    transport: new AssistantChatTransport({
-      api: "/api/chat",
-    }),
+    transport: new AssistantChatTransport({ api: "/api/chat" }),
     cloud,
   });
 
@@ -51,167 +49,62 @@ function Chat() {
 }
 ```
 
-## Configuration Options
+## Authentication Options
 
 ```tsx
+// JWT Token (recommended)
 const cloud = new AssistantCloud({
-  // Required
-  baseUrl: "https://api.assistant-ui.com",
-
-  // Authentication (choose one)
-  authToken: async () => token,         // JWT token
-  apiKey: "key",                         // API key (server-side)
-  anonymous: true,                       // Public/demo apps
-
-  // Additional for API key auth
-  userId: "user-123",
-  workspaceId: "workspace-456",
+  baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
+  authToken: async () => session?.accessToken,
 });
-```
 
-## Authentication Methods
-
-### JWT Token (Recommended)
-
-```tsx
-import { useSession } from "next-auth/react";
-
-function Chat() {
-  const { data: session } = useSession();
-
-  const cloud = useMemo(() => new AssistantCloud({
-    baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
-    authToken: async () => session?.accessToken || null,
-  }), [session]);
-
-  const runtime = useChatRuntime({
-    transport: new AssistantChatTransport({ api: "/api/chat" }),
-    cloud,
-  });
-  // ...
-}
-```
-
-### API Key (Server-Side)
-
-```ts
-// In API route or server component
+// API Key (server-side)
 const cloud = new AssistantCloud({
   baseUrl: process.env.ASSISTANT_BASE_URL,
   apiKey: process.env.ASSISTANT_API_KEY,
   userId: user.id,
   workspaceId: user.workspaceId,
 });
-```
 
-### Anonymous (Public Apps)
-
-```tsx
+// Anonymous (public apps)
 const cloud = new AssistantCloud({
   baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
   anonymous: true,
 });
 ```
 
-## What Cloud Provides
-
-| Feature | Description |
-|---------|-------------|
-| Thread persistence | Save/load chat history |
-| Message storage | Store all messages with format |
-| Thread management | Create, archive, delete threads |
-| Auto-title | Generate titles from conversation |
-| File uploads | Presigned URLs for attachments |
-| Multi-device sync | Same threads across devices |
-
-## Thread Operations
+## Cloud API
 
 ```tsx
-// List threads
+// Thread operations
 const threads = await cloud.threads.list();
-
-// Create thread
-const { thread_id } = await cloud.threads.create({
-  title: "New Chat",
-  metadata: { source: "web" },
-});
-
-// Update thread
-await cloud.threads.update(threadId, {
-  title: "Updated Title",
-  is_archived: true,
-});
-
-// Delete thread
+await cloud.threads.create({ title: "New Chat" });
+await cloud.threads.update(threadId, { title: "Updated" });
 await cloud.threads.delete(threadId);
-```
 
-## Message Operations
-
-```tsx
-// List messages in thread
+// Message operations
 const messages = await cloud.threads.messages(threadId).list();
 
-// Add message
-await cloud.threads.messages(threadId).create({
-  parent_id: null,
-  format: "aui/v0",
-  content: { role: "user", content: [...] },
-});
-```
-
-## File Uploads
-
-```tsx
-// Get presigned upload URL
+// File uploads
 const { signedUrl, publicUrl } = await cloud.files.generatePresignedUploadUrl({
   filename: "document.pdf",
 });
-
-// Upload file
-await fetch(signedUrl, {
-  method: "PUT",
-  body: file,
-  headers: { "Content-Type": file.type },
-});
-
-// Use publicUrl in message
-```
-
-## With useChatRuntime
-
-```tsx
-const runtime = useChatRuntime({
-  transport: new AssistantChatTransport({
-    api: "/api/chat",
-  }),
-  cloud,  // Automatically enables:
-          // - Thread persistence
-          // - ThreadList component
-          // - Auto-title generation
-});
+await fetch(signedUrl, { method: "PUT", body: file });
 ```
 
 ## Environment Variables
 
 ```env
-# .env.local
 NEXT_PUBLIC_ASSISTANT_BASE_URL=https://api.assistant-ui.com
-
-# Server-side only
-ASSISTANT_API_KEY=your-api-key
+ASSISTANT_API_KEY=your-api-key  # Server-side only
 ```
 
 ## Common Gotchas
 
 **Threads not persisting**
-- Ensure `cloud` is passed to runtime
-- Check authentication is working
+- Pass `cloud` to runtime
+- Check authentication
 
 **Auth errors**
 - Verify `authToken` returns valid token
 - Check `baseUrl` is correct
-
-**File uploads failing**
-- Use presigned URL within expiry time
-- Include correct Content-Type header

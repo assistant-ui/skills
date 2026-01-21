@@ -1,14 +1,14 @@
 # Custom Backend Integration
 
-Connect assistant-ui to any backend.
+Connect assistant-ui to any backend using useLocalRuntime or useExternalStoreRuntime.
 
-## Using useLocalRuntime
+## useLocalRuntime
 
 For backends that return streaming responses. Emit `ChatModelRunResult` chunks (append-only `content` parts).
 
 ### Basic Setup
 
-Plain-text streaming only. For AI SDK Data Stream responses, use `toUIMessageStreamResponse()` + `useChatRuntime` or decode with `DataStreamDecoder` and convert to content parts.
+Plain-text streaming only. For AI SDK Data Stream responses, use `toUIMessageStreamResponse()` + `useChatRuntime` or decode with `DataStreamDecoder`.
 
 ```tsx
 import { useLocalRuntime, AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
@@ -28,25 +28,25 @@ function Chat() {
         const decoder = new TextDecoder();
         let buffer = "";
 
-      while (reader) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        while (reader) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split("\n");
-        buffer = parts.pop() ?? "";
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n");
+          buffer = parts.pop() ?? "";
 
-        for (const textChunk of parts.filter(Boolean)) {
-          yield { content: [{ type: "text", text: textChunk }] };
+          for (const textChunk of parts.filter(Boolean)) {
+            yield { content: [{ type: "text", text: textChunk }] };
+          }
         }
-      }
 
-      if (buffer) {
-        yield { content: [{ type: "text", text: buffer }] };
-      }
+        if (buffer) {
+          yield { content: [{ type: "text", text: buffer }] };
+        }
+      },
     },
-  },
-});
+  });
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -87,13 +87,6 @@ const runtime = useLocalRuntime({
           if (line === "data: [DONE]") return;
 
           const data = JSON.parse(line.slice(6));
-          yield { content: [{ type: "text", text: data.content }] };
-        }
-      }
-
-      if (buffer.startsWith("data: ")) {
-        const data = JSON.parse(buffer.slice(6));
-        if (data?.content) {
           yield { content: [{ type: "text", text: data.content }] };
         }
       }
@@ -156,14 +149,14 @@ const runtime = useLocalRuntime({
 });
 ```
 
-## Using useExternalStoreRuntime
+## useExternalStoreRuntime
 
-For apps with existing state management.
+For apps with existing state management (Redux, Zustand, etc.).
 
 ### Basic Setup
 
 ```tsx
-import { useExternalStoreRuntime } from "@assistant-ui/react";
+import { useExternalStoreRuntime, AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
 
 function Chat() {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);
@@ -173,7 +166,6 @@ function Chat() {
     messages,
     isRunning,
     onNew: async (message) => {
-      // Add user message
       const userMessage: ThreadMessage = {
         id: crypto.randomUUID(),
         role: "user",
@@ -183,10 +175,8 @@ function Chat() {
       setMessages((prev) => [...prev, userMessage]);
       setIsRunning(true);
 
-      // Call your API
       const response = await myAPI.chat([...messages, userMessage]);
 
-      // Add assistant message
       const assistantMessage: ThreadMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -211,12 +201,6 @@ function Chat() {
 
 ```tsx
 import { useSelector, useDispatch } from "react-redux";
-import {
-  selectMessages,
-  selectIsRunning,
-  addMessage,
-  setRunning,
-} from "./chatSlice";
 
 function Chat() {
   const dispatch = useDispatch();
@@ -253,18 +237,10 @@ function Chat() {
 ```tsx
 import { create } from "zustand";
 
-interface ChatState {
-  messages: ThreadMessage[];
-  isRunning: boolean;
-  addMessage: (msg: ThreadMessage) => void;
-  setRunning: (running: boolean) => void;
-}
-
-const useChatStore = create<ChatState>((set) => ({
+const useChatStore = create((set) => ({
   messages: [],
   isRunning: false,
-  addMessage: (msg) =>
-    set((state) => ({ messages: [...state.messages, msg] })),
+  addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
   setRunning: (running) => set({ isRunning: running }),
 }));
 
@@ -307,7 +283,6 @@ function Chat() {
 ### Custom Message Format
 
 ```tsx
-// Your message format
 interface MyMessage {
   uuid: string;
   sender: "human" | "ai";
@@ -343,9 +318,7 @@ const runtime = useExternalStoreRuntime<MyMessage>({
 });
 ```
 
-## Streaming Updates
-
-For real-time streaming with external store:
+## Streaming Updates with External Store
 
 ```tsx
 const runtime = useExternalStoreRuntime({
@@ -355,7 +328,6 @@ const runtime = useExternalStoreRuntime({
     addUserMessage(message);
     setIsRunning(true);
 
-    // Create placeholder
     const assistantId = crypto.randomUUID();
     addMessage({
       id: assistantId,
@@ -365,7 +337,6 @@ const runtime = useExternalStoreRuntime({
       createdAt: new Date(),
     });
 
-    // Stream response
     const response = await fetch("/api/chat", {
       method: "POST",
       body: JSON.stringify({ messages }),
@@ -380,13 +351,11 @@ const runtime = useExternalStoreRuntime({
 
       fullText += new TextDecoder().decode(value);
 
-      // Update message content
       updateMessage(assistantId, {
         content: [{ type: "text", text: fullText }],
       });
     }
 
-    // Mark complete
     updateMessage(assistantId, { status: "complete" });
     setIsRunning(false);
   },

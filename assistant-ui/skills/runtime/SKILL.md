@@ -7,9 +7,7 @@ license: MIT
 
 # assistant-ui Runtime
 
-**Always consult [assistant-ui.com/docs](https://assistant-ui.com/docs) for latest API.**
-
-The runtime system manages thread state, messages, and AI interactions.
+**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
 
 ## References
 
@@ -17,6 +15,7 @@ The runtime system manages thread state, messages, and AI interactions.
 - [./references/external-store.md](./references/external-store.md) -- useExternalStoreRuntime deep dive
 - [./references/thread-list.md](./references/thread-list.md) -- Thread list management
 - [./references/state-hooks.md](./references/state-hooks.md) -- State access hooks
+- [./references/types.md](./references/types.md) -- Type definitions
 
 ## Runtime Hierarchy
 
@@ -31,141 +30,34 @@ AssistantRuntime
         └── MessagePartRuntime[] (per-content-part)
 ```
 
-## Pick a Runtime
-
-```
-Using AI SDK v6?
-├─ Yes → useChatRuntime (from @assistant-ui/react-ai-sdk)
-└─ No
-   ├─ Have external state store (Redux/Zustand)?
-   │  └─ Yes → useExternalStoreRuntime
-   └─ No
-      ├─ Using LangGraph?
-      │  └─ Yes → useLangGraphRuntime
-      └─ No → useLocalRuntime
-```
-
-## State Access Patterns
-
-### Modern API (Recommended)
+## State Access (Modern API)
 
 ```tsx
 import { useAssistantApi, useAssistantState, useAssistantEvent } from "@assistant-ui/react";
 
 function ChatControls() {
-  // Get API for imperative actions
   const api = useAssistantApi();
-
-  // Subscribe to reactive state
   const messages = useAssistantState(s => s.thread.messages);
   const isRunning = useAssistantState(s => s.thread.isRunning);
 
-  // Listen to events
   useAssistantEvent("message-added", (e) => {
     console.log("New message:", e.message);
   });
 
-  const handleSend = () => {
-    api.thread().append({
-      role: "user",
-      content: [{ type: "text", text: "Hello!" }],
-    });
-  };
-
-  const handleCancel = () => {
-    api.thread().cancelRun();
-  };
-
   return (
     <div>
-      <p>{messages.length} messages</p>
-      <button onClick={handleSend}>Send</button>
-      {isRunning && <button onClick={handleCancel}>Cancel</button>}
+      <button onClick={() => api.thread().append({
+        role: "user",
+        content: [{ type: "text", text: "Hello!" }],
+      })}>
+        Send
+      </button>
+      {isRunning && (
+        <button onClick={() => api.thread().cancelRun()}>Cancel</button>
+      )}
     </div>
   );
 }
-```
-
-### Legacy Hooks
-
-```tsx
-// Still work, but prefer modern API
-import {
-  useAssistantRuntime,
-  useThreadRuntime,
-  useThread,
-  useThreadMessages,
-  useComposer,
-} from "@assistant-ui/react";
-
-const runtime = useAssistantRuntime();
-const threadRuntime = useThreadRuntime();
-const { messages, isRunning } = useThread();
-const messages = useThreadMessages();
-const { text } = useComposer();
-```
-
-## Message Types
-
-```typescript
-type ThreadMessage =
-  | ThreadUserMessage
-  | ThreadAssistantMessage
-  | ThreadSystemMessage;
-
-interface ThreadUserMessage {
-  id: string;
-  role: "user";
-  content: MessagePart[];
-  attachments?: Attachment[];
-  createdAt: Date;
-}
-
-interface ThreadAssistantMessage {
-  id: string;
-  role: "assistant";
-  content: MessagePart[];
-  status: MessageStatus;
-  createdAt: Date;
-}
-
-type MessageStatus =
-  | "running"          // Generation in progress
-  | "complete"         // Finished successfully
-  | "incomplete"       // Stopped early
-  | "requires-action"; // Needs tool response
-```
-
-### Message Parts
-
-```typescript
-type MessagePart =
-  | { type: "text"; text: string }
-  | { type: "image"; image: string }
-  | {
-      type: "tool-call";
-      toolCallId: string;
-      toolName: string;
-      args: unknown;
-      argsText: string;
-      result?: unknown;
-      isError?: boolean;
-      artifact?: unknown;
-    }
-  | { type: "reasoning"; text: string }
-  | {
-      type: "source";
-      sourceType: "url";
-      id: string;
-      url: string;
-      title?: string;
-    }
-  | {
-      type: "file";
-      filename?: string;
-      data: string;
-      mimeType: string;
-    };
 ```
 
 ## Thread Operations
@@ -175,125 +67,60 @@ const api = useAssistantApi();
 const thread = api.thread();
 
 // Append message
-thread.append({
-  role: "user",
-  content: [{ type: "text", text: "Hello" }],
-});
-
-// With attachments
-thread.append({
-  role: "user",
-  content: [{ type: "text", text: "What's in this image?" }],
-  attachments: [{ type: "image", url: "data:image/..." }],
-});
+thread.append({ role: "user", content: [{ type: "text", text: "Hello" }] });
 
 // Cancel generation
 thread.cancelRun();
 
 // Get current state
-const state = thread.getState();
-// { messages, isRunning, capabilities, ... }
-
-// Start new run
-thread.startRun();
+const state = thread.getState();  // { messages, isRunning, ... }
 ```
 
 ## Message Operations
 
 ```tsx
-const api = useAssistantApi();
-const message = api.thread().message(0); // By index
+const message = api.thread().message(0);  // By index
 
-// Edit user message (creates branch)
-message.edit({
-  role: "user",
-  content: [{ type: "text", text: "Updated content" }],
-});
-
-// Reload assistant message
+message.edit({ role: "user", content: [{ type: "text", text: "Updated" }] });
 message.reload();
+```
 
-// Get message state
-const state = message.getState();
+## Events
+
+```tsx
+useAssistantEvent("thread-started", () => {});
+useAssistantEvent("thread-ended", () => {});
+useAssistantEvent("message-added", ({ message }) => {});
+useAssistantEvent("run-started", () => {});
+useAssistantEvent("run-ended", () => {});
 ```
 
 ## Capabilities
 
 ```tsx
 const caps = useAssistantState(s => s.thread.capabilities);
-
-// {
-//   cancel: boolean,      // Can cancel generation
-//   edit: boolean,        // Can edit messages
-//   reload: boolean,      // Can regenerate
-//   copy: boolean,        // Can copy messages
-//   speak: boolean,       // TTS support
-//   attachments: boolean, // File uploads
-// }
-```
-
-## Events
-
-```tsx
-import { useAssistantEvent } from "@assistant-ui/react";
-
-// Thread events
-useAssistantEvent("thread-started", () => {});
-useAssistantEvent("thread-ended", () => {});
-
-// Message events
-useAssistantEvent("message-added", ({ message }) => {});
-useAssistantEvent("message-updated", ({ message }) => {});
-
-// Run events
-useAssistantEvent("run-started", () => {});
-useAssistantEvent("run-ended", () => {});
-```
-
-## Message Branching
-
-Messages form a tree structure supporting edits:
-
-```tsx
-// Edit creates a new branch
-const message = api.thread().message(0);
-message.edit({ role: "user", content: [{ type: "text", text: "New" }] });
-
-// Navigate branches
-import { useBranchPicker } from "@assistant-ui/react";
-
-const { goToNext, goToPrevious, count, number } = useBranchPicker();
+// { cancel, edit, reload, copy, speak, attachments }
 ```
 
 ## Quick Reference
 
-### Append Message
 ```tsx
-api.thread().append({ role: "user", content: [{ type: "text", text: "Hi" }] });
-```
-
-### Cancel Generation
-```tsx
-api.thread().cancelRun();
-```
-
-### Get Messages
-```tsx
+// Get messages
 const messages = useAssistantState(s => s.thread.messages);
-```
 
-### Check Running State
-```tsx
+// Check running state
 const isRunning = useAssistantState(s => s.thread.isRunning);
-```
 
-### Edit Message
-```tsx
+// Append message
+api.thread().append({ role: "user", content: [{ type: "text", text: "Hi" }] });
+
+// Cancel generation
+api.thread().cancelRun();
+
+// Edit message
 api.thread().message(index).edit({ ... });
-```
 
-### Reload Message
-```tsx
+// Reload message
 api.thread().message(index).reload();
 ```
 
@@ -301,12 +128,10 @@ api.thread().message(index).reload();
 
 **"Cannot read property of undefined"**
 - Ensure hooks are called inside `AssistantRuntimeProvider`
-- Runtime hooks need message/part context for nested access
 
 **State not updating**
-- `useAssistantState` returns new reference on change
-- Use selectors to prevent unnecessary re-renders
+- Use selectors with `useAssistantState` to prevent unnecessary re-renders
 
 **Messages array empty**
-- Check that runtime is properly configured
-- Verify API response format matches expected streaming format
+- Check runtime is configured
+- Verify API response format
