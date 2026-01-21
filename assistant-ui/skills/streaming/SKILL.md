@@ -67,10 +67,12 @@ export async function POST(req: Request) {
 ### Frontend
 
 ```tsx
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 const runtime = useChatRuntime({
-  api: "/api/chat",
+  transport: new AssistantChatTransport({
+    api: "/api/chat",
+  }),
   // Automatically handles Data Stream format
 });
 ```

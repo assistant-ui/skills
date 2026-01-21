@@ -144,11 +144,14 @@ Each line:
 ## Integration with useChatRuntime
 
 ```tsx
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
+import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
 
 function Chat() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
     // Data Stream format is automatically handled
   });
 

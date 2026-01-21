@@ -12,7 +12,7 @@ npm install assistant-cloud
 
 ```tsx
 import { AssistantCloud } from "assistant-cloud";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 import { AssistantRuntimeProvider, Thread, ThreadList } from "@assistant-ui/react";
 
 const cloud = new AssistantCloud({
@@ -22,7 +22,9 @@ const cloud = new AssistantCloud({
 
 function Chat() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
     cloud,
   });
 
@@ -74,7 +76,9 @@ function Chat() {
   }), [session]);
 
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
     cloud,
   });
 
@@ -229,7 +233,9 @@ ASSISTANT_API_KEY=your-api-key
 import { CloudFileAttachmentAdapter } from "assistant-cloud";
 
 const runtime = useChatRuntime({
-  api: "/api/chat",
+  transport: new AssistantChatTransport({
+    api: "/api/chat",
+  }),
   cloud,
   adapters: {
     attachments: new CloudFileAttachmentAdapter(cloud),

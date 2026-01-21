@@ -134,7 +134,9 @@ Requires a feedback adapter in the runtime:
 
 ```tsx
 const runtime = useChatRuntime({
-  api: "/api/chat",
+  transport: new AssistantChatTransport({
+    api: "/api/chat",
+  }),
   adapters: {
     feedback: {
       submit: async ({ messageId, type }) => {

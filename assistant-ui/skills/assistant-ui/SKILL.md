@@ -80,10 +80,12 @@ Need AI SDK?
 
 ```tsx
 import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 function App() {
-  const runtime = useChatRuntime({ api: "/api/chat" });
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({ api: "/api/chat" }),
+  });
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <Thread />

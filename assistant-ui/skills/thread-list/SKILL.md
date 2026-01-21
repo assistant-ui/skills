@@ -22,7 +22,7 @@ Thread list is automatically available with `useChatRuntime` + cloud:
 
 ```tsx
 import { AssistantCloud } from "assistant-cloud";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 import { AssistantRuntimeProvider, Thread, ThreadList } from "@assistant-ui/react";
 
 const cloud = new AssistantCloud({
@@ -32,7 +32,9 @@ const cloud = new AssistantCloud({
 
 function Chat() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
     cloud,
   });
 
