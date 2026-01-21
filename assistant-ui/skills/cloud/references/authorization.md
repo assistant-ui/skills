@@ -45,7 +45,9 @@ function Chat() {
   }, [session, status]);
 
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
     cloud: cloud ?? undefined,
   });
 

@@ -19,10 +19,10 @@
 | @assistant-ui/store | State management |
 | @assistant-ui/react-devtools | Developer tools |
 | @assistant-ui/react-hook-form | React Hook Form integration |
-| @assistant-ui/react-a2a | Agent-to-agent protocol |
-| @assistant-ui/react-ag-ui | AG-UI protocol |
-| @assistant-ui/tap | Testing utilities |
-| @assistant-ui/mcp-docs-server | MCP documentation server |
+| @assistant-ui/react-a2a | Agent-to-Agent protocol for multi-agent systems |
+| @assistant-ui/react-ag-ui | AG-UI protocol adapter for agent backends |
+| @assistant-ui/tap | Reactive state management and testing |
+| @assistant-ui/mcp-docs-server | MCP server for IDE integration |
 | assistant-stream | Streaming protocol |
 | assistant-cloud | Cloud persistence/auth |
 | assistant-ui | CLI tool |
@@ -88,6 +88,7 @@ npm install @assistant-ui/react-ai-sdk @ai-sdk/react
 **Exports:**
 - `useChatRuntime` - Main hook (recommended)
 - `useAISDKRuntime` - Lower-level hook
+- `AssistantChatTransport` - Custom transport class
 
 ### @assistant-ui/react-langgraph
 
@@ -99,7 +100,11 @@ npm install @assistant-ui/react-langgraph
 
 **Exports:**
 - `useLangGraphRuntime` - Main hook
-- `useLangGraphMessages` - Message utilities
+- `useLangGraphSend`, `useLangGraphSendCommand` - Manual send control
+- `useLangGraphInterruptState` - Interrupt state access
+- `useLangGraphMessages` - Message state management
+- `convertLangChainMessages`, `appendLangChainChunk` - Message converters
+- `LangGraphMessageAccumulator` - Message accumulator
 
 ## UI Enhancement Packages
 
@@ -148,6 +153,6 @@ npm install @assistant-ui/styles
 
 ## Version Compatibility
 
-- `@assistant-ui/react` requires React 18+
-- `@assistant-ui/react-ai-sdk` requires AI SDK v6 (`@ai-sdk/react`)
-- Node.js 18+ recommended
+- `@assistant-ui/react` requires React 18+ or 19
+- `@assistant-ui/react-ai-sdk` requires AI SDK v6 (`ai@^6.0.42`)
+- Node.js >=24 recommended (monorepo requirement)

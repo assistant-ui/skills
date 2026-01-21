@@ -7,51 +7,46 @@ license: MIT
 
 # assistant-ui Setup
 
-**Always consult [assistant-ui.com/docs](https://assistant-ui.com/docs) for latest API.**
-
-Complete guide for setting up assistant-ui in your project.
+**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
 
 ## References
 
-- [./references/ai-sdk-v6.md](./references/ai-sdk-v6.md) -- AI SDK v6 setup with useChatRuntime
+- [./references/ai-sdk.md](./references/ai-sdk.md) -- AI SDK v6 setup (recommended)
 - [./references/langgraph.md](./references/langgraph.md) -- LangGraph agent setup
-- [./references/styling.md](./references/styling.md) -- Styling options and customization
+- [./references/custom-backend.md](./references/custom-backend.md) -- useLocalRuntime / useExternalStoreRuntime
+- [./references/ag-ui.md](./references/ag-ui.md) -- AG-UI protocol
+- [./references/a2a.md](./references/a2a.md) -- A2A protocol
+- [./references/styling.md](./references/styling.md) -- Styling options
+- [./references/tanstack.md](./references/tanstack.md) -- TanStack Router
 
 ## Pick Your Setup
 
 ```
-Using Next.js with Vercel AI SDK?
-├─ Yes → AI SDK v6 Setup (recommended)
+Using Vercel AI SDK?
+├─ Yes → useChatRuntime (recommended)
 └─ No
-   ├─ Using LangGraph agents?
-   │  └─ Yes → LangGraph Setup
-   └─ No
-      ├─ Have custom state management?
-      │  └─ Yes → External Store Setup
-      └─ No → Local Runtime Setup
+   ├─ LangGraph agents? → useLangGraphRuntime
+   ├─ AG-UI protocol? → useAgUiRuntime
+   ├─ A2A protocol? → useA2ARuntime
+   ├─ External state (Redux/Zustand)? → useExternalStoreRuntime
+   └─ Custom API → useLocalRuntime
 ```
 
-## AI SDK v6 Setup (Recommended)
-
-### Installation
+## Quick Start (AI SDK)
 
 ```bash
-npm install @assistant-ui/react @assistant-ui/react-ai-sdk @ai-sdk/react ai
-npm install @ai-sdk/openai  # or your preferred provider
+npm install @assistant-ui/react @assistant-ui/react-ai-sdk @ai-sdk/react ai @ai-sdk/openai
 ```
-
-### Frontend
 
 ```tsx
 // app/page.tsx
 "use client";
-
 import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 export default function Chat() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({ api: "/api/chat" }),
   });
 
   return (
@@ -62,8 +57,6 @@ export default function Chat() {
 }
 ```
 
-### API Route
-
 ```ts
 // app/api/chat/route.ts
 import { openai } from "@ai-sdk/openai";
@@ -71,115 +64,24 @@ import { streamText } from "ai";
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
-
-  const result = streamText({
-    model: openai("gpt-4o"),
-    messages,
-  });
-
+  const result = streamText({ model: openai("gpt-4o"), messages });
   return result.toUIMessageStreamResponse();
 }
 ```
 
-## Quick Reference
-
-### useChatRuntime Options
+## Styling
 
 ```tsx
-const runtime = useChatRuntime({
-  api: "/api/chat",           // API endpoint (required)
-  headers: {},                // Custom headers
-  body: {},                   // Extra body params
-  initialMessages: [],        // Pre-populated messages
-  onError: (err) => {},       // Error handler
-  cloud: cloudInstance,       // Cloud persistence
-});
-```
-
-### useLocalRuntime Options
-
-```tsx
-import { useLocalRuntime } from "@assistant-ui/react";
-
-const runtime = useLocalRuntime({
-  model: {
-    async run({ messages, abortSignal }) {
-      // Return final result
-      return { content: [{ type: "text", text: "Response" }] };
-    },
-    // OR use generator for streaming
-    async *run({ messages, abortSignal }) {
-      yield { type: "text-delta", textDelta: "Hello " };
-      yield { type: "text-delta", textDelta: "world!" };
-    },
-  },
-});
-```
-
-### useExternalStoreRuntime Options
-
-```tsx
-import { useExternalStoreRuntime } from "@assistant-ui/react";
-
-const runtime = useExternalStoreRuntime({
-  messages,                              // Your message array
-  isRunning,                             // Generation in progress
-  onNew: (msg) => dispatch(add(msg)),    // Handle new message
-  onEdit: (msg) => dispatch(edit(msg)),  // Handle edit
-  onReload: (parentId) => regenerate(),  // Handle regenerate
-});
-```
-
-## Styling Options
-
-### Option 1: Pre-built CSS (No Tailwind)
-
-```tsx
+// Option 1: Pre-built CSS
 import "@assistant-ui/styles/default.css";
-```
 
-### Option 2: Tailwind CSS
-
-```js
-// tailwind.config.js
-module.exports = {
-  content: [
-    "./node_modules/@assistant-ui/react/dist/**/*.js",
-    // ... your paths
-  ],
-};
-```
-
-### Option 3: Custom Styles
-
-```tsx
-<Thread className="h-full bg-gray-100" />
-
-// Or fully custom with primitives
-<ThreadPrimitive.Root className="flex flex-col">
-  <ThreadPrimitive.Viewport className="flex-1">
-    {/* ... */}
-  </ThreadPrimitive.Viewport>
-</ThreadPrimitive.Root>
-```
-
-## TypeScript Setup
-
-```json
-// tsconfig.json
-{
-  "compilerOptions": {
-    "moduleResolution": "bundler",
-    "jsx": "react-jsx",
-    "strict": true
-  }
-}
+// Option 2: Tailwind (add to tailwind.config.js)
+content: ["./node_modules/@assistant-ui/react/dist/**/*.js"]
 ```
 
 ## Environment Variables
 
 ```env
-# .env.local
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
 NEXT_PUBLIC_ASSISTANT_BASE_URL=https://api.assistant-ui.com  # For cloud
@@ -187,60 +89,17 @@ NEXT_PUBLIC_ASSISTANT_BASE_URL=https://api.assistant-ui.com  # For cloud
 
 ## Common Gotchas
 
-### "Cannot find module @ai-sdk/react"
-
-AI SDK v6 requires `@ai-sdk/react` as a peer dependency:
-
+**"Cannot find module @ai-sdk/react"**
 ```bash
 npm install @ai-sdk/react
 ```
 
-### "useChat is not exported"
+**Styles not applied**
+- Import CSS at root level or configure Tailwind content paths
 
-You're likely mixing AI SDK v5 and v6. Update to v6:
+**Streaming not working**
+- Use `toUIMessageStreamResponse()` in API route
+- Check for CORS errors in console
 
-```bash
-npm install @ai-sdk/react@latest ai@latest
-```
-
-### Styles not applied
-
-1. Check CSS import is at root level
-2. For Tailwind, ensure content paths include node_modules
-
-### Streaming not working
-
-1. Check API returns correct Content-Type: `text/event-stream`
-2. Verify `toUIMessageStreamResponse()` is used
-3. Check browser console for CORS errors
-
-### "runtime is undefined"
-
-Ensure `useChatRuntime` is called inside a component, not at module level:
-
-```tsx
-// Wrong
-const runtime = useChatRuntime({ api: "/api/chat" });
-
-// Correct
-function Chat() {
-  const runtime = useChatRuntime({ api: "/api/chat" });
-  // ...
-}
-```
-
-## Optional Packages
-
-```bash
-# Markdown rendering
-npm install @assistant-ui/react-markdown
-
-# Syntax highlighting
-npm install @assistant-ui/react-syntax-highlighter
-
-# Cloud persistence
-npm install assistant-cloud
-
-# LangGraph integration
-npm install @assistant-ui/react-langgraph
-```
+**"runtime is undefined"**
+- Call `useChatRuntime` inside a component, not at module level

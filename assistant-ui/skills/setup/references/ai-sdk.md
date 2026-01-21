@@ -9,7 +9,7 @@ AI SDK v6 introduced breaking changes:
 | v5 | v6 |
 |----|-----|
 | `import { useChat } from "ai/react"` | `import { useChat } from "@ai-sdk/react"` |
-| `useAISDKRuntime(chat)` | `useChatRuntime({ api })` |
+| `useAISDKRuntime(chat)` | `useChatRuntime({ transport })` |
 | Manual thread management | Built-in thread list |
 
 ## Installation
@@ -28,11 +28,13 @@ npm install @ai-sdk/openai  # Provider of choice
 "use client";
 
 import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 export default function ChatPage() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
   });
 
   return (
@@ -67,16 +69,13 @@ export async function POST(req: Request) {
 
 ```tsx
 const runtime = useChatRuntime({
-  // Required
-  api: "/api/chat",
-
-  // Request customization
-  headers: {
-    "X-Custom-Header": "value",
-  },
-  body: {
-    customParam: "value",
-  },
+  // Transport configuration
+  transport: new AssistantChatTransport({
+    api: "/api/chat",
+    headers: {
+      "X-Custom-Header": "value",
+    },
+  }),
 
   // Initial state
   initialMessages: [
@@ -206,10 +205,131 @@ const result = streamText({
 });
 ```
 
+### Azure OpenAI
+
+```ts
+import { azure } from "@ai-sdk/azure";
+import { streamText } from "ai";
+
+const result = streamText({
+  model: azure("gpt-4o"),  // Your deployment name
+  messages,
+});
+```
+
+## Advanced Configuration
+
+```ts
+streamText({
+  model: openai("gpt-4o"),
+  messages,
+  system: "You are a helpful assistant.",
+  temperature: 0.7,
+  maxTokens: 1000,
+  stopSequences: ["END", "STOP"],
+});
+```
+
+## Structured Output
+
+```ts
+import { z } from "zod";
+import { generateText, Output } from "ai";
+import { openai } from "@ai-sdk/openai";
+
+const { output } = await generateText({
+  model: openai("gpt-4o"),
+  output: Output.object({
+    schema: z.object({
+      name: z.string(),
+      age: z.number(),
+      hobbies: z.array(z.string()),
+    }),
+  }),
+  prompt: "Generate a user profile",
+});
+```
+
+AI SDK v6 uses `generateText` + `Output.object` for structured output; `generateObject` is the older pattern.
+
+## Error Handling
+
+```tsx
+const runtime = useChatRuntime({
+  transport: new AssistantChatTransport({ api: "/api/chat" }),
+  onError: (error) => {
+    if (error.message.includes("rate limit")) {
+      toast.error("Too many requests. Please wait.");
+    } else if (error.message.includes("context length")) {
+      toast.error("Conversation too long. Try starting a new chat.");
+    } else {
+      toast.error("Something went wrong. Please try again.");
+    }
+  },
+});
+```
+
+## With Authentication
+
+```tsx
+import { useSession } from "next-auth/react";
+
+function Chat() {
+  const { data: session } = useSession();
+
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+      headers: {
+        Authorization: `Bearer ${session?.accessToken}`,
+      },
+    }),
+  });
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <Thread />
+    </AssistantRuntimeProvider>
+  );
+}
+```
+
+## Dynamic Model Selection
+
+```tsx
+function Chat({ model }: { model: string }) {
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+      body: { model },  // Pass model to API
+    }),
+  });
+
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <Thread />
+    </AssistantRuntimeProvider>
+  );
+}
+
+// Backend handles model selection
+export async function POST(req: Request) {
+  const { messages, model } = await req.json();
+
+  const provider = model.startsWith("claude")
+    ? anthropic(model)
+    : openai(model);
+
+  const result = streamText({ model: provider, messages });
+  return result.toUIMessageStreamResponse();
+}
+```
+
 ## With Cloud Persistence
 
 ```tsx
-import { AssistantCloud } from "assistant-cloud";
+import { AssistantCloud, AssistantRuntimeProvider, Thread, ThreadList } from "@assistant-ui/react";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 const cloud = new AssistantCloud({
   baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
@@ -218,7 +338,9 @@ const cloud = new AssistantCloud({
 
 function ChatPage() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
     cloud,  // Enables thread persistence
   });
 
@@ -249,10 +371,12 @@ function Chat() {
 ### After (v6)
 
 ```tsx
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 function Chat() {
-  const runtime = useChatRuntime({ api: "/api/chat" });
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({ api: "/api/chat" }),
+  });
   // ...
 }
 ```
