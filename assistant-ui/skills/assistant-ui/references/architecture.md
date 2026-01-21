@@ -133,9 +133,30 @@ interface ThreadAssistantMessage {
 type MessagePart =
   | { type: "text"; text: string }
   | { type: "image"; image: string }
-  | { type: "tool-call"; toolCallId: string; toolName: string; args: unknown; result?: unknown }
-  | { type: "reasoning"; reasoning: string }
-  | { type: "source"; source: Source };
+  | {
+      type: "tool-call";
+      toolCallId: string;
+      toolName: string;
+      args: unknown;
+      argsText: string;
+      result?: unknown;
+      isError?: boolean;
+      artifact?: unknown;
+    }
+  | { type: "reasoning"; text: string }
+  | {
+      type: "source";
+      sourceType: "url";
+      id: string;
+      url: string;
+      title?: string;
+    }
+  | {
+      type: "file";
+      filename?: string;
+      data: string;
+      mimeType: string;
+    };
 ```
 
 ## Branching Model

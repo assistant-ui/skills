@@ -61,17 +61,20 @@ Renders message content parts (text, images, tool calls, etc.).
     Reasoning: ({ part }) => (
       <details className="text-gray-500">
         <summary>Thinking...</summary>
-        <p>{part.reasoning}</p>
+        <p>{part.text}</p>
       </details>
     ),
     Source: ({ part }) => (
-      <a href={part.source.url} className="text-blue-500">
-        {part.source.title}
+      <a href={part.url} className="text-blue-500">
+        {part.title}
       </a>
     ),
     File: ({ part }) => (
-      <a href={part.file.url} download>
-        📄 {part.file.name}
+      <a
+        href={`data:${part.mimeType};base64,${part.data}`}
+        download={part.filename ?? "file"}
+      >
+        📄 {part.filename ?? "file"}
       </a>
     ),
   }}
@@ -84,10 +87,10 @@ Renders message content parts (text, images, tool calls, etc.).
 |------|-------------|------------|
 | `Text` | Plain text | `text` |
 | `Image` | Image attachment | `image` (URL) |
-| `ToolCall` | Tool invocation | `toolName`, `args`, `result`, `status` |
-| `Reasoning` | Chain-of-thought | `reasoning` |
-| `Source` | Citation/reference | `source.url`, `source.title` |
-| `File` | File attachment | `file.name`, `file.url` |
+| `ToolCall` | Tool invocation | `toolName`, `args`, `argsText`, `result?`, `isError?`, `artifact?` |
+| `Reasoning` | Chain-of-thought | `text` |
+| `Source` | Citation/reference | `url`, `title` |
+| `File` | File attachment | `filename?`, `data`, `mimeType` |
 
 ## MessagePrimitive.Avatar
 

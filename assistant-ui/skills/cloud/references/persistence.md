@@ -141,9 +141,24 @@ interface AUIv0Message {
 type MessagePart =
   | { type: "text"; text: string }
   | { type: "image"; image: string }
-  | { type: "tool-call"; toolCallId: string; toolName: string; args: unknown; result?: unknown }
-  | { type: "reasoning"; reasoning: string }
-  | { type: "source"; source: { url: string; title: string } };
+  | {
+      type: "tool-call";
+      toolCallId: string;
+      toolName: string;
+      args: unknown;
+      argsText: string;
+      result?: unknown;
+      isError?: boolean;
+      artifact?: unknown;
+    }
+  | { type: "reasoning"; text: string }
+  | {
+      type: "source";
+      sourceType: "url";
+      id: string;
+      url: string;
+      title?: string;
+    };
 ```
 
 ## Thread History Adapter

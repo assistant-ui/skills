@@ -4,9 +4,11 @@ Connect assistant-ui to any backend.
 
 ## Using useLocalRuntime
 
-For backends that return streaming responses.
+For backends that return streaming responses. Emit `ChatModelRunResult` chunks (append-only `content` parts).
 
 ### Basic Setup
+
+Plain-text streaming only. For AI SDK Data Stream responses, use `toUIMessageStreamResponse()` + `useChatRuntime` or decode with `DataStreamDecoder` and convert to content parts.
 
 ```tsx
 import { useLocalRuntime, AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
@@ -24,17 +26,27 @@ function Chat() {
 
         const reader = response.body?.getReader();
         const decoder = new TextDecoder();
+        let buffer = "";
 
-        while (reader) {
-          const { done, value } = await reader.read();
-          if (done) break;
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-          const text = decoder.decode(value);
-          yield { type: "text-delta", textDelta: text };
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n");
+        buffer = parts.pop() ?? "";
+
+        for (const textChunk of parts.filter(Boolean)) {
+          yield { content: [{ type: "text", text: textChunk }] };
         }
-      },
+      }
+
+      if (buffer) {
+        yield { content: [{ type: "text", text: buffer }] };
+      }
     },
-  });
+  },
+});
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -45,6 +57,8 @@ function Chat() {
 ```
 
 ### With SSE Parsing
+
+Simple SSE `data:` lines only (not AI SDK Data Stream prefixes like `0:`/`b:`/`c:`).
 
 ```tsx
 const runtime = useLocalRuntime({
@@ -73,7 +87,14 @@ const runtime = useLocalRuntime({
           if (line === "data: [DONE]") return;
 
           const data = JSON.parse(line.slice(6));
-          yield { type: "text-delta", textDelta: data.content };
+          yield { content: [{ type: "text", text: data.content }] };
+        }
+      }
+
+      if (buffer.startsWith("data: ")) {
+        const data = JSON.parse(buffer.slice(6));
+        if (data?.content) {
+          yield { content: [{ type: "text", text: data.content }] };
         }
       }
     },
@@ -93,32 +114,41 @@ const runtime = useLocalRuntime({
         signal: abortSignal,
       });
 
+      const toolCalls = new Map<
+        string,
+        { toolCallId: string; toolName: string; args: unknown; argsText: string }
+      >();
+
       for await (const event of parseResponse(response)) {
-        switch (event.type) {
-          case "text":
-            yield { type: "text-delta", textDelta: event.content };
-            break;
+        if (event.type === "text") {
+          yield { content: [{ type: "text", text: event.content }] };
+        }
 
-          case "tool_use":
-            yield {
-              type: "tool-call-begin",
-              toolCallId: event.id,
-              toolName: event.name,
-            };
-            yield {
-              type: "tool-call-done",
-              toolCallId: event.id,
-              args: event.input,
-            };
-            break;
+        if (event.type === "tool_use") {
+          const toolCall = {
+            toolCallId: event.id,
+            toolName: event.name,
+            args: event.input ?? {},
+            argsText: JSON.stringify(event.input ?? {}),
+          };
+          toolCalls.set(event.id, toolCall);
+          yield { content: [{ type: "tool-call", ...toolCall }] };
+        }
 
-          case "tool_result":
-            yield {
-              type: "tool-result",
-              toolCallId: event.tool_use_id,
-              result: event.content,
-            };
-            break;
+        if (event.type === "tool_result") {
+          const toolCall = toolCalls.get(event.tool_use_id);
+          yield {
+            content: [
+              {
+                type: "tool-call",
+                toolCallId: event.tool_use_id,
+                toolName: toolCall?.toolName ?? "tool",
+                args: toolCall?.args ?? {},
+                argsText: toolCall?.argsText ?? "{}",
+                result: event.content,
+              },
+            ],
+          };
         }
       }
     },

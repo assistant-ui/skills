@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     messages,
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 ```
 
@@ -107,13 +107,13 @@ const runtime = useChatRuntime({
 ```ts
 // app/api/chat/route.ts
 import { openai } from "@ai-sdk/openai";
-import { streamText, tool } from "ai";
+import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
 const tools = {
   get_weather: tool({
     description: "Get weather for a city",
-    parameters: z.object({
+    inputSchema: z.object({
       city: z.string().describe("City name"),
       unit: z.enum(["celsius", "fahrenheit"]).optional(),
     }),
@@ -131,10 +131,10 @@ export async function POST(req: Request) {
     model: openai("gpt-4o"),
     messages,
     tools,
-    maxSteps: 5,  // Allow multi-step tool use
+    stopWhen: stepCountIs(5),  // Allow multi-step tool use
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 ```
 
@@ -272,7 +272,7 @@ npm install @ai-sdk/react@latest ai@latest
 ```
 
 **Streaming stops mid-response**
-Check for `maxSteps` when using tools - default is 1.
+Check `stopWhen` when using tools - use `stepCountIs(n)` to allow multi-step.
 
 **Tool results not showing**
 Ensure you return from tool.execute(), not just mutate state.

@@ -165,11 +165,11 @@ Use `.If` for conditional content:
     Reasoning: ({ part }) => (
       <details>
         <summary>Thinking...</summary>
-        {part.reasoning}
+        {part.text}
       </details>
     ),
     Source: ({ part }) => (
-      <a href={part.source.url}>{part.source.title}</a>
+      <a href={part.url}>{part.title}</a>
     ),
   }}
 />

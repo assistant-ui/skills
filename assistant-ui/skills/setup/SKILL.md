@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     messages,
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 ```
 
@@ -211,7 +211,7 @@ npm install @ai-sdk/react@latest ai@latest
 ### Streaming not working
 
 1. Check API returns correct Content-Type: `text/event-stream`
-2. Verify `toDataStreamResponse()` is used (not `toTextStreamResponse()`)
+2. Verify `toUIMessageStreamResponse()` is used
 3. Check browser console for CORS errors
 
 ### "runtime is undefined"

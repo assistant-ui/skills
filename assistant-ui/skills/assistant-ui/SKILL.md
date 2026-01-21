@@ -7,7 +7,7 @@ license: MIT
 
 # assistant-ui
 
-**Always consult [assistant-ui.com/docs](https://assistant-ui.com/docs) for latest API.**
+**Always consult [assistant-ui.com/docs](https://assistant-ui.com/llms.txt) for latest API.**
 
 React library for building AI chat interfaces with composable primitives.
 

@@ -196,24 +196,36 @@ async function* parseStream(response: Response) {
       switch (data.event) {
         case "on_chat_model_stream":
           yield {
-            type: "text-delta",
-            textDelta: data.data.chunk.content,
+            content: [{ type: "text", text: data.data.chunk.content }],
           };
           break;
 
         case "on_tool_start":
           yield {
-            type: "tool-call-begin",
-            toolCallId: data.run_id,
-            toolName: data.name,
+            content: [
+              {
+                type: "tool-call",
+                toolCallId: data.run_id,
+                toolName: data.name,
+                args: data.input ?? {},
+                argsText: JSON.stringify(data.input ?? {}),
+              },
+            ],
           };
           break;
 
         case "on_tool_end":
           yield {
-            type: "tool-result",
-            toolCallId: data.run_id,
-            result: data.data.output,
+            content: [
+              {
+                type: "tool-call",
+                toolCallId: data.run_id,
+                toolName: data.name,
+                args: data.input ?? {},
+                argsText: JSON.stringify(data.input ?? {}),
+                result: data.data.output,
+              },
+            ],
           };
           break;
       }

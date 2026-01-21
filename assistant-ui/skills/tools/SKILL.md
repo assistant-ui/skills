@@ -41,7 +41,7 @@ import { z } from "zod";
 const tools = {
   get_weather: tool({
     description: "Get weather for a city",
-    parameters: z.object({ city: z.string() }),
+    inputSchema: z.object({ city: z.string() }),
     execute: async ({ city }) => ({ temp: 22, city }),
   }),
 };
@@ -136,13 +136,13 @@ useAssistantToolUI({ toolName, render });
 ```ts
 // app/api/chat/route.ts
 import { openai } from "@ai-sdk/openai";
-import { streamText, tool } from "ai";
+import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
 const tools = {
   search: tool({
     description: "Search the web",
-    parameters: z.object({
+    inputSchema: z.object({
       query: z.string(),
       limit: z.number().optional().default(5),
     }),
@@ -160,10 +160,10 @@ export async function POST(req: Request) {
     model: openai("gpt-4o"),
     messages,
     tools,
-    maxSteps: 5,  // Allow multi-step tool use
+    stopWhen: stepCountIs(5),  // Allow multi-step tool use
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 ```
 
@@ -338,7 +338,7 @@ function MyToolComponent() {
 
 **Tool not being called**
 - Check backend tool description is clear
-- Verify `maxSteps` allows tool use
+- Verify `stopWhen` allows tool use (e.g., `stepCountIs(5)`)
 
 **Result not showing**
 - Tool must return a value (not just mutate state)

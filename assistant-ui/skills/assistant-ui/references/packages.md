@@ -1,5 +1,36 @@
 # assistant-ui Packages
 
+## Published Packages
+
+**To check latest version:** Run `npm view <package-name> version` or check the package on npmjs.com.
+
+- All published packages only expose the `latest` dist-tag (no `next/beta/canary`).
+- Monorepo-only: `@assistant-ui/x-buildutils` (not on npm).
+
+| Package | Notes |
+|---------|-------|
+| @assistant-ui/react | Core UI library |
+| @assistant-ui/react-ai-sdk | AI SDK v6 integration |
+| @assistant-ui/react-langgraph | LangGraph integration |
+| @assistant-ui/react-data-stream | Data stream utilities |
+| @assistant-ui/react-markdown | Markdown rendering |
+| @assistant-ui/react-syntax-highlighter | Code highlighting |
+| @assistant-ui/styles | Pre-built CSS (no Tailwind) |
+| @assistant-ui/store | State management |
+| @assistant-ui/react-devtools | Developer tools |
+| @assistant-ui/react-hook-form | React Hook Form integration |
+| @assistant-ui/react-a2a | Agent-to-agent protocol |
+| @assistant-ui/react-ag-ui | AG-UI protocol |
+| @assistant-ui/tap | Testing utilities |
+| @assistant-ui/mcp-docs-server | MCP documentation server |
+| assistant-stream | Streaming protocol |
+| assistant-cloud | Cloud persistence/auth |
+| assistant-ui | CLI tool |
+| create-assistant-ui | Project scaffolding |
+| safe-content-frame | Sandboxed iframe content |
+| tw-shimmer | Tailwind shimmer effects |
+| chatgpt-app-studio | ChatGPT app builder |
+
 ## Core Packages
 
 ### @assistant-ui/react
