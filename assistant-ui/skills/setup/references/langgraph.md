@@ -122,17 +122,10 @@ const runtime = useLangGraphRuntime({
 
 ## LangGraph Event Types
 
-The stream function should yield events in this format:
+The stream callback should yield append-only content updates (same shape as `ChatModelRunResult` content parts). Common cases:
 
-```typescript
-type LangGraphEvent =
-  | { type: "text-delta"; textDelta: string }
-  | { type: "tool-call-begin"; toolCallId: string; toolName: string }
-  | { type: "tool-call-delta"; toolCallId: string; argsTextDelta: string }
-  | { type: "tool-call-done"; toolCallId: string; args: unknown }
-  | { type: "tool-result"; toolCallId: string; result: unknown }
-  | { type: "message-done"; message: ThreadMessage };
-```
+- Text: `{ content: [{ type: "text", text: "partial text" }] }`
+- Tool call start/result (single part): `{ content: [{ type: "tool-call", toolCallId, toolName, args, argsText, result? }] }`
 
 ## With Tool UI
 

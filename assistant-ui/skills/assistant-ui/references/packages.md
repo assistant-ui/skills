@@ -1,5 +1,34 @@
 # assistant-ui Packages
 
+## Current npm status (checked 2026-01-21)
+
+- All published packages only expose the `latest` dist-tag (no `next/beta/canary`).
+- Monorepo-only: `@assistant-ui/x-buildutils` (not on npm).
+
+| Package | npm latest | Notes |
+|---------|------------|-------|
+| @assistant-ui/react | 0.11.58 |  |
+| @assistant-ui/react-ai-sdk | 1.2.0 |  |
+| @assistant-ui/react-langgraph | 0.7.15 |  |
+| @assistant-ui/react-data-stream | 0.12.0 |  |
+| @assistant-ui/react-markdown | 0.11.10 |  |
+| @assistant-ui/react-syntax-highlighter | 0.11.10 |  |
+| @assistant-ui/styles | 0.3.3 |  |
+| @assistant-ui/store | 0.0.6 |  |
+| @assistant-ui/react-devtools | 0.1.13 |  |
+| @assistant-ui/react-hook-form | 0.11.12 |  |
+| @assistant-ui/react-a2a | 0.1.6 |  |
+| @assistant-ui/react-ag-ui | 0.0.9 |  |
+| @assistant-ui/tap | 0.3.6 |  |
+| @assistant-ui/mcp-docs-server | 0.1.19 |  |
+| assistant-stream | 0.2.47 |  |
+| assistant-cloud | 0.1.13 |  |
+| assistant-ui (CLI) | 0.0.72 |  |
+| create-assistant-ui | 0.0.37 |  |
+| safe-content-frame | 0.0.6 |  |
+| tw-shimmer | 0.4.3 |  |
+| chatgpt-app-studio | 0.2.0 | Repo is at 0.3.2 (ahead of npm) |
+
 ## Core Packages
 
 ### @assistant-ui/react

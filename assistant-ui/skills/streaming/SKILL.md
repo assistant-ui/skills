@@ -21,7 +21,7 @@ The `assistant-stream` package handles streaming from AI backends.
 
 ```
 Using Vercel AI SDK?
-├─ Yes → Data Stream format (toDataStreamResponse)
+├─ Yes → UI Message Stream (toUIMessageStreamResponse)
 └─ No
    ├─ Want richest features?
    │  └─ Yes → Assistant Transport format
@@ -39,11 +39,11 @@ npm install assistant-stream
 
 | Format | Use Case | Features |
 |--------|----------|----------|
-| Data Stream | AI SDK apps | Tool calls, multi-step |
-| Assistant Transport | Custom backends | All features, optimized |
+| UI Message Stream | AI SDK + assistant-ui | Tool calls, multi-step, optimized |
+| Assistant Transport | Custom backends | All features, native format |
 | Plain Text | Simple text | Basic streaming |
 
-## AI SDK Data Stream (Most Common)
+## AI SDK UI Message Stream (Recommended)
 
 ### Backend
 
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     messages,
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 ```
 
@@ -77,101 +77,45 @@ const runtime = useChatRuntime({
 
 ## Custom Streaming Response
 
-### Using DataStreamEncoder
+### Using AssistantStream helpers (Data Stream SSE)
 
 ```ts
-import { DataStreamEncoder } from "assistant-stream";
+import { createAssistantStreamResponse } from "assistant-stream";
 
 export async function POST(req: Request) {
-  const encoder = new DataStreamEncoder();
+  return createAssistantStreamResponse(async (stream) => {
+    stream.appendText("Hello ");
+    stream.appendText("world!");
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      // Stream text
-      encoder.writeTextDelta("Hello ");
-      controller.enqueue(encoder.flush());
+    // Optional: tool call
+    const tool = stream.addToolCallPart({ toolCallId: "1", toolName: "get_weather" });
+    tool.argsText.append('{"city":"NYC"}');
+    tool.argsText.close();
+    tool.setResponse({ result: { temperature: 22, unit: "celsius" } });
 
-      await delay(100);
-
-      encoder.writeTextDelta("world!");
-      controller.enqueue(encoder.flush());
-
-      // Complete
-      encoder.close();
-      controller.enqueue(encoder.flush());
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    headers: { "Content-Type": "text/event-stream" },
+    stream.close(); // flush + finish message
   });
 }
 ```
 
 ## Stream Events
 
-### Text Events
+AssistantStream chunks (decoded from Data Stream) look like:
 
-```ts
-// Streaming text
-{ type: "text-delta", textDelta: "partial text" }
-
-// Completion markers
-{ type: "text-created" }
-{ type: "text-done", text: "full text" }
-```
-
-### Tool Call Events
-
-```ts
-// Tool call lifecycle
-{ type: "tool-call-begin", toolCallId: "1", toolName: "search" }
-{ type: "tool-call-delta", toolCallId: "1", argsTextDelta: '{"query":' }
-{ type: "tool-call-delta", toolCallId: "1", argsTextDelta: '"NYC"}' }
-{ type: "tool-call-done", toolCallId: "1", args: { query: "NYC" } }
-
-// Tool result
-{ type: "tool-result", toolCallId: "1", result: { ... } }
-```
-
-### Control Events
-
-```ts
-{ type: "error", error: "Error message" }
-{ type: "finish", finishReason: "stop" }  // or "length", "tool-calls"
-```
-
-## AssistantStream Class
-
-Core streaming abstraction:
-
-```ts
-import { AssistantStream } from "assistant-stream";
-
-// From async generator
-const stream = AssistantStream.fromAsyncIterable(async function* () {
-  yield { type: "text-delta", textDelta: "Hello " };
-  yield { type: "text-delta", textDelta: "world!" };
-});
-
-// From ReadableStream
-const stream = AssistantStream.fromReadableStream(responseStream);
-
-// From Response
-const stream = AssistantStream.fromResponse(response);
-
-// Consume
-for await (const event of stream) {
-  console.log(event);
-}
-```
+- `part-start` with `part.type` = `"text" | "reasoning" | "tool-call" | "source" | "file"`
+- `part-finish` and `tool-call-args-text-finish`
+- `text-delta` with streamed text
+- `result` with tool results (`result`, `artifact?`, `isError`)
+- `annotations` / `data` arrays
+- `step-start`, `step-finish`, `message-finish` (AI SDK bookkeeping)
+- `error` strings
 
 ## Using with useLocalRuntime
 
+`useLocalRuntime` expects `ChatModelRunResult` chunks (content parts). Stream by yielding text/tool-call parts:
+
 ```tsx
 import { useLocalRuntime } from "@assistant-ui/react";
-import { AssistantStream } from "assistant-stream";
 
 const runtime = useLocalRuntime({
   model: {
@@ -183,10 +127,26 @@ const runtime = useLocalRuntime({
         signal: abortSignal,
       });
 
-      const stream = AssistantStream.fromResponse(response);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-      for await (const event of stream) {
-        yield event;
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        // Plain-text streaming only (not AI SDK Data Stream SSE)
+        const parts = buffer.split("\n");
+        buffer = parts.pop() ?? "";
+
+        for (const textChunk of parts.filter(Boolean)) {
+          yield { content: [{ type: "text", text: textChunk }] };
+        }
+      }
+
+      if (buffer) {
+        yield { content: [{ type: "text", text: buffer }] };
       }
     },
   },
@@ -196,32 +156,25 @@ const runtime = useLocalRuntime({
 ## Tool Handling
 
 ```ts
-import { Tool } from "assistant-stream";
-import { z } from "zod";
+import { createAssistantStreamResponse } from "assistant-stream";
 
-const weatherTool = new Tool({
-  name: "get_weather",
-  description: "Get weather for a city",
-  parameters: z.object({ city: z.string() }),
-  execute: async ({ city }) => {
-    return { temperature: 22, unit: "celsius" };
-  },
-});
+export async function POST(req: Request) {
+  return createAssistantStreamResponse(async (stream) => {
+    const tool = stream.addToolCallPart({
+      toolCallId: "1",
+      toolName: "get_weather",
+    });
 
-// Use in streaming context
-const stream = AssistantStream.fromAsyncIterable(async function* () {
-  // Tool call
-  yield { type: "tool-call-begin", toolCallId: "1", toolName: "get_weather" };
-  yield { type: "tool-call-delta", toolCallId: "1", argsTextDelta: '{"city":"NYC"}' };
-  yield { type: "tool-call-done", toolCallId: "1", args: { city: "NYC" } };
+    tool.argsText.append('{"city":"NYC"}');
+    tool.argsText.close();
 
-  // Execute and yield result
-  const result = await weatherTool.execute({ city: "NYC" });
-  yield { type: "tool-result", toolCallId: "1", result };
+    const result = await fetchWeather("NYC");
+    tool.setResponse({ result });
 
-  // Continue with response
-  yield { type: "text-delta", textDelta: "The weather in NYC is 22°C" };
-});
+    stream.appendText("The weather in NYC is 22°C");
+    stream.close();
+  });
+}
 ```
 
 ## Debugging Streams
@@ -229,7 +182,9 @@ const stream = AssistantStream.fromAsyncIterable(async function* () {
 ### Log All Events
 
 ```ts
-const stream = AssistantStream.fromResponse(response);
+import { AssistantStream, DataStreamDecoder } from "assistant-stream";
+
+const stream = AssistantStream.fromResponse(response, new DataStreamDecoder());
 
 for await (const event of stream) {
   console.log("Event:", JSON.stringify(event, null, 2));
@@ -263,7 +218,7 @@ headers: {
 - Check for CORS errors in browser console
 
 **Tool calls not rendering**
-- Ensure `tool-call-begin` includes `toolCallId` and `toolName`
+- Ensure `addToolCallPart` sets both `toolCallId` and `toolName`
 - Register tool UI with `makeAssistantToolUI`
 - Check tool name matches exactly
 

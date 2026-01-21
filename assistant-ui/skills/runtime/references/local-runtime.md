@@ -36,7 +36,7 @@ function App() {
 
 ## Streaming Response
 
-Use a generator for streaming:
+Use a generator and emit `ChatModelRunResult` chunks (append-only content parts):
 
 ```tsx
 const runtime = useLocalRuntime({
@@ -50,13 +50,27 @@ const runtime = useLocalRuntime({
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
+      let buffer = "";
 
       while (reader) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const text = decoder.decode(value);
-        yield { type: "text-delta", textDelta: text };
+        buffer += decoder.decode(value, { stream: true });
+
+        // Split on newlines for this plain-text example (not Data Stream)
+        const parts = buffer.split("\n");
+        buffer = parts.pop() ?? "";
+
+        for (const textChunk of parts.filter(Boolean)) {
+          yield {
+            content: [{ type: "text", text: textChunk }],
+          };
+        }
+      }
+
+      if (buffer) {
+        yield { content: [{ type: "text", text: buffer }] };
       }
     },
   },
@@ -98,13 +112,8 @@ interface ChatModelRunResultFinal {
   content: MessagePart[];
 }
 
-// Stream events
-type ChatModelRunResultStream =
-  | { type: "text-delta"; textDelta: string }
-  | { type: "tool-call-begin"; toolCallId: string; toolName: string }
-  | { type: "tool-call-delta"; toolCallId: string; argsTextDelta: string }
-  | { type: "tool-call-done"; toolCallId: string; args: unknown }
-  | { type: "tool-result"; toolCallId: string; result: unknown };
+// Streamed chunks are ChatModelRunResult objects
+type ChatModelRunResultStream = ChatModelRunResult;
 ```
 
 ## With OpenAI Direct
@@ -136,7 +145,7 @@ const runtime = useLocalRuntime({
         if (abortSignal.aborted) break;
         const delta = chunk.choices[0]?.delta?.content;
         if (delta) {
-          yield { type: "text-delta", textDelta: delta };
+          yield { content: [{ type: "text", text: delta }] };
         }
       }
     },
@@ -146,25 +155,44 @@ const runtime = useLocalRuntime({
 
 ## With Tools
 
-```tsx
-import { z } from "zod";
+Emit tool calls as message parts (`type: "tool-call"`) and include `argsText` plus optional `result`:
 
+```tsx
 const runtime = useLocalRuntime({
   model: {
     async *run({ messages, abortSignal }) {
-      // ... fetch from your API
+      const toolCallId = "1";
 
-      // Stream tool call
-      yield { type: "tool-call-begin", toolCallId: "1", toolName: "get_weather" };
-      yield { type: "tool-call-delta", toolCallId: "1", argsTextDelta: '{"city":"NYC"}' };
-      yield { type: "tool-call-done", toolCallId: "1", args: { city: "NYC" } };
+      // Yield tool call with parsed arguments
+      yield {
+        content: [
+          {
+            type: "tool-call",
+            toolCallId,
+            toolName: "get_weather",
+            args: { city: "NYC" },
+            argsText: '{"city":"NYC"}',
+          },
+        ],
+      };
 
-      // Execute tool and yield result
+      // Execute tool
       const result = await getWeather({ city: "NYC" });
-      yield { type: "tool-result", toolCallId: "1", result };
 
-      // Continue with text response
-      yield { type: "text-delta", textDelta: "The weather in NYC is..." };
+      // Send result on the same tool-call part
+      yield {
+        content: [
+          {
+            type: "tool-call",
+            toolCallId,
+            toolName: "get_weather",
+            args: { city: "NYC" },
+            argsText: '{"city":"NYC"}',
+            result,
+          },
+          { type: "text", text: `The weather in NYC is ${result.temp}°C` },
+        ],
+      };
     },
   },
 });

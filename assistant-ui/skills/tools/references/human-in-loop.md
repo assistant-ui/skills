@@ -14,7 +14,7 @@ Ask user to confirm before executing:
 // Backend tool returns requires-action status
 const deleteTool = tool({
   description: "Delete a file (requires user confirmation)",
-  parameters: z.object({ path: z.string() }),
+  inputSchema: z.object({ path: z.string() }),
   execute: async ({ path }) => {
     // Return requires-action to wait for confirmation
     return { action: "confirm", path };

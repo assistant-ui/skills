@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     messages,
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 ```
 
@@ -299,7 +299,7 @@ npm install @ai-sdk/react
 ```
 
 **Streaming not working**
-- Verify `toDataStreamResponse()` is used
+- Verify `toUIMessageStreamResponse()` is used
 - Check Content-Type header
 - Look for CORS errors
 

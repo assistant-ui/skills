@@ -4,7 +4,7 @@ AI SDK compatible streaming format.
 
 ## Overview
 
-Data Stream is the format used by Vercel AI SDK's `toDataStreamResponse()`. It's the most common format when using AI SDK.
+Data Stream is the underlying format used by Vercel AI SDK. For assistant-ui, use `toUIMessageStreamResponse()` (preferred) which builds on Data Stream with additional features.
 
 ## Usage
 
@@ -22,41 +22,36 @@ export async function POST(req: Request) {
     messages,
   });
 
-  return result.toDataStreamResponse();
+  // Preferred for assistant-ui
+  return result.toUIMessageStreamResponse();
+
+  // Or use toDataStreamResponse() for raw Data Stream
+  // return result.toDataStreamResponse();
 }
 ```
 
-### Manual Encoding
+### Custom Backend (Data Stream SSE)
 
 ```ts
-import { DataStreamEncoder } from "assistant-stream";
+import { createAssistantStreamResponse } from "assistant-stream";
 
 export async function POST(req: Request) {
-  const encoder = new DataStreamEncoder();
+  return createAssistantStreamResponse(async (stream) => {
+    // Text
+    stream.appendText("Hello ");
+    stream.appendText("world!");
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      // Text streaming
-      encoder.writeTextDelta("Hello ");
-      controller.enqueue(encoder.flush());
+    // Tool call
+    const tool = stream.addToolCallPart({
+      toolCallId: "call_123",
+      toolName: "search",
+    });
+    tool.argsText.append('{"query":"weather NYC"}');
+    tool.argsText.close();
+    tool.setResponse({ result: { temperature: 22 } });
 
-      encoder.writeTextDelta("world!");
-      controller.enqueue(encoder.flush());
-
-      // Finish
-      encoder.writeFinish("stop");
-      controller.enqueue(encoder.flush());
-
-      encoder.close();
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-    },
+    // Finish
+    stream.close();
   });
 }
 ```
@@ -64,165 +59,61 @@ export async function POST(req: Request) {
 ### Decoding
 
 ```ts
-import { DataStreamDecoder } from "assistant-stream";
+import { AssistantStream, DataStreamDecoder } from "assistant-stream";
 
-const decoder = new DataStreamDecoder();
+const stream = AssistantStream.fromResponse(response, new DataStreamDecoder());
 
-for await (const event of decoder.decode(responseStream)) {
-  switch (event.type) {
-    case "text-delta":
-      console.log("Text:", event.textDelta);
-      break;
-    case "tool-call-begin":
-      console.log("Tool call started:", event.toolName);
-      break;
-    case "tool-result":
-      console.log("Tool result:", event.result);
-      break;
-    case "finish":
-      console.log("Done:", event.finishReason);
-      break;
-  }
+for await (const chunk of stream) {
+  if (chunk.type === "text-delta") console.log("Text:", chunk.textDelta);
+  if (chunk.type === "result") console.log("Result:", chunk.result);
 }
 ```
 
-## DataStreamEncoder API
+## AssistantStreamController (what you get in createAssistantStreamResponse)
 
-```ts
-const encoder = new DataStreamEncoder();
-
-// Text
-encoder.writeTextCreated();
-encoder.writeTextDelta(text: string);
-encoder.writeTextDone(fullText: string);
-
-// Tool calls
-encoder.writeToolCallBegin(toolCallId: string, toolName: string);
-encoder.writeToolCallDelta(toolCallId: string, argsTextDelta: string);
-encoder.writeToolCallDone(toolCallId: string, args: object);
-encoder.writeToolResult(toolCallId: string, result: unknown);
-
-// Control
-encoder.writeFinish(reason: "stop" | "length" | "tool-calls");
-encoder.writeError(message: string);
-
-// Get encoded data
-const bytes = encoder.flush();
-
-// Close stream
-encoder.close();
-```
+- `appendText(text: string)`
+- `appendReasoning(reasoning: string)`
+- `appendSource({ sourceType: "url", id, url, title?, parentId? })`
+- `appendFile({ data, mimeType })`
+- `addToolCallPart({ toolCallId, toolName, parentId? })` → controller with:
+  - `argsText.append(text)`, `argsText.close()`
+  - `setResponse({ result, artifact?, isError? })`
+  - `close()`
+- `close()` to end the message
 
 ## Event Types
 
-### Text Events
+Decoded `AssistantStreamChunk` shapes:
 
-```ts
-// Created (optional, signals start)
-{ type: "text-created" }
-
-// Delta (streaming content)
-{ type: "text-delta", textDelta: "Hello " }
-{ type: "text-delta", textDelta: "world!" }
-
-// Done (optional, final content)
-{ type: "text-done", text: "Hello world!" }
-```
-
-### Tool Events
-
-```ts
-// Begin
-{
-  type: "tool-call-begin",
-  toolCallId: "call_abc123",
-  toolName: "search"
-}
-
-// Arguments streaming
-{
-  type: "tool-call-delta",
-  toolCallId: "call_abc123",
-  argsTextDelta: '{"query":'
-}
-{
-  type: "tool-call-delta",
-  toolCallId: "call_abc123",
-  argsTextDelta: '"NYC"}'
-}
-
-// Complete
-{
-  type: "tool-call-done",
-  toolCallId: "call_abc123",
-  args: { query: "NYC" }
-}
-
-// Result
-{
-  type: "tool-result",
-  toolCallId: "call_abc123",
-  result: { results: [...] }
-}
-```
-
-### Control Events
-
-```ts
-// Finish reasons
-{ type: "finish", finishReason: "stop" }        // Normal completion
-{ type: "finish", finishReason: "length" }      // Max tokens reached
-{ type: "finish", finishReason: "tool-calls" }  // Tool use
-
-// Error
-{ type: "error", error: "Rate limit exceeded" }
-```
+- `part-start` with `part.type` = `"text" | "reasoning" | "tool-call" | "source" | "file"`
+- `part-finish` and `tool-call-args-text-finish`
+- `text-delta` / `annotations` / `data`
+- `result` (tool results)
+- `step-start` / `step-finish` / `message-finish`
+- `error`
 
 ## With Tools Example
 
 ```ts
-import { DataStreamEncoder } from "assistant-stream";
+import { createAssistantStreamResponse } from "assistant-stream";
 
 async function streamWithTools(req: Request) {
-  const encoder = new DataStreamEncoder();
+  return createAssistantStreamResponse(async (stream) => {
+    stream.appendText("Let me search for that...\n\n");
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      // Initial text
-      encoder.writeTextDelta("Let me search for that...\n\n");
-      controller.enqueue(encoder.flush());
+    const toolCallId = "call_" + Date.now();
+    const tool = stream.addToolCallPart({
+      toolCallId,
+      toolName: "search",
+    });
+    tool.argsText.append('{"query":"weather NYC"}');
+    tool.argsText.close();
 
-      // Tool call
-      const toolCallId = "call_" + Date.now();
-      encoder.writeToolCallBegin(toolCallId, "search");
-      controller.enqueue(encoder.flush());
+    const result = await searchWeather("NYC");
+    tool.setResponse({ result });
 
-      encoder.writeToolCallDelta(toolCallId, '{"query":"weather NYC"}');
-      controller.enqueue(encoder.flush());
-
-      encoder.writeToolCallDone(toolCallId, { query: "weather NYC" });
-      controller.enqueue(encoder.flush());
-
-      // Execute tool
-      const result = await searchWeather("NYC");
-
-      encoder.writeToolResult(toolCallId, result);
-      controller.enqueue(encoder.flush());
-
-      // Continue with response
-      encoder.writeTextDelta(`The current weather in NYC is ${result.temp}°F`);
-      controller.enqueue(encoder.flush());
-
-      encoder.writeFinish("stop");
-      controller.enqueue(encoder.flush());
-
-      encoder.close();
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    headers: { "Content-Type": "text/event-stream" },
+    stream.appendText(`The current weather in NYC is ${result.temp}°F`);
+    stream.close();
   });
 }
 ```
@@ -234,15 +125,21 @@ Data Stream uses Server-Sent Events (SSE) format:
 ```
 0:"Hello "
 0:"world!"
-e:{"finishReason":"stop"}
+d:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}
 ```
 
 Each line:
 - `0:` - Text content
 - `9:` - Tool call
+- `b:` - Tool call start
+- `c:` - Tool call args text delta
 - `a:` - Tool result
-- `e:` - Finish event
+- `d:` - Message finish
+- `e:` - Step finish
 - `3:` - Error
+- `h:` - Source
+- `k:` - File
+- `aui-*` - assistant-ui extensions (state updates, parented deltas)
 
 ## Integration with useChatRuntime
 

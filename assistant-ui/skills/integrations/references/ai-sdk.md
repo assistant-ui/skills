@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     messages,
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 ```
 
@@ -95,13 +95,13 @@ const runtime = useChatRuntime({
 
 ```ts
 import { openai } from "@ai-sdk/openai";
-import { streamText, tool } from "ai";
+import { streamText, tool, stepCountIs } from "ai";
 import { z } from "zod";
 
 const tools = {
   search: tool({
     description: "Search the web for information",
-    parameters: z.object({
+    inputSchema: z.object({
       query: z.string().describe("Search query"),
       limit: z.number().optional().default(5),
     }),
@@ -119,10 +119,10 @@ export async function POST(req: Request) {
     model: openai("gpt-4o"),
     messages,
     tools,
-    maxSteps: 5,  // Allow multi-step tool use
+    stopWhen: stepCountIs(5),  // Allow multi-step tool use
   });
 
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 ```
 
@@ -251,18 +251,23 @@ streamText({
 
 ```ts
 import { z } from "zod";
-import { generateObject } from "ai";
+import { generateText, Output } from "ai";
+import { openai } from "@ai-sdk/openai";
 
-const result = await generateObject({
+const { output } = await generateText({
   model: openai("gpt-4o"),
-  schema: z.object({
-    name: z.string(),
-    age: z.number(),
-    hobbies: z.array(z.string()),
+  output: Output.object({
+    schema: z.object({
+      name: z.string(),
+      age: z.number(),
+      hobbies: z.array(z.string()),
+    }),
   }),
   prompt: "Generate a user profile",
 });
 ```
+
+AI SDK v6 uses `generateText` + `Output.object` for structured output; `generateObject` is the older pattern.
 
 ## Error Handling
 
@@ -329,6 +334,6 @@ export async function POST(req: Request) {
     : openai(model);
 
   const result = streamText({ model: provider, messages });
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 ```
