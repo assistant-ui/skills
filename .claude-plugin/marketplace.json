@@ -14,15 +14,15 @@
       "description": "Skills for assistant-ui - React components for AI chat UX",
       "source": "./assistant-ui",
       "skills": [
-        "./assistant-ui/skills/assistant-ui",
-        "./assistant-ui/skills/setup",
-        "./assistant-ui/skills/primitives",
-        "./assistant-ui/skills/runtime",
-        "./assistant-ui/skills/tools",
-        "./assistant-ui/skills/streaming",
-        "./assistant-ui/skills/integrations",
-        "./assistant-ui/skills/cloud",
-        "./assistant-ui/skills/thread-list"
+        "./skills/assistant-ui",
+        "./skills/setup",
+        "./skills/primitives",
+        "./skills/runtime",
+        "./skills/tools",
+        "./skills/streaming",
+        "./skills/integrations",
+        "./skills/cloud",
+        "./skills/thread-list"
       ]
     }
   ]
