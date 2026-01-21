@@ -15,6 +15,8 @@ Connect assistant-ui to various AI backends.
 
 - [./references/ai-sdk.md](./references/ai-sdk.md) -- Vercel AI SDK v6 integration
 - [./references/langgraph.md](./references/langgraph.md) -- LangGraph agent integration
+- [./references/ag-ui.md](./references/ag-ui.md) -- AG-UI protocol integration
+- [./references/a2a.md](./references/a2a.md) -- Agent-to-Agent protocol
 - [./references/cloud.md](./references/cloud.md) -- Cloud persistence setup
 - [./references/custom-backend.md](./references/custom-backend.md) -- Custom backend patterns
 
@@ -26,6 +28,10 @@ What's your backend?
 │  └─ useChatRuntime (recommended)
 ├─ LangGraph
 │  └─ useLangGraphRuntime
+├─ AG-UI Protocol
+│  └─ useAgUiRuntime
+├─ A2A Protocol
+│  └─ useA2ARuntime
 ├─ Custom API
 │  ├─ External state management?
 │  │  └─ Yes → useExternalStoreRuntime
@@ -44,11 +50,13 @@ npm install @assistant-ui/react @assistant-ui/react-ai-sdk @ai-sdk/react ai
 
 ```tsx
 import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 function Chat() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
   });
 
   return (
@@ -208,8 +216,8 @@ const runtime = useExternalStoreRuntime({
 ## With Cloud Persistence
 
 ```tsx
-import { AssistantCloud } from "assistant-cloud";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { AssistantCloud, AssistantRuntimeProvider, Thread, ThreadList } from "@assistant-ui/react";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 const cloud = new AssistantCloud({
   baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
@@ -218,7 +226,9 @@ const cloud = new AssistantCloud({
 
 function Chat() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
     cloud,  // Enables thread persistence
   });
 
@@ -234,9 +244,13 @@ function Chat() {
 ## Multiple Providers
 
 ```tsx
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
+
 function Chat({ provider }: { provider: "openai" | "anthropic" | "local" }) {
   const runtime = useChatRuntime({
-    api: `/api/chat/${provider}`,
+    transport: new AssistantChatTransport({
+      api: `/api/chat/${provider}`,
+    }),
   });
 
   return (
@@ -253,12 +267,13 @@ function Chat({ provider }: { provider: "openai" | "anthropic" | "local" }) {
 
 ```tsx
 const runtime = useChatRuntime({
-  api: "/api/chat",             // Required
-  headers: { "X-API-Key": key },// Custom headers
-  body: { model: "gpt-4o" },    // Extra body params
-  initialMessages: [],          // Pre-populated
-  onError: (err) => {},         // Error handler
-  cloud: cloudInstance,         // Cloud persistence
+  transport: new AssistantChatTransport({
+    api: "/api/chat",             // API endpoint
+    headers: { "X-API-Key": key },// Custom headers
+  }),
+  initialMessages: [],            // Pre-populated
+  onError: (err) => {},           // Error handler
+  cloud: cloudInstance,           // Cloud persistence
 });
 ```
 

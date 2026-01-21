@@ -15,6 +15,7 @@ Complete guide for setting up assistant-ui in your project.
 
 - [./references/ai-sdk-v6.md](./references/ai-sdk-v6.md) -- AI SDK v6 setup with useChatRuntime
 - [./references/langgraph.md](./references/langgraph.md) -- LangGraph agent setup
+- [./references/tanstack.md](./references/tanstack.md) -- TanStack Router setup
 - [./references/styling.md](./references/styling.md) -- Styling options and customization
 
 ## Pick Your Setup
@@ -47,11 +48,13 @@ npm install @ai-sdk/openai  # or your preferred provider
 "use client";
 
 import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 export default function Chat() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
   });
 
   return (
@@ -87,9 +90,10 @@ export async function POST(req: Request) {
 
 ```tsx
 const runtime = useChatRuntime({
-  api: "/api/chat",           // API endpoint (required)
-  headers: {},                // Custom headers
-  body: {},                   // Extra body params
+  transport: new AssistantChatTransport({
+    api: "/api/chat",         // API endpoint
+    headers: {},              // Custom headers
+  }),
   initialMessages: [],        // Pre-populated messages
   onError: (err) => {},       // Error handler
   cloud: cloudInstance,       // Cloud persistence
@@ -220,11 +224,13 @@ Ensure `useChatRuntime` is called inside a component, not at module level:
 
 ```tsx
 // Wrong
-const runtime = useChatRuntime({ api: "/api/chat" });
+const runtime = useChatRuntime({ transport: ... });
 
 // Correct
 function Chat() {
-  const runtime = useChatRuntime({ api: "/api/chat" });
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({ api: "/api/chat" }),
+  });
   // ...
 }
 ```

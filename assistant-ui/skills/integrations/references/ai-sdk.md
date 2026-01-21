@@ -15,11 +15,13 @@ npm install @ai-sdk/openai  # or your preferred provider
 
 ```tsx
 import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 function Chat() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
   });
 
   return (
@@ -54,18 +56,14 @@ export async function POST(req: Request) {
 
 ```tsx
 const runtime = useChatRuntime({
-  // Required
-  api: "/api/chat",
-
-  // Request customization
-  headers: {
-    "Authorization": `Bearer ${token}`,
-    "X-Custom-Header": "value",
-  },
-  body: {
-    model: "gpt-4o",
-    temperature: 0.7,
-  },
+  // Transport configuration
+  transport: new AssistantChatTransport({
+    api: "/api/chat",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "X-Custom-Header": "value",
+    },
+  }),
 
   // Initial state
   initialMessages: [
@@ -273,7 +271,9 @@ AI SDK v6 uses `generateText` + `Output.object` for structured output; `generate
 
 ```tsx
 const runtime = useChatRuntime({
-  api: "/api/chat",
+  transport: new AssistantChatTransport({
+    api: "/api/chat",
+  }),
   onError: (error) => {
     if (error.message.includes("rate limit")) {
       toast.error("Too many requests. Please wait.");
@@ -290,15 +290,18 @@ const runtime = useChatRuntime({
 
 ```tsx
 import { useSession } from "next-auth/react";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 function Chat() {
   const { data: session } = useSession();
 
   const runtime = useChatRuntime({
-    api: "/api/chat",
-    headers: {
-      Authorization: `Bearer ${session?.accessToken}`,
-    },
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+      headers: {
+        Authorization: `Bearer ${session?.accessToken}`,
+      },
+    }),
   });
 
   return (
@@ -312,10 +315,14 @@ function Chat() {
 ## Dynamic API Selection
 
 ```tsx
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
+
 function Chat({ model }: { model: string }) {
   const runtime = useChatRuntime({
-    api: "/api/chat",
-    body: { model },  // Pass model to API
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+      body: { model },  // Pass model to API
+    }),
   });
 
   return (

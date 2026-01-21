@@ -9,7 +9,7 @@ AI SDK v6 introduced breaking changes:
 | v5 | v6 |
 |----|-----|
 | `import { useChat } from "ai/react"` | `import { useChat } from "@ai-sdk/react"` |
-| `useAISDKRuntime(chat)` | `useChatRuntime({ api })` |
+| `useAISDKRuntime(chat)` | `useChatRuntime({ transport })` |
 | Manual thread management | Built-in thread list |
 
 ## Installation
@@ -28,11 +28,13 @@ npm install @ai-sdk/openai  # Provider of choice
 "use client";
 
 import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 export default function ChatPage() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
   });
 
   return (
@@ -67,16 +69,13 @@ export async function POST(req: Request) {
 
 ```tsx
 const runtime = useChatRuntime({
-  // Required
-  api: "/api/chat",
-
-  // Request customization
-  headers: {
-    "X-Custom-Header": "value",
-  },
-  body: {
-    customParam: "value",
-  },
+  // Transport configuration
+  transport: new AssistantChatTransport({
+    api: "/api/chat",
+    headers: {
+      "X-Custom-Header": "value",
+    },
+  }),
 
   // Initial state
   initialMessages: [
@@ -209,7 +208,8 @@ const result = streamText({
 ## With Cloud Persistence
 
 ```tsx
-import { AssistantCloud } from "assistant-cloud";
+import { AssistantCloud, AssistantRuntimeProvider, Thread, ThreadList } from "@assistant-ui/react";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 const cloud = new AssistantCloud({
   baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
@@ -218,7 +218,9 @@ const cloud = new AssistantCloud({
 
 function ChatPage() {
   const runtime = useChatRuntime({
-    api: "/api/chat",
+    transport: new AssistantChatTransport({
+      api: "/api/chat",
+    }),
     cloud,  // Enables thread persistence
   });
 
@@ -249,10 +251,12 @@ function Chat() {
 ### After (v6)
 
 ```tsx
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 function Chat() {
-  const runtime = useChatRuntime({ api: "/api/chat" });
+  const runtime = useChatRuntime({
+    transport: new AssistantChatTransport({ api: "/api/chat" }),
+  });
   // ...
 }
 ```
