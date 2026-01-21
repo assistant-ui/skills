@@ -1,0 +1,29 @@
+{
+  "name": "assistant-ui-skills",
+  "owner": {
+    "name": "assistant-ui",
+    "email": "hello@assistant-ui.com"
+  },
+  "metadata": {
+    "description": "Agent skills for building AI chat interfaces with assistant-ui",
+    "version": "0.0.1"
+  },
+  "plugins": [
+    {
+      "name": "assistant-ui",
+      "description": "Skills for assistant-ui - React components for AI chat UX",
+      "source": "./assistant-ui",
+      "skills": [
+        "./assistant-ui/skills/assistant-ui",
+        "./assistant-ui/skills/setup",
+        "./assistant-ui/skills/primitives",
+        "./assistant-ui/skills/runtime",
+        "./assistant-ui/skills/tools",
+        "./assistant-ui/skills/streaming",
+        "./assistant-ui/skills/integrations",
+        "./assistant-ui/skills/cloud",
+        "./assistant-ui/skills/thread-list"
+      ]
+    }
+  ]
+}
