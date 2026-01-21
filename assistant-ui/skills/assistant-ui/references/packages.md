@@ -1,33 +1,35 @@
 # assistant-ui Packages
 
-## Current npm status (checked 2026-01-21)
+## Published Packages
+
+**To check latest version:** Run `npm view <package-name> version` or check the package on npmjs.com.
 
 - All published packages only expose the `latest` dist-tag (no `next/beta/canary`).
 - Monorepo-only: `@assistant-ui/x-buildutils` (not on npm).
 
-| Package | npm latest | Notes |
-|---------|------------|-------|
-| @assistant-ui/react | 0.11.58 |  |
-| @assistant-ui/react-ai-sdk | 1.2.0 |  |
-| @assistant-ui/react-langgraph | 0.7.15 |  |
-| @assistant-ui/react-data-stream | 0.12.0 |  |
-| @assistant-ui/react-markdown | 0.11.10 |  |
-| @assistant-ui/react-syntax-highlighter | 0.11.10 |  |
-| @assistant-ui/styles | 0.3.3 |  |
-| @assistant-ui/store | 0.0.6 |  |
-| @assistant-ui/react-devtools | 0.1.13 |  |
-| @assistant-ui/react-hook-form | 0.11.12 |  |
-| @assistant-ui/react-a2a | 0.1.6 |  |
-| @assistant-ui/react-ag-ui | 0.0.9 |  |
-| @assistant-ui/tap | 0.3.6 |  |
-| @assistant-ui/mcp-docs-server | 0.1.19 |  |
-| assistant-stream | 0.2.47 |  |
-| assistant-cloud | 0.1.13 |  |
-| assistant-ui (CLI) | 0.0.72 |  |
-| create-assistant-ui | 0.0.37 |  |
-| safe-content-frame | 0.0.6 |  |
-| tw-shimmer | 0.4.3 |  |
-| chatgpt-app-studio | 0.2.0 | Repo is at 0.3.2 (ahead of npm) |
+| Package | Notes |
+|---------|-------|
+| @assistant-ui/react | Core UI library |
+| @assistant-ui/react-ai-sdk | AI SDK v6 integration |
+| @assistant-ui/react-langgraph | LangGraph integration |
+| @assistant-ui/react-data-stream | Data stream utilities |
+| @assistant-ui/react-markdown | Markdown rendering |
+| @assistant-ui/react-syntax-highlighter | Code highlighting |
+| @assistant-ui/styles | Pre-built CSS (no Tailwind) |
+| @assistant-ui/store | State management |
+| @assistant-ui/react-devtools | Developer tools |
+| @assistant-ui/react-hook-form | React Hook Form integration |
+| @assistant-ui/react-a2a | Agent-to-agent protocol |
+| @assistant-ui/react-ag-ui | AG-UI protocol |
+| @assistant-ui/tap | Testing utilities |
+| @assistant-ui/mcp-docs-server | MCP documentation server |
+| assistant-stream | Streaming protocol |
+| assistant-cloud | Cloud persistence/auth |
+| assistant-ui | CLI tool |
+| create-assistant-ui | Project scaffolding |
+| safe-content-frame | Sandboxed iframe content |
+| tw-shimmer | Tailwind shimmer effects |
+| chatgpt-app-studio | ChatGPT app builder |
 
 ## Core Packages
 

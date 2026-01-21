@@ -7,7 +7,7 @@ license: MIT
 
 # assistant-ui
 
-**Always consult [assistant-ui.com/docs](https://assistant-ui.com/docs) for latest API.**
+**Always consult [assistant-ui.com/docs](https://assistant-ui.com/llms.txt) for latest API.**
 
 React library for building AI chat interfaces with composable primitives.
 
@@ -75,11 +75,6 @@ Need AI SDK?
 | `@assistant-ui/styles` | Pre-built CSS | Non-Tailwind projects |
 | `assistant-stream` | Streaming protocol | Custom backends |
 | `assistant-cloud` | Cloud persistence | Production apps |
-
-## Version Snapshot (npm latest, 2026-01-21)
-
-- `@assistant-ui/react` 0.11.58, `@assistant-ui/react-ai-sdk` 1.2.0, `assistant-stream` 0.2.47, `assistant-cloud` 0.1.13
-- Full package matrix and notes (e.g., repo-ahead `chatgpt-app-studio@0.3.2` vs npm 0.2.0) live in `./references/packages.md`
 
 ## Quick Start
 
