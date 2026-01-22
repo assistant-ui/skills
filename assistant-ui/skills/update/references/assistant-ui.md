@@ -92,22 +92,37 @@ export default {
 
 ### From 0.7.x
 
-**BREAKING: Pre-styled UI moved to `@assistant-ui/react-ui`**
+**BREAKING: Pre-styled UI moved out of `@assistant-ui/react`**
+
+0.7.x: `Thread` etc. were re-exported from `@assistant-ui/react` via `./ui` subpath
+0.8.0+: Use shadcn/ui registry (recommended) or `@assistant-ui/react-ui` (legacy, not maintained)
+
+**Option 1: shadcn/ui Registry (Recommended)**
 
 ```bash
-npm install @assistant-ui/react-ui
+# Using assistant-ui CLI
+npx assistant-ui add thread thread-list
+
+# Or using shadcn CLI
+npx shadcn@latest add "https://r.assistant-ui.com/thread"
 ```
+
+Components are copied to your project (e.g., `components/assistant-ui/thread.tsx`).
 
 ```diff
-// Styled components
+// Styled components - now local files
 - import { Thread, ThreadWelcome } from "@assistant-ui/react";
-+ import { Thread, ThreadWelcome } from "@assistant-ui/react-ui";
++ import { Thread } from "@/components/assistant-ui/thread";
 
-// OR use primitives (no additional package)
-+ import { ThreadPrimitive } from "@assistant-ui/react";
+// Primitives remain in @assistant-ui/react (no change)
+import { ThreadPrimitive } from "@assistant-ui/react";
 ```
 
-**Search and replace:**
+**Option 2: Legacy Package (Not Recommended)**
+
+`@assistant-ui/react-ui` exists but is not actively maintained.
+
+**Search for imports to update:**
 ```bash
 grep -r "from ['\"]@assistant-ui/react['\"]" --include="*.tsx" --include="*.ts" | grep -v "Primitive"
 ```
