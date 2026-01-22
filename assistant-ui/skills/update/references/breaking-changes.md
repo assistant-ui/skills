@@ -9,7 +9,7 @@ Fast lookup for breaking changes by version.
 | **0.11.0** | Runtime rearchitecture | Use `useAssistantApi`, `useAssistantState`, `useAssistantEvent` |
 | **0.10.0** | CommonJS dropped | Use ESM, set `"type": "module"` |
 | **0.8.18** | `setResult`/`setArtifact` merged | Use `setResponse({ result, artifact })` |
-| **0.8.0** | UI → `@assistant-ui/react-ui` | Install react-ui or use primitives |
+| **0.8.0** | UI moved out of core | Use shadcn registry (recommended) or primitives |
 | **0.7.44** | `runtime.switchToThread()` moved | Use `runtime.threads.switchToThread()` |
 | **0.7.44** | `runtime.threadList` renamed | Use `runtime.threads` |
 | **0.7.0** | Deprecated features dropped | Update to non-deprecated APIs |
@@ -24,9 +24,10 @@ Fast lookup for breaking changes by version.
 ### Import Changes
 
 ```diff
-# Styled components (0.8.0+)
+# Styled components (0.8.0+) - use shadcn registry (recommended)
 - import { Thread } from "@assistant-ui/react";
-+ import { Thread } from "@assistant-ui/react-ui";
++ import { Thread } from "@/components/assistant-ui/thread";
+# Note: Run `npx assistant-ui add thread` to install
 
 # Message types (0.4.0+)
 - import type { AssistantMessage, UserMessage } from "@assistant-ui/react";
