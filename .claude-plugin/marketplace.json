@@ -21,7 +21,8 @@
         "./skills/tools",
         "./skills/streaming",
         "./skills/cloud",
-        "./skills/thread-list"
+        "./skills/thread-list",
+        "./skills/update"
       ]
     }
   ]
