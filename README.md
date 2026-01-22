@@ -13,12 +13,13 @@ npx skills add assistant-ui/skills
 | Skill | Description |
 |-------|-------------|
 | `/assistant-ui` | Main guide - architecture, packages, patterns |
-| `/setup` | Project setup and configuration |
+| `/setup` | Project setup and configuration (AI SDK, LangGraph, custom backends) |
 | `/primitives` | UI component primitives (Thread, Composer, Message, etc.) |
 | `/runtime` | Runtime system and state management |
 | `/tools` | Tool registration and tool UI |
 | `/streaming` | Streaming protocol and backends |
-| `/integrations` | Backend integrations (AI SDK, LangGraph, etc.) |
+| `/cloud` | Cloud persistence and authentication |
+| `/thread-list` | Multi-thread management |
 
 ## Usage
 
@@ -26,12 +27,13 @@ After installation, use skills in Claude Code by typing `/` followed by the skil
 
 ```
 /assistant-ui    # Get architecture overview
-/setup           # Setup a new project
+/setup           # Setup a new project (AI SDK, LangGraph, etc.)
 /primitives      # Customize UI components
 /runtime         # Work with state and runtimes
 /tools           # Implement LLM tools
 /streaming       # Handle streaming responses
-/integrations    # Connect to backends
+/cloud           # Persistence and auth
+/thread-list     # Multi-thread management
 ```
 
 ## Links

@@ -20,7 +20,6 @@
         "./skills/runtime",
         "./skills/tools",
         "./skills/streaming",
-        "./skills/integrations",
         "./skills/cloud",
         "./skills/thread-list"
       ]
