@@ -1407,7 +1407,7 @@ export function Chat() {
 }
 ```
 
-### 3. Custom Endpoint Configuration
+### 2. Custom Endpoint Configuration
 
 For custom API endpoints:
 
@@ -1438,7 +1438,7 @@ const runtime = useChatRuntime({
 });
 ```
 
-### 4. Transport Types Summary
+### 3. Transport Types Summary
 
 | Transport | Package | Auto-Forwards | Use Case |
 |-----------|---------|---------------|----------|
@@ -1447,7 +1447,7 @@ const runtime = useChatRuntime({
 | `DirectChatTransport` | `ai` | No | SSR/testing with direct agent |
 | `TextStreamChatTransport` | `ai` | No | Plain text backends |
 
-### 5. What AssistantChatTransport Forwards
+### 4. What AssistantChatTransport Forwards
 
 When using `AssistantChatTransport`, the following are automatically sent to your backend:
 
@@ -1465,7 +1465,7 @@ When using `AssistantChatTransport`, the following are automatically sent to you
 }
 ```
 
-### 6. Exports from @assistant-ui/react-ai-sdk
+### 5. Exports from @assistant-ui/react-ai-sdk
 
 ```typescript
 import {
