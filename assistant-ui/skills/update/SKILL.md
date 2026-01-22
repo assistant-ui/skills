@@ -11,11 +11,7 @@ license: MIT
 
 ## References
 
-- [./references/ai-sdk-v6.md](./references/ai-sdk-v6.md) -- AI SDK v4/v5 → v6 migration
-- [./references/ai-sdk-tools.md](./references/ai-sdk-tools.md) -- Tool system changes
-- [./references/ai-sdk-streaming.md](./references/ai-sdk-streaming.md) -- Streaming & structured output
-- [./references/ai-sdk-ui.md](./references/ai-sdk-ui.md) -- UI/React changes
-- [./references/ai-sdk-providers.md](./references/ai-sdk-providers.md) -- Provider changes
+- [./references/ai-sdk-v6.md](./references/ai-sdk-v6.md) -- AI SDK v4/v5 → v6 migration (complete guide)
 - [./references/assistant-ui.md](./references/assistant-ui.md) -- assistant-ui version migrations
 - [./references/breaking-changes.md](./references/breaking-changes.md) -- Quick reference table
 
