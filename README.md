@@ -20,6 +20,7 @@ npx skills add assistant-ui/skills
 | `/streaming` | Streaming protocol and backends |
 | `/cloud` | Cloud persistence and authentication |
 | `/thread-list` | Multi-thread management |
+| `/upgrade` | Upgrade assistant-ui and AI SDK to latest versions |
 
 ## Usage
 
@@ -34,6 +35,7 @@ After installation, use skills in Claude Code by typing `/` followed by the skil
 /streaming       # Handle streaming responses
 /cloud           # Persistence and auth
 /thread-list     # Multi-thread management
+/upgrade         # Upgrade assistant-ui and AI SDK versions
 ```
 
 ## Links
