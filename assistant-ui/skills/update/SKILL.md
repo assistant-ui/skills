@@ -1,11 +1,11 @@
 ---
-name: upgrade
-description: Upgrade assistant-ui and AI SDK to latest versions. Detects current versions, identifies breaking changes, and executes migrations.
+name: update
+description: Update assistant-ui and AI SDK to latest versions. Detects current versions, identifies breaking changes, and executes migrations.
 version: 0.0.1
 license: MIT
 ---
 
-# assistant-ui Upgrade
+# assistant-ui Update
 
 **Always verifies against npm ground truth and GitHub commits.**
 

@@ -22,7 +22,7 @@
         "./skills/streaming",
         "./skills/cloud",
         "./skills/thread-list",
-        "./skills/upgrade"
+        "./skills/update"
       ]
     }
   ]
