@@ -12,6 +12,10 @@ license: MIT
 ## References
 
 - [./references/ai-sdk-v6.md](./references/ai-sdk-v6.md) -- AI SDK v4/v5 → v6 migration
+- [./references/ai-sdk-tools.md](./references/ai-sdk-tools.md) -- Tool system changes
+- [./references/ai-sdk-streaming.md](./references/ai-sdk-streaming.md) -- Streaming & structured output
+- [./references/ai-sdk-ui.md](./references/ai-sdk-ui.md) -- UI/React changes
+- [./references/ai-sdk-providers.md](./references/ai-sdk-providers.md) -- Provider changes
 - [./references/assistant-ui.md](./references/assistant-ui.md) -- assistant-ui version migrations
 - [./references/breaking-changes.md](./references/breaking-changes.md) -- Quick reference table
 
@@ -79,68 +83,11 @@ npx tsc --noEmit  # Type check
 pnpm build        # Build check
 ```
 
-## Quick Upgrade (Latest Versions)
-
-For projects already on recent versions:
-
-```bash
-pnpm add @assistant-ui/react@latest @assistant-ui/react-ai-sdk@latest
-```
-
-Current latest:
-- `@assistant-ui/react`: 0.11.58
-- `@assistant-ui/react-ai-sdk`: 1.2.0
-- `ai`: 6.0.44
-
-## Version Compatibility
-
-| @assistant-ui/react | @assistant-ui/react-ai-sdk | AI SDK | Notes |
-|---------------------|---------------------------|--------|-------|
-| 0.11.x | 1.2.x | 6.x | Current, recommended |
-| 0.11.x | 1.1.x | 5.x/6.x | Transitional |
-| 0.10.x | 0.x | 4.x/5.x | Pre-AI SDK v6 |
-| 0.8.x-0.9.x | 0.x | 4.x | UI split era |
-| < 0.8.0 | 0.x | 4.x | Legacy |
-
-## Common Upgrade Paths
-
-### Path 1: Old Project → Latest
-
-```
-ai@4.x + @assistant-ui/react@0.7.x
-  ↓
-  Run AI SDK v6 migration (./references/ai-sdk-v6.md)
-  ↓
-  Run assistant-ui migration (./references/assistant-ui.md)
-  ↓
-ai@6.x + @assistant-ui/react@0.11.x
-```
-
-### Path 2: AI SDK v5 → v6
-
-```
-ai@5.x + @assistant-ui/react@0.10.x
-  ↓
-  Run AI SDK v6 migration only
-  ↓
-ai@6.x + @assistant-ui/react@0.11.x
-```
-
-### Path 3: Just Update assistant-ui
-
-```
-ai@6.x + @assistant-ui/react@0.11.40
-  ↓
-  pnpm add @assistant-ui/react@latest
-  ↓
-ai@6.x + @assistant-ui/react@0.11.58
-```
-
 ## Troubleshooting
 
 **"Peer dependency conflict"**
 - Update all packages together
-- Check version compatibility matrix above
+- Check version compatibility in [./references/breaking-changes.md](./references/breaking-changes.md)
 
 **Type errors after upgrade**
 - Consult breaking changes reference
