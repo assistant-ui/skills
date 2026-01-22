@@ -111,6 +111,7 @@ Components are copied to your project (e.g., `components/assistant-ui/thread.tsx
 
 ```diff
 // Styled components - now local files
+// Note: ThreadWelcome is now embedded inside Thread (shows when thread is empty)
 - import { Thread, ThreadWelcome } from "@assistant-ui/react";
 + import { Thread } from "@/components/assistant-ui/thread";
 
@@ -233,7 +234,7 @@ grep -rn "AssistantMessage\[^C\]\|UserMessage\[^C\]" --include="*.tsx" --include
 # Old tool API
 grep -rn "setResult\|setArtifact" --include="*.tsx" --include="*.ts"
 
-# Styled imports (need react-ui)
+# Styled imports (need shadcn registry migration)
 grep -rn "from ['\"]@assistant-ui/react['\"]" --include="*.tsx" | grep -v "Primitive\|Runtime\|use"
 ```
 

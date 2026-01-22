@@ -186,8 +186,10 @@ yarn add ai@latest @ai-sdk/react@latest @ai-sdk/openai@latest zod@latest
 ### 3.2 Run Codemods
 
 ```bash
-npx @ai-sdk/codemod v6
+npx @ai-sdk/codemod upgrade
 ```
+
+This is the recommended approach - it detects your current version and applies all necessary codemods (v4→v5→v6) automatically.
 
 **VERIFY:**
 - Review codemod output
