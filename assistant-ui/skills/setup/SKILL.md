@@ -1,105 +1,103 @@
 ---
 name: setup
-description: Setup and configure assistant-ui in a project. Use when installing packages, configuring runtimes, or troubleshooting setup issues.
-version: 0.0.1
+description: Setup and configure assistant-ui in a project. Use when installing packages, configuring runtimes, setting up chat UI, or troubleshooting setup issues.
+version: 0.1.0
 license: MIT
 ---
 
 # assistant-ui Setup
 
-**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
+## CLI Commands
 
-## References
+### Quick Decision Flow
 
-- [./references/ai-sdk.md](./references/ai-sdk.md) -- AI SDK v6 setup (recommended)
-- [./references/langgraph.md](./references/langgraph.md) -- LangGraph agent setup
-- [./references/custom-backend.md](./references/custom-backend.md) -- useLocalRuntime / useExternalStoreRuntime
-- [./references/ag-ui.md](./references/ag-ui.md) -- AG-UI protocol
-- [./references/a2a.md](./references/a2a.md) -- A2A protocol
-- [./references/styling.md](./references/styling.md) -- Styling options
-- [./references/tanstack.md](./references/tanstack.md) -- TanStack Router
+- Existing Next.js app (`package.json` exists): use `npx assistant-ui@latest init`
+- Existing app in CI/agent/non-interactive shell: use `npx assistant-ui@latest init --yes`
+- Existing app + force overwrite of conflicts: add `--overwrite`
+- New app / empty directory: use `npx assistant-ui@latest create <name>`
+- Need specific starter template: add `-t <default|minimal|cloud|cloud-clerk|langgraph|mcp>`
+- Need a curated example: use `npx assistant-ui@latest create <name> --example <example>`
+- Need playground preset config: use `npx assistant-ui@latest create <name> --preset <url>`
 
-## Pick Your Setup
-
-```
-Using Vercel AI SDK?
-├─ Yes → useChatRuntime (recommended)
-└─ No
-   ├─ LangGraph agents? → useLangGraphRuntime
-   ├─ AG-UI protocol? → useAgUiRuntime
-   ├─ A2A protocol? → useA2ARuntime
-   ├─ External state (Redux/Zustand)? → useExternalStoreRuntime
-   └─ Custom API → useLocalRuntime
-```
-
-## Quick Start (AI SDK)
+### New Project (`create`)
 
 ```bash
-npm install @assistant-ui/react @assistant-ui/react-ai-sdk @ai-sdk/react ai @ai-sdk/openai
+npx assistant-ui@latest create my-app -t minimal
+npx assistant-ui@latest create my-app -t cloud-clerk
+npx assistant-ui@latest create my-app --preset "https://www.assistant-ui.com/playground/init?preset=chatgpt"
 ```
 
-```tsx
-// app/page.tsx
-"use client";
-import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
-import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
+Templates:
 
-export default function Chat() {
-  const runtime = useChatRuntime({
-    transport: new AssistantChatTransport({ api: "/api/chat" }),
-  });
+| Template | Description |
+|-------|-------|
+| `default` | Default template with Vercel AI SDK |
+| `minimal` | Bare-bones starting point |
+| `cloud` | Cloud-backed persistence starter |
+| `cloud-clerk` | Cloud-backed starter with Clerk auth |
+| `langgraph` | LangGraph starter template |
+| `mcp` | MCP starter template |
 
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <Thread />
-    </AssistantRuntimeProvider>
-  );
-}
-```
+When `-t` is omitted:
+- Interactive shell (TTY): an interactive template picker is shown.
+- Non-interactive shell (CI/agent): template defaults to `default`.
 
-```ts
-// app/api/chat/route.ts
-import { openai } from "@ai-sdk/openai";
-import { streamText } from "ai";
+If no project directory is provided in a non-interactive shell, `create` uses `my-aui-app`.
 
-export async function POST(req: Request) {
-  const { messages } = await req.json();
-  const result = streamText({ model: openai("gpt-4o"), messages });
-  return result.toUIMessageStreamResponse();
-}
-```
+### Existing Next.js Project (`init`)
 
-## Styling
-
-```tsx
-// Option 1: Pre-built CSS
-import "@assistant-ui/styles/default.css";
-
-// Option 2: Tailwind (add to tailwind.config.js)
-content: ["./node_modules/@assistant-ui/react/dist/**/*.js"]
-```
-
-## Environment Variables
-
-```env
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-NEXT_PUBLIC_ASSISTANT_BASE_URL=https://api.assistant-ui.com  # For cloud
-```
-
-## Common Gotchas
-
-**"Cannot find module @ai-sdk/react"**
 ```bash
-npm install @ai-sdk/react
+npx assistant-ui@latest init --yes
 ```
 
-**Styles not applied**
-- Import CSS at root level or configure Tailwind content paths
+The `init` command is for **existing projects only** (requires `package.json`).
+If no project is found, it automatically forwards to `create`.
+Passing `--preset` to `init` also forwards to `create` (compatibility path).
 
-**Streaming not working**
-- Use `toUIMessageStreamResponse()` in API route
-- Check for CORS errors in console
+The `--yes` flag runs non-interactively (no prompts).
 
-**"runtime is undefined"**
-- Call `useChatRuntime` inside a component, not at module level
+### Add Registry Components
+
+```bash
+npx assistant-ui@latest add markdown-text
+npx assistant-ui@latest add thread-list
+```
+
+Registry: `https://r.assistant-ui.com/{name}.json`
+
+---
+
+## Template Code Policy
+
+When using CLI templates (`npx assistant-ui@latest create`), **never modify generated code** unless explicitly requested.
+
+---
+
+## Non-Default Setups
+
+For runtimes other than AI SDK or frameworks other than Next.js, consult the reference files:
+
+| Setup | Runtime Hook | Reference |
+|-------|-------------|-----------|
+| AI SDK advanced (tools, cloud, options) | `useChatRuntime` | [references/ai-sdk.md](./references/ai-sdk.md) |
+| LangGraph agents | `useLangGraphRuntime` | [references/langgraph.md](./references/langgraph.md) |
+| AG-UI protocol | `useAgUiRuntime` | [references/ag-ui.md](./references/ag-ui.md) |
+| A2A protocol | `useA2ARuntime` | [references/a2a.md](./references/a2a.md) |
+| Custom streaming API | `useLocalRuntime` | [references/custom-backend.md](./references/custom-backend.md) |
+| Existing state (Redux/Zustand) | `useExternalStoreRuntime` | [references/custom-backend.md](./references/custom-backend.md) |
+| Vite / TanStack Start | — | [references/tanstack.md](./references/tanstack.md) |
+
+---
+
+## Deprecated Packages
+
+NEVER install `@assistant-ui/styles` or `@assistant-ui/react-ui` — both are deprecated and deleted.
+
+---
+
+## Troubleshooting
+
+For issues not covered by the reference files, use the docs website:
+
+1. **Fetch the index**: `https://www.assistant-ui.com/llms.txt` — compact table of contents
+2. **Fetch specific pages**: Append `.mdx` to the docs URL, e.g. `https://www.assistant-ui.com/docs/runtimes/ai-sdk.mdx`
