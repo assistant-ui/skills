@@ -15,7 +15,7 @@ Message input form for sending messages.
 | `.AttachmentDropzone` | Drag-drop area |
 | `.Dictate` | Start voice input |
 | `.StopDictation` | Stop voice input |
-| `.If` | Conditional rendering |
+| `.If` | Conditional rendering (deprecated; prefer `AuiIf`) |
 
 ## Basic Structure
 
@@ -77,40 +77,41 @@ Submit button. Disabled when input is empty or generating.
 Cancel ongoing generation.
 
 ```tsx
-<ComposerPrimitive.If submitting>
+<AuiIf condition={({ thread }) => thread.isRunning}>
   <ComposerPrimitive.Cancel className="bg-red-500 text-white px-4 py-2 rounded-lg">
     Stop
   </ComposerPrimitive.Cancel>
-</ComposerPrimitive.If>
+</AuiIf>
 ```
 
-## ComposerPrimitive.If
+## Conditional rendering with `AuiIf`
 
-Conditional rendering based on composer state.
+Deprecated `ComposerPrimitive.If` supports only `editing` and `dictation` props.
+Prefer `AuiIf` for richer state checks (`thread`, `composer`, etc.).
 
 ```tsx
-// While generating
-<ComposerPrimitive.If submitting>
+// While sending
+<AuiIf condition={({ thread }) => thread.isRunning}>
   <ComposerPrimitive.Cancel>Stop</ComposerPrimitive.Cancel>
-</ComposerPrimitive.If>
+</AuiIf>
 
-// When not generating
-<ComposerPrimitive.If notSubmitting>
+// Not generating
+<AuiIf condition={({ thread }) => !thread.isRunning}>
   <ComposerPrimitive.Send>Send</ComposerPrimitive.Send>
-</ComposerPrimitive.If>
+</AuiIf>
 
 // Has file attachments
-<ComposerPrimitive.If hasAttachments>
+<AuiIf condition={({ composer }) => composer.attachments.length > 0}>
   <AttachmentList />
-</ComposerPrimitive.If>
+</AuiIf>
 ```
 
 ### Available Conditions
 
-- `submitting` / `notSubmitting` - Message being sent
-- `hasAttachments` / `notHasAttachments` - Files attached
-- `canSend` / `cannotSend` - Can submit form
-- `focused` / `notFocused` - Input is focused
+- `thread.isRunning` - Thread is currently generating
+- `composer.attachments.length > 0` - Composer has file attachments
+- `composer.isEditing` - Composer is in edit mode
+- `composer.dictation != null` - Dictation is active
 
 ## Attachments
 
@@ -119,7 +120,6 @@ Conditional rendering based on composer state.
 ```tsx
 <ComposerPrimitive.AddAttachment
   className="p-2 rounded hover:bg-gray-100"
-  accept="image/*,.pdf"  // Accepted file types
 >
   📎 Attach
 </ComposerPrimitive.AddAttachment>
@@ -149,17 +149,17 @@ Conditional rendering based on composer state.
 ## Voice Input
 
 ```tsx
-<ComposerPrimitive.If notDictating>
+<AuiIf condition={({ composer }) => composer.dictation == null}>
   <ComposerPrimitive.Dictate className="p-2 rounded hover:bg-gray-100">
     🎤 Voice
   </ComposerPrimitive.Dictate>
-</ComposerPrimitive.If>
+</AuiIf>
 
-<ComposerPrimitive.If dictating>
+<AuiIf condition={({ composer }) => composer.dictation != null}>
   <ComposerPrimitive.StopDictation className="p-2 rounded bg-red-100">
     ⏹️ Stop
   </ComposerPrimitive.StopDictation>
-</ComposerPrimitive.If>
+</AuiIf>
 ```
 
 ## Complete Example
@@ -174,7 +174,7 @@ function CustomComposer() {
       </ComposerPrimitive.AttachmentDropzone>
 
       {/* Attached files */}
-      <ComposerPrimitive.If hasAttachments>
+      <AuiIf condition={({ composer }) => composer.attachments.length > 0}>
         <ComposerPrimitive.Attachments className="flex flex-wrap gap-2 mb-2">
           <AttachmentPrimitive.Root className="group flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5">
             <AttachmentPrimitive.Name className="text-sm truncate max-w-[150px]" />
@@ -183,7 +183,7 @@ function CustomComposer() {
             </AttachmentPrimitive.Remove>
           </AttachmentPrimitive.Root>
         </ComposerPrimitive.Attachments>
-      </ComposerPrimitive.If>
+      </AuiIf>
 
       {/* Input row */}
       <div className="flex items-end gap-2">
@@ -197,29 +197,29 @@ function CustomComposer() {
           rows={1}
         />
 
-        <ComposerPrimitive.If notDictating>
+        <AuiIf condition={({ composer }) => composer.dictation == null}>
           <ComposerPrimitive.Dictate className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
             <MicIcon className="w-5 h-5" />
           </ComposerPrimitive.Dictate>
-        </ComposerPrimitive.If>
+        </AuiIf>
 
-        <ComposerPrimitive.If dictating>
+        <AuiIf condition={({ composer }) => composer.dictation != null}>
           <ComposerPrimitive.StopDictation className="p-2 text-red-500 bg-red-50 rounded animate-pulse">
             <StopIcon className="w-5 h-5" />
           </ComposerPrimitive.StopDictation>
-        </ComposerPrimitive.If>
+        </AuiIf>
 
-        <ComposerPrimitive.If submitting>
+        <AuiIf condition={({ thread }) => thread.isRunning}>
           <ComposerPrimitive.Cancel className="p-2 text-red-500 hover:bg-red-50 rounded">
             <StopIcon className="w-5 h-5" />
           </ComposerPrimitive.Cancel>
-        </ComposerPrimitive.If>
+        </AuiIf>
 
-        <ComposerPrimitive.If notSubmitting>
+        <AuiIf condition={({ thread }) => !thread.isRunning}>
           <ComposerPrimitive.Send className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:hover:bg-blue-500">
             <SendIcon className="w-5 h-5" />
           </ComposerPrimitive.Send>
-        </ComposerPrimitive.If>
+        </AuiIf>
       </div>
     </ComposerPrimitive.Root>
   );

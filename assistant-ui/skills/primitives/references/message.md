@@ -7,17 +7,19 @@ Individual message display.
 | Part | Description |
 |------|-------------|
 | `.Root` | Message container |
+| `.Parts` | Message body with parts (canonical) |
 | `.Content` | Message body with parts |
-| `.Avatar` | User/assistant avatar |
-| `.Status` | Loading/error status |
-| `.BranchPicker` | Navigate branches |
-| `.If` | Conditional rendering |
+| `.If` | Conditional rendering (deprecated; prefer `AuiIf`) |
+| `.Error` | Render fallback when message has an error |
+| `.PartByIndex` | Render a single part by index |
+| `.Attachments` | Render message attachments |
+| `.AttachmentByIndex` | Render one attachment by index |
 
 ## Basic Structure
 
 ```tsx
 <MessagePrimitive.Root>
-  <MessagePrimitive.Avatar fallback="U" />
+  <Avatar src="/user-avatar.png" />
   <MessagePrimitive.Content />
 </MessagePrimitive.Root>
 ```
@@ -92,59 +94,34 @@ Renders message content parts (text, images, tool calls, etc.).
 | `Source` | Citation/reference | `url`, `title` |
 | `File` | File attachment | `filename?`, `data`, `mimeType` |
 
-## MessagePrimitive.Avatar
+## MessagePrimitive.If / AuiIf
 
-User or assistant avatar.
-
-```tsx
-<MessagePrimitive.Avatar
-  src="/user-avatar.png"    // Image URL
-  fallback="U"              // Fallback text
-  className="w-8 h-8 rounded-full"
-/>
-```
-
-## MessagePrimitive.Status
-
-Shows message status (loading, error).
+`MessagePrimitive.If` still exists but is deprecated. Prefer `AuiIf` for the most flexible state checks.
 
 ```tsx
-<MessagePrimitive.Status>
-  {/* Custom loading indicator */}
-  <div className="animate-pulse">●●●</div>
-</MessagePrimitive.Status>
-```
-
-## MessagePrimitive.If
-
-Conditional rendering based on message state.
-
-```tsx
-// By role
 <MessagePrimitive.If user>User message content</MessagePrimitive.If>
 <MessagePrimitive.If assistant>Assistant message content</MessagePrimitive.If>
 <MessagePrimitive.If system>System message content</MessagePrimitive.If>
-
-// By status
-<MessagePrimitive.If running>Generating...</MessagePrimitive.If>
-<MessagePrimitive.If complete>Done</MessagePrimitive.If>
-
-// By features
 <MessagePrimitive.If hasBranches>
   <BranchPickerPrimitive.Root>...</BranchPickerPrimitive.Root>
 </MessagePrimitive.If>
 
-<MessagePrimitive.If canCopy>
-  <ActionBarPrimitive.Copy />
-</MessagePrimitive.If>
+<MessagePrimitive.If copied>Copied</MessagePrimitive.If>
+<MessagePrimitive.If speaking>Playing speech</MessagePrimitive.If>
+<MessagePrimitive.If submittedFeedback="positive">Positive feedback</MessagePrimitive.If>
 ```
 
-### Available Conditions
+When you need custom conditions (for example branch metadata), use `AuiIf`:
 
-- `user` / `assistant` / `system` - Message role
-- `running` / `complete` / `incomplete` - Generation status
-- `hasBranches` - Has edit history
-- `canCopy` / `canReload` / `canEdit` / `canSpeak` - Capabilities
+```tsx
+<AuiIf condition={({ message }) => message.branchCount > 1}>
+  <BranchPickerPrimitive.Root>...</BranchPickerPrimitive.Root>
+</AuiIf>
+
+<AuiIf condition={({ message }) => message.isCopied}>
+  <CheckIcon />
+</AuiIf>
+```
 
 ## Complete Example
 
@@ -152,33 +129,15 @@ Conditional rendering based on message state.
 function CustomUserMessage() {
   return (
     <MessagePrimitive.Root className="flex justify-end mb-4">
+      <Avatar
+        fallback="U"
+        className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center ml-2"
+      />
       <div className="max-w-[80%]">
         <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm px-4 py-2">
           <MessagePrimitive.Content />
         </div>
-
-        {/* Branch picker for edits */}
-        <MessagePrimitive.If hasBranches>
-          <div className="flex justify-end mt-1">
-            <BranchPickerPrimitive.Root className="flex items-center gap-1 text-xs text-gray-500">
-              <BranchPickerPrimitive.Previous className="hover:text-gray-700">
-                ←
-              </BranchPickerPrimitive.Previous>
-              <span>
-                <BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count />
-              </span>
-              <BranchPickerPrimitive.Next className="hover:text-gray-700">
-                →
-              </BranchPickerPrimitive.Next>
-            </BranchPickerPrimitive.Root>
-          </div>
-        </MessagePrimitive.If>
       </div>
-
-      <MessagePrimitive.Avatar
-        fallback="U"
-        className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center ml-2"
-      />
     </MessagePrimitive.Root>
   );
 }
@@ -186,7 +145,7 @@ function CustomUserMessage() {
 function CustomAssistantMessage() {
   return (
     <MessagePrimitive.Root className="flex mb-4">
-      <MessagePrimitive.Avatar
+      <Avatar
         src="/ai-avatar.png"
         fallback="AI"
         className="w-8 h-8 rounded-full mr-2 shrink-0"
@@ -194,43 +153,36 @@ function CustomAssistantMessage() {
 
       <div className="max-w-[80%]">
         <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-2">
-          <MessagePrimitive.Content
-            components={{
-              Text: ({ part }) => (
-                <p className="whitespace-pre-wrap">{part.text}</p>
-              ),
-              ToolCall: ToolCallUI,
-            }}
-          />
-
-          {/* Loading indicator while generating */}
-          <MessagePrimitive.If running>
-            <div className="flex gap-1 mt-2">
-              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
-              <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
-            </div>
-          </MessagePrimitive.If>
+          <MessagePrimitive.Content />
         </div>
-
-        {/* Action bar */}
-        <MessagePrimitive.If complete>
-          <ActionBarPrimitive.Root className="flex gap-2 mt-1 opacity-0 hover:opacity-100 transition-opacity">
-            <ActionBarPrimitive.Copy className="text-xs text-gray-500 hover:text-gray-700">
-              Copy
-            </ActionBarPrimitive.Copy>
-            <ActionBarPrimitive.Reload className="text-xs text-gray-500 hover:text-gray-700">
-              Regenerate
-            </ActionBarPrimitive.Reload>
-            <ActionBarPrimitive.Speak className="text-xs text-gray-500 hover:text-gray-700">
-              🔊
-            </ActionBarPrimitive.Speak>
-          </ActionBarPrimitive.Root>
-        </MessagePrimitive.If>
       </div>
+
+      <ActionBarPrimitive.Root className="flex gap-2 mt-1 opacity-0 hover:opacity-100 transition-opacity">
+        <ActionBarPrimitive.Copy className="text-xs text-gray-500 hover:text-gray-700">
+          Copy
+        </ActionBarPrimitive.Copy>
+        <ActionBarPrimitive.Reload className="text-xs text-gray-500 hover:text-gray-700">
+          Regenerate
+        </ActionBarPrimitive.Reload>
+        <ActionBarPrimitive.Speak className="text-xs text-gray-500 hover:text-gray-700">
+          🔊
+        </ActionBarPrimitive.Speak>
+      </ActionBarPrimitive.Root>
     </MessagePrimitive.Root>
   );
 }
+```
+
+## Error and branching support
+
+Use `MessagePrimitive.Error` to render a fallback UI only when the message has an error:
+
+```tsx
+<MessagePrimitive.Error>
+  <ErrorPrimitive.Root>
+    <ErrorPrimitive.Message />
+  </ErrorPrimitive.Root>
+</MessagePrimitive.Error>
 ```
 
 ## Accessing Message State

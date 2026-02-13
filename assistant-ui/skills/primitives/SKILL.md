@@ -22,6 +22,7 @@ Composable, unstyled components following Radix UI patterns.
 
 ```tsx
 import {
+  AuiIf,
   ThreadPrimitive,
   ComposerPrimitive,
   MessagePrimitive,
@@ -39,8 +40,8 @@ import {
 |-----------|-----------|
 | `ThreadPrimitive` | `.Root`, `.Viewport`, `.Messages`, `.Empty`, `.ScrollToBottom` |
 | `ComposerPrimitive` | `.Root`, `.Input`, `.Send`, `.Cancel`, `.Attachments` |
-| `MessagePrimitive` | `.Root`, `.Content`, `.Avatar`, `.If` |
-| `ActionBarPrimitive` | `.Copy`, `.Edit`, `.Reload`, `.Speak` |
+| `MessagePrimitive` | `.Root`, `.Parts`/`.Content`, `.If`, `.Error` |
+| `ActionBarPrimitive` | `.Copy`, `.Edit`, `.Reload`, `.Speak`, `.FeedbackPositive`, `.FeedbackNegative`, `.ExportMarkdown` |
 | `BranchPickerPrimitive` | `.Previous`, `.Next`, `.Number`, `.Count` |
 
 ## Custom Thread Example
@@ -75,17 +76,24 @@ function CustomThread() {
 
 ## Conditional Rendering
 
+Prefer `AuiIf` for new code. Primitive `.If` components still exist but are deprecated.
+
 ```tsx
-<MessagePrimitive.If user>User only</MessagePrimitive.If>
-<MessagePrimitive.If assistant>Assistant only</MessagePrimitive.If>
-<MessagePrimitive.If running>Generating...</MessagePrimitive.If>
-<MessagePrimitive.If hasBranches>Has edit history</MessagePrimitive.If>
+<AuiIf condition={({ message }) => message.role === "user"}>
+  User only
+</AuiIf>
+<AuiIf condition={({ thread }) => thread.isRunning}>
+  Generating...
+</AuiIf>
+<AuiIf condition={({ message }) => message.branchCount > 1}>
+  Has edit history
+</AuiIf>
 
-<ComposerPrimitive.If submitting>
+<AuiIf condition={({ thread }) => thread.isRunning}>
   <ComposerPrimitive.Cancel>Stop</ComposerPrimitive.Cancel>
-</ComposerPrimitive.If>
+</AuiIf>
 
-<ThreadPrimitive.If empty>No messages</ThreadPrimitive.If>
+<AuiIf condition={({ thread }) => thread.isEmpty}>No messages</AuiIf>
 ```
 
 ## Content Parts
@@ -119,4 +127,4 @@ function CustomThread() {
 
 **Styles not applying**
 - Primitives are unstyled by default
-- Add className or use `@assistant-ui/styles`
+- Add `className` and style with your app's Tailwind/CSS system

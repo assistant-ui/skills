@@ -12,7 +12,7 @@ Container for the entire chat thread.
 | `.Empty` | Shown when no messages |
 | `.ScrollToBottom` | Button to scroll down |
 | `.Suggestions` | Quick reply suggestions |
-| `.If` | Conditional rendering |
+| `.If` | Conditional rendering (deprecated; prefer `AuiIf`) |
 
 ## Basic Structure
 
@@ -116,37 +116,32 @@ Renders suggested quick replies.
 />
 ```
 
-## ThreadPrimitive.If
+## Conditional Rendering (`AuiIf`)
 
-Conditional rendering based on thread state.
+`ThreadPrimitive.If` is deprecated. Prefer `AuiIf` with thread state:
 
 ```tsx
 // When no messages
-<ThreadPrimitive.If empty>
+<AuiIf condition={({ thread }) => thread.isEmpty}>
   <EmptyState />
-</ThreadPrimitive.If>
+</AuiIf>
 
 // When has messages
-<ThreadPrimitive.If notEmpty>
+<AuiIf condition={({ thread }) => !thread.isEmpty}>
   <ThreadPrimitive.Messages />
-</ThreadPrimitive.If>
+</AuiIf>
 
 // While generating
-<ThreadPrimitive.If running>
+<AuiIf condition={({ thread }) => thread.isRunning}>
   <LoadingIndicator />
-</ThreadPrimitive.If>
-
-// When not generating
-<ThreadPrimitive.If notRunning>
-  <IdleState />
-</ThreadPrimitive.If>
+</AuiIf>
 ```
 
 ### Available Conditions
 
-- `empty` / `notEmpty` - Thread has no messages
-- `running` / `notRunning` - Generation in progress
-- `disabled` / `notDisabled` - Thread is disabled
+- `thread.isEmpty` - Thread has no messages
+- `thread.isRunning` - Generation in progress
+- `thread.isDisabled` - Thread is disabled
 
 ## Complete Example
 
@@ -155,7 +150,7 @@ function CustomThread() {
   return (
     <ThreadPrimitive.Root className="relative flex flex-col h-full bg-white">
       {/* Empty state */}
-      <ThreadPrimitive.If empty>
+      <AuiIf condition={({ thread }) => thread.isEmpty}>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center p-8">
             <h1 className="text-2xl font-bold mb-2">AI Assistant</h1>
@@ -174,10 +169,10 @@ function CustomThread() {
             />
           </div>
         </div>
-      </ThreadPrimitive.If>
+      </AuiIf>
 
       {/* Messages */}
-      <ThreadPrimitive.If notEmpty>
+      <AuiIf condition={({ thread }) => !thread.isEmpty}>
         <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto p-4">
             <ThreadPrimitive.Messages
@@ -188,7 +183,7 @@ function CustomThread() {
             />
           </div>
         </ThreadPrimitive.Viewport>
-      </ThreadPrimitive.If>
+      </AuiIf>
 
       {/* Scroll to bottom */}
       <ThreadPrimitive.ScrollToBottom className="absolute bottom-24 right-4 p-2 rounded-full bg-white shadow-lg hover:bg-gray-50">
