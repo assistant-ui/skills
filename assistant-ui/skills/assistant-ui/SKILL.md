@@ -71,7 +71,6 @@ Using AI SDK?
 | `@assistant-ui/react-ai-sdk` | Vercel AI SDK v6 adapter |
 | `@assistant-ui/react-langgraph` | LangGraph adapter |
 | `@assistant-ui/react-markdown` | Markdown rendering |
-| `@assistant-ui/styles` | Pre-built CSS |
 | `assistant-stream` | Streaming protocol |
 | `assistant-cloud` | Cloud persistence |
 
