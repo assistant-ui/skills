@@ -1,248 +1,91 @@
-# Styling Guide
+# Styling and Customization (shadcn Pattern)
 
-Options for styling assistant-ui components.
+assistant-ui UI components added by `init`/`create`/`add` are local source files. Style and customize them the same way you customize shadcn components: edit local TSX and theme tokens directly.
 
-## Quick Decision
+## Where to Customize
 
-```
-Using Tailwind CSS?
-├─ Yes
-│  ├─ Want pre-built components? → Use Thread with className
-│  └─ Want full control? → Use Primitives with Tailwind classes
-└─ No
-   └─ Import @assistant-ui/styles/default.css
-```
+- `components/assistant-ui/*`: assistant-ui registry components (thread, tool-fallback, markdown-text, etc.)
+- `components/ui/*`: shadcn base primitives (button, tooltip, dialog, sidebar, ...)
+- `app/globals.css`: theme tokens (`:root`, `.dark`) and global overrides
+- `lib/utils.ts`: `cn()` class merging helper used across components
 
-## Option 1: Pre-built CSS (No Tailwind)
+## Theme Tokens (Tailwind v4 + shadcn style)
 
-Simplest approach for projects without Tailwind.
-
-```bash
-npm install @assistant-ui/styles
-```
-
-```tsx
-// In your root layout or _app
-import "@assistant-ui/styles/default.css";
-
-function App() {
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <Thread />  {/* Fully styled */}
-    </AssistantRuntimeProvider>
-  );
-}
-```
-
-### Available Stylesheets
-
-- `@assistant-ui/styles/default.css` - Full thread styles
-- `@assistant-ui/styles/modal.css` - Modal/popup styles
-- `@assistant-ui/styles/markdown.css` - Markdown content styles
-
-## Option 2: Tailwind CSS
-
-### Configure Tailwind
-
-```js
-// tailwind.config.js
-module.exports = {
-  content: [
-    "./app/**/*.{js,ts,jsx,tsx}",
-    "./components/**/*.{js,ts,jsx,tsx}",
-    // Include assistant-ui components
-    "./node_modules/@assistant-ui/react/dist/**/*.js",
-  ],
-  // ...
-};
-```
-
-### Use with Pre-built Components
-
-```tsx
-import { Thread } from "@assistant-ui/react";
-
-function Chat() {
-  return (
-    <Thread
-      className="h-full bg-white dark:bg-gray-900"
-    />
-  );
-}
-```
-
-### Use with Primitives
-
-```tsx
-import {
-  ThreadPrimitive,
-  ComposerPrimitive,
-  MessagePrimitive,
-} from "@assistant-ui/react";
-
-function CustomThread() {
-  return (
-    <ThreadPrimitive.Root className="flex flex-col h-full bg-gray-50">
-      <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto p-4">
-        <ThreadPrimitive.Messages
-          components={{
-            UserMessage: () => (
-              <MessagePrimitive.Root className="flex justify-end mb-4">
-                <div className="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-[80%]">
-                  <MessagePrimitive.Content />
-                </div>
-              </MessagePrimitive.Root>
-            ),
-            AssistantMessage: () => (
-              <MessagePrimitive.Root className="flex mb-4">
-                <div className="bg-gray-200 rounded-lg px-4 py-2 max-w-[80%]">
-                  <MessagePrimitive.Content />
-                </div>
-              </MessagePrimitive.Root>
-            ),
-          }}
-        />
-      </ThreadPrimitive.Viewport>
-
-      <ComposerPrimitive.Root className="border-t p-4 flex gap-2">
-        <ComposerPrimitive.Input
-          className="flex-1 rounded-lg border px-4 py-2 focus:outline-none focus:ring-2"
-          placeholder="Type a message..."
-        />
-        <ComposerPrimitive.Send className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-          Send
-        </ComposerPrimitive.Send>
-      </ComposerPrimitive.Root>
-    </ThreadPrimitive.Root>
-  );
-}
-```
-
-## Option 3: CSS Variables
-
-Customize via CSS variables:
+Components use shadcn theme tokens defined in `app/globals.css` and mapped to Tailwind v4 `@theme` variables. These help maintain a consistent style system.
 
 ```css
 :root {
-  /* Primary colors */
-  --aui-primary: #3b82f6;
-  --aui-primary-foreground: #ffffff;
-
-  /* Background */
-  --aui-background: #ffffff;
-  --aui-foreground: #1f2937;
-
-  /* Messages */
-  --aui-user-message-bg: #3b82f6;
-  --aui-assistant-message-bg: #f3f4f6;
-
-  /* Borders */
-  --aui-border: #e5e7eb;
-  --aui-border-radius: 0.5rem;
-
-  /* Typography */
-  --aui-font-family: system-ui, sans-serif;
-  --aui-font-size: 0.875rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.21 0.006 285.885);
+  --radius: 0.625rem;
+  /* ...other theme tokens */
 }
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --aui-background: #111827;
-    --aui-foreground: #f9fafb;
-    --aui-assistant-message-bg: #374151;
-  }
+.dark {
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.985 0 0);
+  --primary: oklch(0.9 0.001 286.0);
+  /* ...other theme tokens */
 }
-```
-
-## Component-Specific Styling
-
-### Thread
-
-```tsx
-<Thread
-  className="h-[600px] max-w-2xl mx-auto"
-  style={{ "--aui-primary": "#8b5cf6" }}
-/>
-```
-
-### Composer
-
-```tsx
-<ComposerPrimitive.Root className="sticky bottom-0 bg-white border-t">
-  <ComposerPrimitive.Input
-    className="w-full resize-none"
-    rows={3}
-  />
-</ComposerPrimitive.Root>
-```
-
-### Messages
-
-```tsx
-<MessagePrimitive.Root
-  className={cn(
-    "mb-4 flex",
-    isUser ? "justify-end" : "justify-start"
-  )}
->
-  <MessagePrimitive.Content />
-</MessagePrimitive.Root>
 ```
 
 ## Dark Mode
 
-### With Tailwind
+Dark mode is class-based: toggling the `dark` class on `<html>` switches shadcn theme tokens to dark mode values.
 
 ```tsx
-<ThreadPrimitive.Root className="bg-white dark:bg-gray-900">
-  {/* Components inherit dark mode */}
-</ThreadPrimitive.Root>
+// app/layout.tsx
+import { ThemeProvider } from "next-themes";
+
+<ThemeProvider attribute="class" defaultTheme="system">
+  {children}
+</ThemeProvider>
 ```
 
-### With CSS
-
-```css
-@media (prefers-color-scheme: dark) {
-  .aui-thread {
-    --aui-background: #1a1a1a;
-    --aui-foreground: #ffffff;
-  }
-}
-
-/* Or with class-based dark mode */
-.dark .aui-thread {
-  --aui-background: #1a1a1a;
-}
-```
-
-## Common Patterns
-
-### Full-Height Thread
+## Common Layout Patterns
 
 ```tsx
+// Full-height thread
 <div className="h-screen">
+  <Thread className="h-full" />
+</div>
+
+// Floating modal chat
+<AssistantModal />
+
+// Constrained-width centered thread
+<div className="mx-auto max-w-2xl h-full">
   <Thread className="h-full" />
 </div>
 ```
 
-### Chat in Modal
+## Component-Level Customization with `cn()`
+
+Use `cn()` when customizing local component styles (including child elements like a `Button` inside `Thread`) so you can layer conditional or external classes without breaking defaults. Keep edits in registry components (`components/assistant-ui/`) and rely on shadcn primitives for consistent composition.
+
+`cn()` keeps base styles, then resolves conflicts so later classes win.
 
 ```tsx
-import { AssistantModal } from "@assistant-ui/react";
-
-<AssistantModal className="fixed bottom-4 right-4 w-96 h-[500px]" />
+<Button className={cn("thread-send-button", className)} />
 ```
 
-### Sticky Composer
-
 ```tsx
-<ThreadPrimitive.Root className="flex flex-col h-full">
-  <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto">
-    {/* Messages */}
-  </ThreadPrimitive.Viewport>
-  <ComposerPrimitive.Root className="sticky bottom-0">
-    {/* Input */}
-  </ComposerPrimitive.Root>
+<ThreadPrimitive.Root
+  className={cn(
+    "aui-thread-root @container flex h-full flex-col bg-background",
+    className
+  )}
+>
+  {/* ... */}
 </ThreadPrimitive.Root>
 ```
+
+## Deep UI Control
+
+For building entirely custom layouts, compose directly with `ThreadPrimitive`, `MessagePrimitive`, and `ComposerPrimitive` from `@assistant-ui/react`. See the `/primitives` skill for API details.
+
+## Legacy / Deprecated
+
+- Never install `@assistant-ui/styles` or `@assistant-ui/react-ui`, they are deprecated legacy packages.
+- Existing `aui-*` classes in registry components are legacy identifiers — they do not impact styling and can be safely ignored.

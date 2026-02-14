@@ -32,8 +32,8 @@ api.thread().append({ role: "user", content: [{ type: "text", text: "Hello" }] }
 api.thread().cancelRun();
 
 // Events
-useAssistantEvent("message-added", (e) => {
-  console.log("New message:", e.message);
+useAssistantEvent("composer.send", (e) => {
+  console.log("Message sent:", e.messageId);
 });
 ```
 

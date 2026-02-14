@@ -80,6 +80,7 @@ For runtimes other than AI SDK or frameworks other than Next.js, consult the ref
 | Setup | Runtime Hook | Reference |
 |-------|-------------|-----------|
 | AI SDK advanced (tools, cloud, options) | `useChatRuntime` | [references/ai-sdk.md](./references/ai-sdk.md) |
+| Styling and UI customization (shadcn pattern) | — | [references/styling.md](./references/styling.md) |
 | LangGraph agents | `useLangGraphRuntime` | [references/langgraph.md](./references/langgraph.md) |
 | AG-UI protocol | `useAgUiRuntime` | [references/ag-ui.md](./references/ag-ui.md) |
 | A2A protocol | `useA2ARuntime` | [references/a2a.md](./references/a2a.md) |

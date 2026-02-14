@@ -11,7 +11,8 @@ npm install @assistant-ui/react @assistant-ui/react-langgraph
 ## Basic Setup
 
 ```tsx
-import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
 import { useLangGraphRuntime } from "@assistant-ui/react-langgraph";
 
 function Chat() {

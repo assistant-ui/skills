@@ -137,18 +137,20 @@ interface ThreadCapabilities {
 
 ```typescript
 interface ThreadListState {
-  threads: string[];         // Active thread IDs
-  archivedThreads: string[]; // Archived thread IDs
+  threadIds: readonly string[];         // Active thread IDs
+  archivedThreadIds: readonly string[]; // Archived thread IDs
+  newThreadId: string | null; // Pending new thread ID
   mainThreadId: string;      // Current active thread
   isLoading: boolean;
+  threadItems: readonly ThreadListItemState[];
 }
 
 interface ThreadListItemState {
   id: string;
   remoteId?: string;
+  externalId?: string;
   title?: string;
-  status: "new" | "idle" | "running";
-  isMain: boolean;
+  status: "archived" | "regular" | "new" | "deleted";
 }
 ```
 

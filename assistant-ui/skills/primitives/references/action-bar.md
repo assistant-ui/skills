@@ -12,9 +12,9 @@ Message action buttons (copy, edit, reload, etc.).
 | `.Reload` | Regenerate response |
 | `.Speak` | Text-to-speech |
 | `.StopSpeaking` | Stop TTS |
-| `.Feedback` | Thumbs up/down |
-| `.Export` | Export message |
-| `.If` | Conditional rendering |
+| `.FeedbackPositive` | Thumbs up |
+| `.FeedbackNegative` | Thumbs down |
+| `.ExportMarkdown` | Export message |
 
 ## Basic Usage
 
@@ -34,7 +34,7 @@ Container for action buttons. Usually placed inside a message.
 <ActionBarPrimitive.Root
   className="flex gap-2 mt-2"
   hideWhenRunning  // Hide while generating
-  autohide         // Show on hover only
+  autohide="not-last"  // "always" | "not-last" | "never"
   autohideFloat="single-branch"  // Float behavior
 >
   {children}
@@ -62,12 +62,12 @@ Copy message content to clipboard.
 
 // With copied state
 <ActionBarPrimitive.Copy>
-  <ActionBarPrimitive.If copied>
+  <AuiIf condition={({ message }) => message.isCopied}>
     <CheckIcon className="w-4 h-4 text-green-500" />
-  </ActionBarPrimitive.If>
-  <ActionBarPrimitive.If notCopied>
+  </AuiIf>
+  <AuiIf condition={({ message }) => !message.isCopied}>
     <CopyIcon className="w-4 h-4" />
-  </ActionBarPrimitive.If>
+  </AuiIf>
 </ActionBarPrimitive.Copy>
 ```
 
@@ -87,12 +87,12 @@ Regenerate the assistant's response.
 Enter edit mode for user messages.
 
 ```tsx
-<MessagePrimitive.If user>
+<AuiIf condition={({ message }) => message.role === "user"}>
   <ActionBarPrimitive.Edit className="p-1 rounded hover:bg-gray-100">
     <EditIcon className="w-4 h-4" />
     Edit
   </ActionBarPrimitive.Edit>
-</MessagePrimitive.If>
+</AuiIf>
 ```
 
 ## ActionBarPrimitive.Speak / StopSpeaking
@@ -100,34 +100,33 @@ Enter edit mode for user messages.
 Text-to-speech controls.
 
 ```tsx
-<ActionBarPrimitive.If notSpeaking>
+<AuiIf condition={({ message }) => message.speech == null}>
   <ActionBarPrimitive.Speak className="p-1 rounded hover:bg-gray-100">
     🔊 Read aloud
   </ActionBarPrimitive.Speak>
-</ActionBarPrimitive.If>
+</AuiIf>
 
-<ActionBarPrimitive.If speaking>
+<AuiIf condition={({ message }) => message.speech != null}>
   <ActionBarPrimitive.StopSpeaking className="p-1 rounded bg-red-100">
     ⏹️ Stop
   </ActionBarPrimitive.StopSpeaking>
-</ActionBarPrimitive.If>
+</AuiIf>
 ```
 
-## ActionBarPrimitive.Feedback
+## ActionBarPrimitive.FeedbackPositive / FeedbackNegative
 
 Thumbs up/down feedback buttons.
 
 ```tsx
-<ActionBarPrimitive.Feedback
+<ActionBarPrimitive.FeedbackPositive
   className="p-1 rounded hover:bg-gray-100"
-  type="positive"  // or "negative"
 >
   👍
-</ActionBarPrimitive.Feedback>
+</ActionBarPrimitive.FeedbackPositive>
 
-<ActionBarPrimitive.Feedback type="negative">
+<ActionBarPrimitive.FeedbackNegative>
   👎
-</ActionBarPrimitive.Feedback>
+</ActionBarPrimitive.FeedbackNegative>
 ```
 
 Requires a feedback adapter in the runtime:
@@ -150,24 +149,7 @@ const runtime = useChatRuntime({
 });
 ```
 
-## ActionBarPrimitive.If
-
-Conditional rendering based on action bar state.
-
-```tsx
-// Copy state
-<ActionBarPrimitive.If copied>Copied!</ActionBarPrimitive.If>
-<ActionBarPrimitive.If notCopied>Copy</ActionBarPrimitive.If>
-
-// Speech state
-<ActionBarPrimitive.If speaking>Playing...</ActionBarPrimitive.If>
-<ActionBarPrimitive.If notSpeaking>Read aloud</ActionBarPrimitive.If>
-```
-
-### Available Conditions
-
-- `copied` / `notCopied` - Copy button state
-- `speaking` / `notSpeaking` - TTS state
+Use `AuiIf` for copy/speech conditional rendering instead of `ActionBarPrimitive.If`.
 
 ## Complete Example
 
@@ -183,54 +165,52 @@ function MessageActionBar() {
         className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100"
         copiedDuration={2000}
       >
-        <ActionBarPrimitive.If copied>
+        <AuiIf condition={({ message }) => message.isCopied}>
           <CheckIcon className="w-4 h-4 text-green-500" />
-        </ActionBarPrimitive.If>
-        <ActionBarPrimitive.If notCopied>
+        </AuiIf>
+        <AuiIf condition={({ message }) => !message.isCopied}>
           <CopyIcon className="w-4 h-4" />
-        </ActionBarPrimitive.If>
+        </AuiIf>
       </ActionBarPrimitive.Copy>
 
       {/* Regenerate (assistant only) */}
-      <MessagePrimitive.If assistant>
+      <AuiIf condition={({ message }) => message.role === "assistant"}>
         <ActionBarPrimitive.Reload className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100">
           <RefreshIcon className="w-4 h-4" />
         </ActionBarPrimitive.Reload>
-      </MessagePrimitive.If>
+      </AuiIf>
 
       {/* Edit (user only) */}
-      <MessagePrimitive.If user>
+      <AuiIf condition={({ message }) => message.role === "user"}>
         <ActionBarPrimitive.Edit className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100">
           <EditIcon className="w-4 h-4" />
         </ActionBarPrimitive.Edit>
-      </MessagePrimitive.If>
+      </AuiIf>
 
       {/* Text-to-speech */}
-      <ActionBarPrimitive.If notSpeaking>
+      <AuiIf condition={({ message }) => message.speech == null}>
         <ActionBarPrimitive.Speak className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100">
           <SpeakerIcon className="w-4 h-4" />
         </ActionBarPrimitive.Speak>
-      </ActionBarPrimitive.If>
-      <ActionBarPrimitive.If speaking>
+      </AuiIf>
+      <AuiIf condition={({ message }) => message.speech != null}>
         <ActionBarPrimitive.StopSpeaking className="p-1.5 rounded text-red-500 bg-red-50">
           <StopIcon className="w-4 h-4" />
         </ActionBarPrimitive.StopSpeaking>
-      </ActionBarPrimitive.If>
+      </AuiIf>
 
       {/* Feedback */}
       <div className="border-l pl-1 ml-1">
-        <ActionBarPrimitive.Feedback
-          type="positive"
+        <ActionBarPrimitive.FeedbackPositive
           className="p-1.5 rounded text-gray-500 hover:text-green-600 hover:bg-green-50"
         >
           <ThumbsUpIcon className="w-4 h-4" />
-        </ActionBarPrimitive.Feedback>
-        <ActionBarPrimitive.Feedback
-          type="negative"
+        </ActionBarPrimitive.FeedbackPositive>
+        <ActionBarPrimitive.FeedbackNegative
           className="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50"
         >
           <ThumbsDownIcon className="w-4 h-4" />
-        </ActionBarPrimitive.Feedback>
+        </ActionBarPrimitive.FeedbackNegative>
       </div>
     </ActionBarPrimitive.Root>
   );
@@ -243,7 +223,7 @@ function MessageActionBar() {
 function AssistantMessage() {
   return (
     <MessagePrimitive.Root className="group flex mb-4">
-      <MessagePrimitive.Avatar fallback="AI" />
+      <Avatar fallback="AI" />
       <div className="flex-1">
         <MessagePrimitive.Content />
         <MessageActionBar />

@@ -23,7 +23,9 @@ Thread list is available with `useChatRuntime` + cloud:
 ```tsx
 import { AssistantCloud } from "assistant-cloud";
 import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
-import { AssistantRuntimeProvider, Thread, ThreadList } from "@assistant-ui/react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { ThreadList } from "@/components/assistant-ui/thread-list";
+import { Thread } from "@/components/assistant-ui/thread";
 
 const cloud = new AssistantCloud({
   baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
@@ -50,10 +52,13 @@ function Chat() {
 ## Thread Operations
 
 ```tsx
-import { useAssistantApi, useAssistantState } from "@assistant-ui/react";
+import { useAui, useAuiState } from "@assistant-ui/react";
 
-const api = useAssistantApi();
-const { threads, mainThreadId } = useAssistantState(s => s.threadList);
+const api = useAui();
+const { threadIds, mainThreadId } = useAuiState((s) => ({
+  threadIds: s.threads.threadIds,
+  mainThreadId: s.threads.mainThreadId,
+}));
 
 // Switch to thread
 api.threads().switchToThread(threadId);
@@ -97,7 +102,10 @@ function CustomThreadList() {
 ## Without Cloud (Local)
 
 ```tsx
-import { useRemoteThreadListRuntime, InMemoryThreadListAdapter } from "@assistant-ui/react";
+import {
+  unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
+  unstable_InMemoryThreadListAdapter as InMemoryThreadListAdapter,
+} from "@assistant-ui/react";
 
 const runtime = useRemoteThreadListRuntime({
   adapter: new InMemoryThreadListAdapter(),

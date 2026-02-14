@@ -13,17 +13,20 @@ Thread list management allows users to:
 ## Accessing Thread List API
 
 ```tsx
-import { useAssistantApi, useAssistantState } from "@assistant-ui/react";
+import { useAui, useAuiState } from "@assistant-ui/react";
 
 function ThreadManager() {
-  const api = useAssistantApi();
+  const api = useAui();
 
   // Get thread list API
   const threads = api.threads();
 
   // Get current state
-  const { threads: threadIds, mainThreadId } = useAssistantState(
-    (s) => s.threadList
+  const { threadIds, mainThreadId } = useAuiState(
+    (s) => ({
+      threadIds: s.threads.threadIds,
+      mainThreadId: s.threads.mainThreadId,
+    })
   );
 }
 ```
@@ -33,7 +36,7 @@ function ThreadManager() {
 ### Create New Thread
 
 ```tsx
-const api = useAssistantApi();
+const api = useAui();
 
 // Switch to a new empty thread
 await api.threads().switchToNewThread();
@@ -101,32 +104,33 @@ await item.generateTitle();
 ```typescript
 interface ThreadListState {
   mainThreadId: string;           // Current thread
-  newThread: string | undefined;  // Pending new thread
-  threads: readonly string[];     // Regular thread IDs
-  archivedThreads: readonly string[];
+  newThreadId: string | null;     // Pending new thread
+  threadIds: readonly string[];   // Regular thread IDs
+  archivedThreadIds: readonly string[];
   isLoading: boolean;
-  threadItems: Record<string, ThreadListItemState>;
+  threadItems: readonly ThreadListItemState[];
 }
 
 interface ThreadListItemState {
   id: string;
   title?: string;
-  status: "regular" | "archived";
-  isMain: boolean;  // Is current thread
+  remoteId?: string;
+  externalId?: string;
+  status: "archived" | "regular" | "new" | "deleted";
 }
 ```
 
 ## Subscribing to Changes
 
 ```tsx
-import { useAssistantState, useAssistantEvent } from "@assistant-ui/react";
+import { useAuiState, useAuiEvent } from "@assistant-ui/react";
 
 function ThreadWatcher() {
   // Reactive state
-  const threads = useAssistantState((s) => s.threadList.threads);
+  const threads = useAuiState((s) => s.threads.threadIds);
 
   // Events
-  useAssistantEvent("thread-started", () => {
+  useAuiEvent("thread.initialize", () => {
     console.log("New thread created");
   });
 
@@ -137,7 +141,7 @@ function ThreadWatcher() {
 ## Item Access Patterns
 
 ```tsx
-const api = useAssistantApi();
+const api = useAui();
 const threads = api.threads();
 
 // By ID
@@ -156,15 +160,16 @@ const mainItem = threads.item("main");
 ## Batch Operations
 
 ```tsx
-async function archiveOldThreads(olderThan: Date) {
-  const api = useAssistantApi();
-  const { threads } = api.threads().getState();
+async function archiveThreadsByTitlePrefix(prefix: string) {
+  const api = useAui();
+  const { threadIds } = api.threads().getState();
 
-  for (const threadId of threads) {
+  for (const threadId of threadIds) {
     const item = api.threads().item({ id: threadId });
     const state = item.getState();
+    const title = (state.title || "").toLowerCase();
 
-    if (new Date(state.updatedAt) < olderThan) {
+    if (title.startsWith(prefix.toLowerCase())) {
       await item.archive();
     }
   }
@@ -181,11 +186,10 @@ const state = item.getState();
 
 // {
 //   id: "thread-123",
+//   remoteId: "remote-123",
+//   externalId: "ext-123",
 //   title: "Chat about React",
 //   status: "regular",
-//   isMain: true,
-//   createdAt: Date,
-//   updatedAt: Date,
 // }
 ```
 
@@ -206,7 +210,7 @@ const { remoteId, externalId } = await item.initialize();
 
 ```tsx
 async function safeDelete(threadId: string) {
-  const api = useAssistantApi();
+  const api = useAui();
   const item = api.threads().item({ id: threadId });
 
   try {
@@ -223,12 +227,12 @@ async function safeDelete(threadId: string) {
 
 ## Sorting and Filtering
 
-Thread list is sorted by last activity. For custom sorting:
+Thread list can be sorted by title or by ID for custom ordering:
 
 ```tsx
-function SortedThreadList({ sortBy }: { sortBy: "title" | "date" }) {
-  const { threads } = useAssistantState((s) => s.threadList);
-  const api = useAssistantApi();
+function SortedThreadList({ sortBy }: { sortBy: "title" | "id" }) {
+  const { threads } = useAuiState((s) => ({ threads: s.threads.threadIds }));
+  const api = useAui();
 
   const sorted = [...threads].sort((a, b) => {
     const itemA = api.threads().item({ id: a }).getState();
@@ -237,7 +241,7 @@ function SortedThreadList({ sortBy }: { sortBy: "title" | "date" }) {
     if (sortBy === "title") {
       return (itemA.title || "").localeCompare(itemB.title || "");
     }
-    return new Date(itemB.updatedAt) - new Date(itemA.updatedAt);
+    return b.localeCompare(a);
   });
 
   return (
@@ -254,8 +258,11 @@ function SortedThreadList({ sortBy }: { sortBy: "title" | "date" }) {
 
 ```tsx
 function KeyboardNav() {
-  const { threads, mainThreadId } = useAssistantState((s) => s.threadList);
-  const api = useAssistantApi();
+  const { threads, mainThreadId } = useAuiState((s) => ({
+    threads: s.threads.threadIds,
+    mainThreadId: s.threads.mainThreadId,
+  }));
+  const api = useAui();
 
   const currentIndex = threads.indexOf(mainThreadId);
 

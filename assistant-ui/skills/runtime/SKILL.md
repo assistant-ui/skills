@@ -33,15 +33,15 @@ AssistantRuntime
 ## State Access (Modern API)
 
 ```tsx
-import { useAssistantApi, useAssistantState, useAssistantEvent } from "@assistant-ui/react";
+import { useAui, useAuiState, useAuiEvent } from "@assistant-ui/react";
 
 function ChatControls() {
-  const api = useAssistantApi();
-  const messages = useAssistantState(s => s.thread.messages);
-  const isRunning = useAssistantState(s => s.thread.isRunning);
+  const api = useAui();
+  const messages = useAuiState(s => s.thread.messages);
+  const isRunning = useAuiState(s => s.thread.isRunning);
 
-  useAssistantEvent("message-added", (e) => {
-    console.log("New message:", e.message);
+  useAuiEvent("composer.send", (e) => {
+    console.log("Sent in thread:", e.threadId);
   });
 
   return (
@@ -63,7 +63,7 @@ function ChatControls() {
 ## Thread Operations
 
 ```tsx
-const api = useAssistantApi();
+const api = useAui();
 const thread = api.thread();
 
 // Append message
@@ -88,17 +88,18 @@ message.reload();
 ## Events
 
 ```tsx
-useAssistantEvent("thread-started", () => {});
-useAssistantEvent("thread-ended", () => {});
-useAssistantEvent("message-added", ({ message }) => {});
-useAssistantEvent("run-started", () => {});
-useAssistantEvent("run-ended", () => {});
+useAuiEvent("thread.runStart", () => {});
+useAuiEvent("thread.runEnd", () => {});
+useAuiEvent("composer.send", ({ threadId }) => {
+  console.log("Sent in thread:", threadId);
+});
+useAuiEvent("thread.modelContextUpdate", () => {});
 ```
 
 ## Capabilities
 
 ```tsx
-const caps = useAssistantState(s => s.thread.capabilities);
+const caps = useAuiState(s => s.thread.capabilities);
 // { cancel, edit, reload, copy, speak, attachments }
 ```
 
@@ -106,10 +107,10 @@ const caps = useAssistantState(s => s.thread.capabilities);
 
 ```tsx
 // Get messages
-const messages = useAssistantState(s => s.thread.messages);
+const messages = useAuiState(s => s.thread.messages);
 
 // Check running state
-const isRunning = useAssistantState(s => s.thread.isRunning);
+const isRunning = useAuiState(s => s.thread.isRunning);
 
 // Append message
 api.thread().append({ role: "user", content: [{ type: "text", text: "Hi" }] });
@@ -130,7 +131,7 @@ api.thread().message(index).reload();
 - Ensure hooks are called inside `AssistantRuntimeProvider`
 
 **State not updating**
-- Use selectors with `useAssistantState` to prevent unnecessary re-renders
+- Use selectors with `useAuiState` to prevent unnecessary re-renders
 
 **Messages array empty**
 - Check runtime is configured

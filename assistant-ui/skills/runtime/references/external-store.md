@@ -5,7 +5,8 @@ Connect assistant-ui to custom message stores (Redux, Zustand, etc.).
 ## Basic Usage
 
 ```tsx
-import { useExternalStoreRuntime, AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
+import { useExternalStoreRuntime, AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
 
 function App() {
   // Your existing state
