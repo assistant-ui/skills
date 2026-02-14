@@ -233,7 +233,9 @@ const result = streamText({
 Pass a `cloud` instance to `useChatRuntime` to enable thread persistence and history. Use `ThreadList` to display saved threads.
 
 ```tsx
-import { AssistantCloud, AssistantRuntimeProvider, Thread, ThreadList } from "@assistant-ui/react";
+import { AssistantCloud, AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
+import { ThreadList } from "@/components/assistant-ui/thread-list";
 import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 const cloud = new AssistantCloud({

@@ -14,7 +14,8 @@ npm install @assistant-ui/react-ag-ui @ag-ui/client
 "use client";
 
 import { useMemo } from "react";
-import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
 import { HttpAgent } from "@ag-ui/client";
 import { useAgUiRuntime } from "@assistant-ui/react-ag-ui";
 

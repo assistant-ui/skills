@@ -42,8 +42,9 @@ npm install @assistant-ui/react
 
 **Exports:**
 - Primitives: `ThreadPrimitive`, `MessagePrimitive`, `ComposerPrimitive`, `ActionBarPrimitive`, `BranchPickerPrimitive`, `AttachmentPrimitive`, `ThreadListPrimitive`
-- Pre-built: `Thread`, `ThreadList`, `AssistantModal`
-- Hooks: `useAssistantApi`, `useAssistantState`, `useAssistantEvent`
+- Pre-built components are added via project templates in:
+  `@/components/assistant-ui/thread` and `@/components/assistant-ui/thread-list`
+- Hooks: `useAui`, `useAuiState`, `useAuiEvent`
 - Runtime: `useLocalRuntime`, `useExternalStoreRuntime`
 - Tools: `makeAssistantTool`, `makeAssistantToolUI`, `useAssistantTool`, `useAssistantToolUI`
 - Provider: `AssistantRuntimeProvider`

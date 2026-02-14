@@ -65,13 +65,16 @@ function CustomThreadItem({ archived = false }) {
 ## Fully Custom with Hooks
 
 ```tsx
-import { useAssistantApi, useAssistantState } from "@assistant-ui/react";
+import { useAui, useAuiState } from "@assistant-ui/react";
 
 function FullyCustomThreadList() {
-  const api = useAssistantApi();
-  const { threads, archivedThreads, mainThreadId, isLoading } = useAssistantState(
-    (s) => s.threadList
-  );
+  const api = useAui();
+  const { threads, archivedThreads, mainThreadId, isLoading } = useAuiState((s) => ({
+    threads: s.threads.threadIds,
+    archivedThreads: s.threads.archivedThreadIds,
+    mainThreadId: s.threads.mainThreadId,
+    isLoading: s.threads.isLoading,
+  }));
 
   if (isLoading) return <LoadingSpinner />;
 
@@ -120,7 +123,7 @@ function ThreadItem({
   isActive?: boolean;
   archived?: boolean;
 }) {
-  const api = useAssistantApi();
+  const api = useAui();
   const item = api.threads().item({ id });
   const state = item.getState();
   const [isEditing, setIsEditing] = useState(false);
@@ -208,8 +211,11 @@ function ThreadItem({
 ```tsx
 function SearchableThreadList() {
   const [search, setSearch] = useState("");
-  const api = useAssistantApi();
-  const { threads, mainThreadId } = useAssistantState((s) => s.threadList);
+  const api = useAui();
+  const { threads, mainThreadId } = useAuiState((s) => ({
+    threads: s.threads.threadIds,
+    mainThreadId: s.threads.mainThreadId,
+  }));
 
   const filteredThreads = threads.filter((id) => {
     if (!search) return true;
@@ -262,8 +268,8 @@ function SearchableThreadList() {
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
 function DraggableThreadList() {
-  const api = useAssistantApi();
-  const { threads } = useAssistantState((s) => s.threadList);
+  const api = useAui();
+  const { threads } = useAuiState((s) => ({ threads: s.threads.threadIds }));
   const [orderedThreads, setOrderedThreads] = useState(threads);
 
   useEffect(() => {
@@ -313,8 +319,11 @@ function DraggableThreadList() {
 ```tsx
 function ThreadDropdown() {
   const [open, setOpen] = useState(false);
-  const api = useAssistantApi();
-  const { threads, mainThreadId } = useAssistantState((s) => s.threadList);
+  const api = useAui();
+  const { threads, mainThreadId } = useAuiState((s) => ({
+    threads: s.threads.threadIds,
+    mainThreadId: s.threads.mainThreadId,
+  }));
   const currentItem = api.threads().item("main").getState();
 
   return (
@@ -368,13 +377,13 @@ function ThreadDropdown() {
 
 ```tsx
 function CategorizedThreadList() {
-  const api = useAssistantApi();
-  const { threads } = useAssistantState((s) => s.threadList);
+  const api = useAui();
+  const { threads } = useAuiState((s) => ({ threads: s.threads.threadIds }));
 
-  // Group by metadata category (requires cloud with metadata)
+  // Group by title first letter
   const grouped = threads.reduce((acc, id) => {
     const item = api.threads().item({ id }).getState();
-    const category = item.metadata?.category || "Uncategorized";
+    const category = (item.title || "Untitled").charAt(0).toUpperCase();
     if (!acc[category]) acc[category] = [];
     acc[category].push(id);
     return acc;

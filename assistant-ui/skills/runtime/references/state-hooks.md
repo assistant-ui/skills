@@ -4,15 +4,15 @@ Accessing assistant-ui runtime state.
 
 ## Modern API (Recommended)
 
-### useAssistantApi
+### useAui
 
 Get the runtime API for imperative actions.
 
 ```tsx
-import { useAssistantApi } from "@assistant-ui/react";
+import { useAui } from "@assistant-ui/react";
 
 function Controls() {
-  const api = useAssistantApi();
+  const api = useAui();
 
   // Thread operations
   const thread = api.thread();
@@ -35,33 +35,33 @@ function Controls() {
 }
 ```
 
-### useAssistantState
+### useAuiState
 
 Subscribe to state changes with a selector.
 
 ```tsx
-import { useAssistantState } from "@assistant-ui/react";
+import { useAuiState } from "@assistant-ui/react";
 
 function MessageCount() {
   // Re-renders when messages change
-  const messages = useAssistantState((s) => s.thread.messages);
+  const messages = useAuiState((s) => s.thread.messages);
   return <div>{messages.length} messages</div>;
 }
 
 function RunningIndicator() {
   // Only re-renders when isRunning changes
-  const isRunning = useAssistantState((s) => s.thread.isRunning);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
   return isRunning ? <Spinner /> : null;
 }
 
 function ComposerText() {
-  const text = useAssistantState((s) => s.thread.composer.text);
+  const text = useAuiState((s) => s.thread.composer.text);
   return <div>Typing: {text}</div>;
 }
 
 function ThreadInfo() {
   // Multiple values
-  const { messages, isRunning, capabilities } = useAssistantState((s) => ({
+  const { messages, isRunning, capabilities } = useAuiState((s) => ({
     messages: s.thread.messages,
     isRunning: s.thread.isRunning,
     capabilities: s.thread.capabilities,
@@ -69,26 +69,26 @@ function ThreadInfo() {
 }
 ```
 
-### useAssistantEvent
+### useAuiEvent
 
 Listen to runtime events.
 
 ```tsx
-import { useAssistantEvent } from "@assistant-ui/react";
+import { useAuiEvent } from "@assistant-ui/react";
 
 function Analytics() {
-  useAssistantEvent("message-added", (event) => {
+  useAuiEvent("composer.send", (event) => {
     analytics.track("message_sent", {
-      role: event.message.role,
-      messageId: event.message.id,
+      threadId: event.threadId,
+      messageId: event.messageId, // optional, may be undefined
     });
   });
 
-  useAssistantEvent("run-started", () => {
+  useAuiEvent("thread.runStart", () => {
     console.log("Generation started");
   });
 
-  useAssistantEvent("run-ended", () => {
+  useAuiEvent("thread.runEnd", () => {
     console.log("Generation completed");
   });
 
@@ -97,12 +97,14 @@ function Analytics() {
 ```
 
 Available events:
-- `message-added` - New message added
-- `message-updated` - Message content changed
-- `run-started` - Generation started
-- `run-ended` - Generation completed
-- `thread-started` - New thread created
-- `thread-ended` - Thread closed
+- `composer.send` - Message submitted from composer
+- `composer.attachmentAdd` - Attachment added in composer
+- `thread.runStart` - Generation started
+- `thread.runEnd` - Generation ended
+- `thread.initialize` - Thread is initialized
+- `thread.modelContextUpdate` - Thread model context updated
+- `threadListItem.switchedTo` - Active thread changed
+- `threadListItem.switchedAway` - Active thread changed away
 
 ## State Shape
 
@@ -117,17 +119,21 @@ interface AssistantState {
       attachments: Attachment[];
     };
   };
-  threadList: {
+  threads: {
     mainThreadId: string;
-    threads: string[];
-    archivedThreads: string[];
+    newThreadId: string | null;
+    threadIds: readonly string[];
+    archivedThreadIds: readonly string[];
     isLoading: boolean;
+    threadItems: readonly ThreadListItemState[];
+    main: ThreadState;
   };
   threadListItem: {
     id: string;
+    remoteId?: string;
+    externalId?: string;
     title?: string;
-    status: "regular" | "archived";
-    isMain: boolean;
+    status: "archived" | "regular" | "new" | "deleted";
   };
 }
 ```
@@ -172,9 +178,9 @@ Some hooks require being inside specific contexts:
 
 ```tsx
 // These work anywhere inside AssistantRuntimeProvider
-useAssistantApi()
-useAssistantState()
-useAssistantEvent()
+useAui()
+useAuiState()
+useAuiEvent()
 useAssistantRuntime()
 useThreadRuntime()
 useThread()
@@ -195,20 +201,20 @@ useMessagePartRuntime()
 
 ```tsx
 // Bad - re-renders on any state change
-const state = useAssistantState((s) => s);
+const state = useAuiState((s) => s);
 
 // Good - only re-renders when messages change
-const messages = useAssistantState((s) => s.thread.messages);
+const messages = useAuiState((s) => s.thread.messages);
 
 // Better - only re-renders when message count changes
-const count = useAssistantState((s) => s.thread.messages.length);
+const count = useAuiState((s) => s.thread.messages.length);
 ```
 
 ### Memoize Derived Data
 
 ```tsx
 function MessageList() {
-  const messages = useAssistantState((s) => s.thread.messages);
+  const messages = useAuiState((s) => s.thread.messages);
 
   // Memoize expensive computations
   const userMessages = useMemo(
@@ -225,8 +231,8 @@ function MessageList() {
 ```tsx
 // Bad - entire component re-renders
 function Chat() {
-  const messages = useAssistantState((s) => s.thread.messages);
-  const isRunning = useAssistantState((s) => s.thread.isRunning);
+  const messages = useAuiState((s) => s.thread.messages);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
   return (
     <div>
       <MessageList messages={messages} />
@@ -246,12 +252,12 @@ function Chat() {
 }
 
 function MessageList() {
-  const messages = useAssistantState((s) => s.thread.messages);
+  const messages = useAuiState((s) => s.thread.messages);
   return <div>...</div>;
 }
 
 function RunningIndicator() {
-  const isRunning = useAssistantState((s) => s.thread.isRunning);
+  const isRunning = useAuiState((s) => s.thread.isRunning);
   return isRunning ? <Spinner /> : null;
 }
 ```
@@ -261,7 +267,7 @@ function RunningIndicator() {
 For non-React contexts:
 
 ```tsx
-const api = useAssistantApi();
+const api = useAui();
 
 useEffect(() => {
   const runtime = api.thread();

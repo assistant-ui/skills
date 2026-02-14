@@ -5,7 +5,8 @@ In-browser chat with custom model adapter.
 ## Basic Usage
 
 ```tsx
-import { useLocalRuntime, AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
+import { useLocalRuntime, AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
 
 function App() {
   const runtime = useLocalRuntime({

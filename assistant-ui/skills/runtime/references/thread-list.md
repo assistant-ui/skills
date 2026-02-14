@@ -4,7 +4,7 @@ Managing multiple chat threads.
 
 ## Overview
 
-Thread list features are automatically available when using `useChatRuntime` with cloud persistence or `useRemoteThreadListRuntime`.
+Thread list features are automatically available when using `useChatRuntime` with cloud persistence or `unstable_useRemoteThreadListRuntime`.
 
 ## ThreadListRuntime API
 
@@ -28,14 +28,17 @@ type ThreadListRuntime = {
 
 ## ThreadListState
 
+This is the state shape returned by `ThreadListRuntime.getState()` (runtime API).
+For app-level state via `useAuiState((s) => s.threads)`, use the client `ThreadsState` shape (`newThreadId: string | null`, `threadItems: readonly ThreadListItemState[]`).
+
 ```typescript
 type ThreadListState = {
   mainThreadId: string;              // Current thread ID
-  newThread: string | undefined;     // Pending new thread ID
-  threads: readonly string[];        // Regular thread IDs
-  archivedThreads: readonly string[];
+  newThreadId: string | undefined;     // Pending new thread ID
+  threadIds: readonly string[];        // Regular thread IDs
+  archivedThreadIds: readonly string[];
   isLoading: boolean;
-  threadItems: Record<string, ThreadListItemState>;
+  threadItems: Record<string, Omit<ThreadListItemState, "isMain" | "threadId">>;
 };
 ```
 
@@ -61,14 +64,14 @@ type ThreadListItemRuntime = {
 ## Accessing Thread List
 
 ```tsx
-import { useAssistantApi, useAssistantState } from "@assistant-ui/react";
+import { useAui, useAuiState } from "@assistant-ui/react";
 
 function ThreadListComponent() {
-  const api = useAssistantApi();
+  const api = useAui();
 
   // Get thread list state
-  const { threads, archivedThreads, isLoading } = useAssistantState(
-    (s) => s.threadList
+  const { threadIds, archivedThreadIds, isLoading } = useAuiState(
+    (s) => s.threads
   );
 
   // Switch threads
@@ -84,7 +87,7 @@ function ThreadListComponent() {
   return (
     <div>
       <button onClick={handleNew}>New Chat</button>
-      {threads.map((threadId) => (
+      {threadIds.map((threadId) => (
         <button key={threadId} onClick={() => handleSwitch(threadId)}>
           {threadId}
         </button>
@@ -98,7 +101,7 @@ function ThreadListComponent() {
 
 ```tsx
 function ThreadItem({ threadId }: { threadId: string }) {
-  const api = useAssistantApi();
+  const api = useAui();
   const item = api.threads().item({ id: threadId });
 
   const handleRename = async () => {
@@ -166,11 +169,11 @@ function ThreadList() {
 
 ```tsx
 function SidebarWithThreadList() {
-  const { threads, mainThreadId } = useAssistantState((s) => ({
-    threads: s.threadList.threads,
-    mainThreadId: s.threadList.mainThreadId,
+  const { threadIds, mainThreadId } = useAuiState((s) => ({
+    threadIds: s.threads.threadIds,
+    mainThreadId: s.threads.mainThreadId,
   }));
-  const api = useAssistantApi();
+  const api = useAui();
 
   return (
     <aside className="w-64 bg-gray-50 h-full">
@@ -184,7 +187,7 @@ function SidebarWithThreadList() {
       </div>
 
       <nav className="p-2">
-        {threads.map((threadId) => {
+        {threadIds.map((threadId) => {
           const isActive = threadId === mainThreadId;
           return (
             <button
@@ -209,7 +212,13 @@ function SidebarWithThreadList() {
 For custom persistence:
 
 ```tsx
-import { useRemoteThreadListRuntime } from "@assistant-ui/react";
+import {
+  AssistantRuntimeProvider,
+  unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
+  useLocalRuntime,
+} from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
+import { ThreadList } from "@/components/assistant-ui/thread-list";
 
 const adapter: RemoteThreadListAdapter = {
   async list() {

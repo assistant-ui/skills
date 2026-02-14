@@ -36,7 +36,7 @@ React library for building AI chat interfaces with composable primitives.
                           │
 ┌─────────────────────────▼───────────────────────────────┐
 │                   Context Hooks                         │
-│   useAssistantApi, useAssistantState, useAssistantEvent │
+│   useAui, useAuiState, useAuiEvent │
 └─────────────────────────┬───────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────┐
@@ -77,7 +77,8 @@ Using AI SDK?
 ## Quick Start
 
 ```tsx
-import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
 import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
 
 function App() {
@@ -95,14 +96,14 @@ function App() {
 ## State Access
 
 ```tsx
-import { useAssistantApi, useAssistantState } from "@assistant-ui/react";
+import { useAui, useAuiState } from "@assistant-ui/react";
 
-const api = useAssistantApi();
+const api = useAui();
 api.thread().append({ role: "user", content: [{ type: "text", text: "Hi" }] });
 api.thread().cancelRun();
 
-const messages = useAssistantState(s => s.thread.messages);
-const isRunning = useAssistantState(s => s.thread.isRunning);
+const messages = useAuiState(s => s.thread.messages);
+const isRunning = useAuiState(s => s.thread.isRunning);
 ```
 
 ## Related Skills

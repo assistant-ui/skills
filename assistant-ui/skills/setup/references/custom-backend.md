@@ -11,7 +11,8 @@ For backends that return streaming responses. Emit `ChatModelRunResult` chunks (
 Plain-text streaming only. For AI SDK Data Stream responses, use `toUIMessageStreamResponse()` + `useChatRuntime` or decode with `DataStreamDecoder`.
 
 ```tsx
-import { useLocalRuntime, AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
+import { useLocalRuntime, AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
 
 function Chat() {
   const runtime = useLocalRuntime({
@@ -156,7 +157,8 @@ For apps with existing state management (Redux, Zustand, etc.).
 ### Basic Setup
 
 ```tsx
-import { useExternalStoreRuntime, AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
+import { useExternalStoreRuntime, AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
 
 function Chat() {
   const [messages, setMessages] = useState<ThreadMessage[]>([]);

@@ -26,7 +26,8 @@ import {
 ## Basic Setup
 
 ```tsx
-import { AssistantRuntimeProvider, Thread } from "@assistant-ui/react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/thread";
 import { useA2ARuntime } from "@assistant-ui/react-a2a";
 
 function Chat() {
