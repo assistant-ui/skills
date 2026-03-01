@@ -383,8 +383,8 @@ Then re-analyze what went wrong before retrying.
   "@ai-sdk/react": "^3.0.0",
   "@ai-sdk/provider": "^3.0.0",
   "@ai-sdk/provider-utils": "^4.0.0",
-  "@assistant-ui/react": "^0.11.58",
-  "@assistant-ui/react-ai-sdk": "^1.2.0"
+  "@assistant-ui/react": "^0.12.14",
+  "@assistant-ui/react-ai-sdk": "^1.3.10"
 }
 ```
 
@@ -1855,8 +1855,8 @@ npx @ai-sdk/codemod v6       # v5→v6 only
 - [ ] Update `@ai-sdk/provider-utils` to `^4.0.0`
 - [ ] Update all `@ai-sdk/*` provider packages to `^3.0.0`
 - [ ] Update `zod` to `^3.25.76` or `^4.1.8` (both supported)
-- [ ] Update `@assistant-ui/react` to `^0.11.58`
-- [ ] Update `@assistant-ui/react-ai-sdk` to `^1.2.0`
+- [ ] Update `@assistant-ui/react` to `^0.12.14`
+- [ ] Update `@assistant-ui/react-ai-sdk` to `^1.3.10`
 - [ ] If using MCP: Install `@ai-sdk/mcp` to `^1.0.0`
 
 ### Automated Migration
