@@ -4,7 +4,7 @@
 
 **To check latest version:** Run `npm view <package-name> version` or check the package on npmjs.com.
 
-- All published packages only expose the `latest` dist-tag (no `next/beta/canary`).
+- Most published packages only expose the `latest` dist-tag; always install from `latest`.
 - Monorepo-only: `@assistant-ui/x-buildutils` (not on npm).
 
 | Package | Notes |
