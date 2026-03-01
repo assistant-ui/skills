@@ -28,7 +28,7 @@
 | create-assistant-ui | Project scaffolding |
 | safe-content-frame | Sandboxed iframe content |
 | tw-shimmer | Tailwind shimmer effects |
-| chatgpt-app-studio | ChatGPT app builder |
+| mcp-app-studio | MCP app builder |
 
 ## Core Packages
 
