@@ -4,7 +4,7 @@
 
 **To check latest version:** Run `npm view <package-name> version` or check the package on npmjs.com.
 
-- All published packages only expose the `latest` dist-tag (no `next/beta/canary`).
+- Most published packages only expose the `latest` dist-tag; always install from `latest`.
 - Monorepo-only: `@assistant-ui/x-buildutils` (not on npm).
 
 | Package | Notes |
@@ -20,6 +20,11 @@
 | @assistant-ui/react-hook-form | React Hook Form integration |
 | @assistant-ui/react-a2a | Agent-to-Agent protocol for multi-agent systems |
 | @assistant-ui/react-ag-ui | AG-UI protocol adapter for agent backends |
+| @assistant-ui/cloud-ai-sdk | AI SDK hooks for assistant-cloud persistence |
+| @assistant-ui/core | Framework-agnostic core runtime |
+| @assistant-ui/react-native | React Native bindings |
+| @assistant-ui/react-o11y | Observability primitives |
+| @assistant-ui/react-streamdown | Streamdown-based markdown rendering |
 | @assistant-ui/tap | Reactive state management and testing |
 | @assistant-ui/mcp-docs-server | MCP server for IDE integration |
 | assistant-stream | Streaming protocol |
@@ -28,7 +33,8 @@
 | create-assistant-ui | Project scaffolding |
 | safe-content-frame | Sandboxed iframe content |
 | tw-shimmer | Tailwind shimmer effects |
-| chatgpt-app-studio | ChatGPT app builder |
+| tw-glass | Tailwind CSS v4 glass refraction effects |
+| mcp-app-studio | MCP app builder |
 
 ## Core Packages
 
@@ -117,8 +123,9 @@ npm install @assistant-ui/react-markdown
 ```
 
 **Exports:**
-- `MarkdownText` - Renders markdown content
-- `makeMarkdownText` - Create custom markdown component
+- `MarkdownTextPrimitive` - Renders markdown content
+- `useIsMarkdownCodeBlock` - Check if code block is inside markdown
+- `unstable_memoizeMarkdownComponents` - Memoize markdown components for performance
 
 ### @assistant-ui/react-syntax-highlighter
 
@@ -141,5 +148,5 @@ npm install @assistant-ui/react-syntax-highlighter
 ## Version Compatibility
 
 - `@assistant-ui/react` requires React 18+ or 19
-- `@assistant-ui/react-ai-sdk` requires AI SDK v6 (`ai@^6.0.42`)
+- `@assistant-ui/react-ai-sdk` requires AI SDK v6 (`ai@^6`)
 - Node.js >=24 recommended (monorepo requirement)
