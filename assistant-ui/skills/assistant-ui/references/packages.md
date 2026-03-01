@@ -142,5 +142,5 @@ npm install @assistant-ui/react-syntax-highlighter
 ## Version Compatibility
 
 - `@assistant-ui/react` requires React 18+ or 19
-- `@assistant-ui/react-ai-sdk` requires AI SDK v6 (`ai@^6.0.42`)
+- `@assistant-ui/react-ai-sdk` requires AI SDK v6 (`ai@^6`)
 - Node.js >=24 recommended (monorepo requirement)
