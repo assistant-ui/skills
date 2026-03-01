@@ -20,6 +20,11 @@
 | @assistant-ui/react-hook-form | React Hook Form integration |
 | @assistant-ui/react-a2a | Agent-to-Agent protocol for multi-agent systems |
 | @assistant-ui/react-ag-ui | AG-UI protocol adapter for agent backends |
+| @assistant-ui/cloud-ai-sdk | AI SDK hooks for assistant-cloud persistence |
+| @assistant-ui/core | Framework-agnostic core runtime |
+| @assistant-ui/react-native | React Native bindings |
+| @assistant-ui/react-o11y | Observability primitives |
+| @assistant-ui/react-streamdown | Streamdown-based markdown rendering |
 | @assistant-ui/tap | Reactive state management and testing |
 | @assistant-ui/mcp-docs-server | MCP server for IDE integration |
 | assistant-stream | Streaming protocol |
@@ -28,6 +33,7 @@
 | create-assistant-ui | Project scaffolding |
 | safe-content-frame | Sandboxed iframe content |
 | tw-shimmer | Tailwind shimmer effects |
+| tw-glass | Tailwind CSS v4 glass refraction effects |
 | mcp-app-studio | MCP app builder |
 
 ## Core Packages
