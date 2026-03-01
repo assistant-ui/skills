@@ -117,8 +117,9 @@ npm install @assistant-ui/react-markdown
 ```
 
 **Exports:**
-- `MarkdownText` - Renders markdown content
-- `makeMarkdownText` - Create custom markdown component
+- `MarkdownTextPrimitive` - Renders markdown content
+- `useIsMarkdownCodeBlock` - Check if code block is inside markdown
+- `unstable_memoizeMarkdownComponents` - Memoize markdown components for performance
 
 ### @assistant-ui/react-syntax-highlighter
 
