@@ -96,7 +96,7 @@ const runtime = useChatRuntime({
     headers: { "X-Workspace": "acme" },
     body: { model: "gpt-4o-mini" },
   }),
-  initialMessages: [
+  messages: [
     { id: "1", role: "assistant", parts: [{ type: "text", text: "Hello! How can I help?" }] },
   ],
   sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
