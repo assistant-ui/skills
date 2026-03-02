@@ -17,22 +17,22 @@ npm view @assistant-ui/react version  # Latest
 
 ```typescript
 import {
-  useAssistantApi,
-  useAssistantState,
-  useAssistantEvent
+  useAui,
+  useAuiState,
+  useAuiEvent
 } from "@assistant-ui/react";
 
 // State access (replaces various useThread* hooks)
-const messages = useAssistantState(s => s.thread.messages);
-const isRunning = useAssistantState(s => s.thread.isRunning);
+const messages = useAuiState(s => s.thread.messages);
+const isRunning = useAuiState(s => s.thread.isRunning);
 
 // Actions
-const api = useAssistantApi();
+const api = useAui();
 api.thread().append({ role: "user", content: [{ type: "text", text: "Hello" }] });
 api.thread().cancelRun();
 
 // Events
-useAssistantEvent("composer.send", (e) => {
+useAuiEvent("composer.send", (e) => {
   console.log("Message sent:", e.messageId);
 });
 ```

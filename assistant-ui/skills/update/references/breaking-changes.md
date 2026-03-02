@@ -6,7 +6,7 @@ Fast lookup for breaking changes by version.
 
 | Version | Breaking Change | Migration |
 |---------|-----------------|-----------|
-| **0.11.0** | Runtime rearchitecture | Use `useAssistantApi`, `useAssistantState`, `useAssistantEvent` |
+| **0.11.0** | Runtime rearchitecture | Use `useAui`, `useAuiState`, `useAuiEvent` |
 | **0.10.0** | CommonJS dropped | Use ESM, set `"type": "module"` |
 | **0.8.18** | `setResult`/`setArtifact` merged | Use `setResponse({ result, artifact })` |
 | **0.8.0** | UI moved out of core | Use shadcn registry (recommended) or primitives |
@@ -57,11 +57,11 @@ Fast lookup for breaking changes by version.
 
 # State access (0.11.0+)
 - const { messages } = useThread();
-+ const messages = useAssistantState(s => s.thread.messages);
++ const messages = useAuiState(s => s.thread.messages);
 
 # Actions (0.11.0+)
 - useThreadActions().append(...)
-+ useAssistantApi().thread().append(...)
++ useAui().thread().append(...)
 ```
 
 ### Config Changes
