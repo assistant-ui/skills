@@ -153,10 +153,10 @@ export function MyRuntimeProvider({ children }: { children: ReactNode }) {
 ```json
 {
   "@assistant-ui/react": "latest",
-  "@tanstack/react-router": "^1.153.2",
-  "@tanstack/react-start": "^1.154.0",
-  "@tailwindcss/vite": "^4.1.18",
-  "react": "^19.2.3",
+  "@tanstack/react-router": "^1.162.9",
+  "@tanstack/react-start": "^1.162.9",
+  "@tailwindcss/vite": "^4.2.1",
+  "react": "^19.2.4",
   "vite": "^7.3.1"
 }
 ```
