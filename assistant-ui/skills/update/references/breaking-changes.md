@@ -102,6 +102,7 @@ See [./ai-sdk-v6.md](./ai-sdk-v6.md) for AI SDK specific migrations:
 
 | @assistant-ui/react | react-ai-sdk | AI SDK | Zod |
 |---------------------|--------------|--------|-----|
+| 0.12.x | 1.3.x | 6.x | 4.x |
 | 0.11.x | 1.2.x | 6.x | 3.25+ or 4.x |
 | 0.10.x | 0.x | 4.x-5.x | 3.x |
 | 0.8.x-0.9.x | 0.x | 4.x | 3.x |

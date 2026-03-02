@@ -34,6 +34,7 @@ npm view ai version
 | Package | Check For |
 |---------|-----------|
 | `ai` | < 6.0.0 → needs AI SDK v6 migration |
+| `@assistant-ui/react` | < 0.12.0 → needs unified state API migration |
 | `@assistant-ui/react` | < 0.11.0 → needs runtime migration |
 | `@assistant-ui/react` | < 0.10.0 → needs ESM migration |
 | `@assistant-ui/react` | < 0.8.0 → needs UI split migration |
