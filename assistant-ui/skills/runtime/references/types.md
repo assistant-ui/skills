@@ -36,12 +36,18 @@ interface ThreadSystemMessage {
 
 ## Message Status
 
+`status` is an object with a `type` discriminator (not a bare string):
+
 ```typescript
 type MessageStatus =
-  | "running"          // Generation in progress
-  | "complete"         // Finished successfully
-  | "incomplete"       // Stopped early
-  | "requires-action"; // Needs tool response
+  | { type: "running" }                                    // Generation in progress
+  | { type: "requires-action"; reason: "tool-calls" | "interrupt" }
+  | { type: "complete"; reason: "stop" | "unknown" }       // Finished
+  | {
+      type: "incomplete";                                  // Stopped early
+      reason: "cancelled" | "tool-calls" | "length" | "content-filter" | "other" | "error";
+      error?: unknown;
+    };
 ```
 
 ## Message Parts
@@ -102,10 +108,13 @@ interface FilePart {
 ```typescript
 interface Attachment {
   id: string;
-  type: "image" | "file" | "document";
+  type: "image" | "document" | "file";
   name: string;
+  contentType?: string;
   file?: File;
   content?: AttachmentContent[];
+  // Pending attachments are "requires-action"; completed ones are "complete"
+  status: { type: "running" | "requires-action" | "complete" | "incomplete"; reason?: string };
 }
 
 type AttachmentContent =
@@ -159,30 +168,39 @@ interface ThreadListItemState {
 ```typescript
 interface ComposerState {
   text: string;
+  role: MessageRole;            // role of the message being composed
   attachments: Attachment[];
+  attachmentAccept: string;
   isEmpty: boolean;
-  isSubmitting: boolean;
-  isDictating: boolean;
+  isEditing: boolean;           // editing an existing message
+  canCancel: boolean;
+  dictation?: DictationState;   // present while dictation is active
 }
 ```
 
 ## Tool Call Types
 
 ```typescript
-type ToolCallStatus =
-  | "running"         // Tool executing
-  | "complete"        // Finished
-  | "incomplete"      // Stopped early
-  | "requires-action" // Needs user input
+type ToolCallMessagePartStatus =
+  | { type: "running" }        // Tool executing
+  | { type: "complete" }       // Finished
+  | { type: "incomplete"; reason: "cancelled" | "length" | "content-filter" | "other" | "error" }
+  | { type: "requires-action"; reason: "interrupt" };  // Needs input
 
-interface ToolUIProps<TArgs = unknown, TResult = unknown> {
+// Props passed to a makeAssistantToolUI render component
+interface ToolCallMessagePartProps<TArgs = unknown, TResult = unknown> {
   toolCallId: string;
   toolName: string;
   args: TArgs;
   argsText: string;
   result?: TResult;
-  status: ToolCallStatus;
-  submitResult: (result: unknown) => void;
+  isError?: boolean;
+  artifact?: unknown;
+  status: ToolCallMessagePartStatus;
+
+  addResult: (result: unknown) => void;   // renderer-supplied result
+  resume: (payload: unknown) => void;      // resume a context.human(...) tool
+  respondToApproval: (response: { approved: boolean; reason?: string }) => void;
 }
 ```
 

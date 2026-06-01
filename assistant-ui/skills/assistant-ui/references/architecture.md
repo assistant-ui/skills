@@ -59,13 +59,10 @@ React hooks for accessing runtime:
 // Modern API (recommended)
 import { useAui, useAuiState, useAuiEvent } from "@assistant-ui/react";
 
-// Get API for imperative actions
 const api = useAui();
 
-// Subscribe to state changes
 const messages = useAuiState(s => s.thread.messages);
 
-// Listen to events
 useAuiEvent("composer.send", (e) => console.log(e));
 ```
 
@@ -126,7 +123,8 @@ interface ThreadAssistantMessage {
   id: string;
   role: "assistant";
   content: MessagePart[];
-  status: "running" | "complete" | "incomplete" | "requires-action";
+  // status is an object, not a string. Check status.type.
+  status: MessageStatus; // { type: "running" | "complete" | "incomplete" | "requires-action"; reason?: string }
   createdAt: Date;
 }
 

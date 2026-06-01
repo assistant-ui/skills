@@ -66,7 +66,6 @@ export async function POST(req: Request) {
     messages: await convertToModelMessages(messages),
     tools: {
       ...frontendTools(tools ?? {}),
-      // backend tools here...
     },
   });
 
@@ -178,7 +177,6 @@ const WeatherToolUI = makeAssistantToolUI({
   },
 });
 
-// Register inside the provider tree
 <AssistantRuntimeProvider runtime={runtime}>
   <WeatherToolUI />
   <Thread />
@@ -258,7 +256,7 @@ function ChatPage() {
 }
 ```
 
-See the [cloud reference](./cloud.md) for authentication and configuration details.
+See the `/cloud` skill for authentication and configuration details.
 
 ## Troubleshooting
 

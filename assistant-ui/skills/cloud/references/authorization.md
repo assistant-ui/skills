@@ -20,7 +20,6 @@ Recommended for production. Token is fetched dynamically.
 const cloud = new AssistantCloud({
   baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
   authToken: async () => {
-    // Return your JWT token
     const token = await getAuthToken();
     return token;
   },
@@ -197,7 +196,6 @@ const cloud = new AssistantCloud({
     } catch (error) {
       console.error("Auth error:", error);
 
-      // Redirect to login
       window.location.href = "/login";
       return null;
     }
@@ -227,7 +225,6 @@ Implement in your backend:
 export async function DELETE(req: Request, { params }) {
   const session = await getServerSession();
 
-  // Check permissions
   const thread = await cloud.threads.get(params.id);
   if (thread.metadata.ownerId !== session.user.id) {
     if (!session.user.roles.includes("admin")) {

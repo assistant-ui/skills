@@ -105,7 +105,7 @@ await cloud.threads.delete(threadId);
 
 ```tsx
 const messages = await cloud.threads.messages(threadId).list({
-  format: "aui/v0",  // Message format
+  format: "aui/v0",
 });
 
 // messages: Array<{
@@ -166,22 +166,21 @@ type MessagePart =
     };
 ```
 
-## Thread History Adapter
+## Custom Persistence Adapters
 
-For custom persistence with useLocalRuntime:
+The simplest persistence is passing `cloud` to the runtime (see Basic Setup above). For full control over storage, assistant-ui exposes adapter interfaces (from `@assistant-ui/react`):
+
+- `ThreadHistoryAdapter` owns the messages of a single thread.
+- `RemoteThreadListAdapter` owns the list of threads (create, rename, archive, delete).
+
+To back those adapters with assistant-cloud rather than your own database, use `CloudMessagePersistence` or `createFormattedPersistence` from `assistant-cloud`:
 
 ```tsx
-import { AssistantCloudThreadHistoryAdapter } from "assistant-cloud";
-
-const historyAdapter = new AssistantCloudThreadHistoryAdapter(cloud, threadId);
-
-const runtime = useLocalRuntime({
-  model: myModel,
-  adapters: {
-    threadHistory: historyAdapter,
-  },
-});
+import { CloudMessagePersistence, createFormattedPersistence } from "assistant-cloud";
 ```
+
+For a database-backed example, see the custom thread persistence guide at
+[assistant-ui.com/docs/integrations/persistence/custom-adapter](https://www.assistant-ui.com/docs/integrations/persistence/custom-adapter).
 
 ## Auto-Save Behavior
 
@@ -209,12 +208,10 @@ The cloud backend uses the conversation to generate a concise title.
 Link threads to your system:
 
 ```tsx
-// Create with external ID
 await cloud.threads.create({
   external_id: "your-system-id-123",
 });
 
-// Find by external ID
 const threads = await cloud.threads.list();
 const thread = threads.find(t => t.external_id === "your-system-id-123");
 ```
@@ -233,7 +230,6 @@ await cloud.threads.create({
   },
 });
 
-// Update metadata
 await cloud.threads.update(threadId, {
   metadata: { resolved: true },
 });

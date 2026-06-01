@@ -168,12 +168,10 @@ Prefer `AuiIf` for richer state checks (`thread`, `composer`, etc.).
 function CustomComposer() {
   return (
     <ComposerPrimitive.Root className="border-t p-4">
-      {/* Drag-drop overlay */}
       <ComposerPrimitive.AttachmentDropzone className="absolute inset-0 flex items-center justify-center bg-blue-50/80 border-2 border-dashed border-blue-300 rounded-lg opacity-0 pointer-events-none data-[dragging]:opacity-100 data-[dragging]:pointer-events-auto">
         <p className="text-blue-500">Drop files to attach</p>
       </ComposerPrimitive.AttachmentDropzone>
 
-      {/* Attached files */}
       <AuiIf condition={({ composer }) => composer.attachments.length > 0}>
         <ComposerPrimitive.Attachments className="flex flex-wrap gap-2 mb-2">
           <AttachmentPrimitive.Root className="group flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5">
@@ -185,7 +183,6 @@ function CustomComposer() {
         </ComposerPrimitive.Attachments>
       </AuiIf>
 
-      {/* Input row */}
       <div className="flex items-end gap-2">
         <ComposerPrimitive.AddAttachment className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
           <PaperclipIcon className="w-5 h-5" />
@@ -228,23 +225,4 @@ function CustomComposer() {
 
 ## Accessing Composer State
 
-```tsx
-import { useComposer, useComposerRuntime } from "@assistant-ui/react";
-
-function ComposerInfo() {
-  // Reactive state
-  const { text, attachments, isSubmitting } = useComposer();
-
-  // Runtime API
-  const runtime = useComposerRuntime();
-  const handleClear = () => runtime.setText("");
-
-  return (
-    <div>
-      <p>Characters: {text.length}</p>
-      <p>Attachments: {attachments.length}</p>
-      <button onClick={handleClear}>Clear</button>
-    </div>
-  );
-}
-```
+Read composer state with `useAuiState((s) => s.composer...)` (e.g. `s.composer.text`, `s.composer.attachments`) and act via `useAui().composer()` (e.g. `.setText("")`). See the `/runtime` skill for the full state API.

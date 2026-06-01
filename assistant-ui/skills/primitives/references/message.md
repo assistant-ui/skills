@@ -20,7 +20,7 @@ Individual message display.
 ```tsx
 <MessagePrimitive.Root>
   <Avatar src="/user-avatar.png" />
-  <MessagePrimitive.Content />
+  <MessagePrimitive.Parts />
 </MessagePrimitive.Root>
 ```
 
@@ -37,50 +37,56 @@ Container for a single message.
 </MessagePrimitive.Root>
 ```
 
-## MessagePrimitive.Content
+## MessagePrimitive.Parts
 
-Renders message content parts (text, images, tool calls, etc.).
+Renders message content parts (text, images, tool calls, etc.). `MessagePrimitive.Parts` is canonical; `MessagePrimitive.Content` is a deprecated alias. As of 0.14 it takes a children render function that receives `{ part }`; the `components` prop still works but is deprecated.
 
 ```tsx
-// Simple usage - uses default rendering
-<MessagePrimitive.Content />
+<MessagePrimitive.Parts />
 
-// Custom part rendering
-<MessagePrimitive.Content
-  components={{
-    Text: ({ part }) => (
-      <p className="whitespace-pre-wrap">{part.text}</p>
-    ),
-    Image: ({ part }) => (
-      <img src={part.image} alt="" className="max-w-full rounded" />
-    ),
-    ToolCall: ({ part }) => (
-      <div className="bg-gray-100 rounded p-2">
-        <strong>{part.toolName}</strong>
-        {part.result && <pre>{JSON.stringify(part.result, null, 2)}</pre>}
-      </div>
-    ),
-    Reasoning: ({ part }) => (
-      <details className="text-gray-500">
-        <summary>Thinking...</summary>
-        <p>{part.text}</p>
-      </details>
-    ),
-    Source: ({ part }) => (
-      <a href={part.url} className="text-blue-500">
-        {part.title}
-      </a>
-    ),
-    File: ({ part }) => (
-      <a
-        href={`data:${part.mimeType};base64,${part.data}`}
-        download={part.filename ?? "file"}
-      >
-        📄 {part.filename ?? "file"}
-      </a>
-    ),
+<MessagePrimitive.Parts>
+  {({ part }) => {
+    switch (part.type) {
+      case "text":
+        return <p className="whitespace-pre-wrap">{part.text}</p>;
+      case "image":
+        return <img src={part.image} alt="" className="max-w-full rounded" />;
+      case "tool-call":
+        return (
+          part.toolUI ?? (
+            <div className="bg-gray-100 rounded p-2">
+              <strong>{part.toolName}</strong>
+              {part.result && <pre>{JSON.stringify(part.result, null, 2)}</pre>}
+            </div>
+          )
+        );
+      case "reasoning":
+        return (
+          <details className="text-gray-500">
+            <summary>Thinking...</summary>
+            <p>{part.text}</p>
+          </details>
+        );
+      case "source":
+        return (
+          <a href={part.url} className="text-blue-500">
+            {part.title}
+          </a>
+        );
+      case "file":
+        return (
+          <a
+            href={`data:${part.mimeType};base64,${part.data}`}
+            download={part.filename ?? "file"}
+          >
+            📄 {part.filename ?? "file"}
+          </a>
+        );
+      default:
+        return null; // registered tool/data UIs still render
+    }
   }}
-/>
+</MessagePrimitive.Parts>
 ```
 
 ### Part Types
@@ -135,7 +141,7 @@ function CustomUserMessage() {
       />
       <div className="max-w-[80%]">
         <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm px-4 py-2">
-          <MessagePrimitive.Content />
+          <MessagePrimitive.Parts />
         </div>
       </div>
     </MessagePrimitive.Root>
@@ -153,7 +159,7 @@ function CustomAssistantMessage() {
 
       <div className="max-w-[80%]">
         <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-2">
-          <MessagePrimitive.Content />
+          <MessagePrimitive.Parts />
         </div>
       </div>
 
@@ -187,25 +193,4 @@ Use `MessagePrimitive.Error` to render a fallback UI only when the message has a
 
 ## Accessing Message State
 
-```tsx
-import { useMessage, useMessageRuntime } from "@assistant-ui/react";
-
-function MessageInfo() {
-  // Reactive state
-  const { role, content, status, createdAt } = useMessage();
-
-  // Runtime API
-  const runtime = useMessageRuntime();
-  const handleEdit = () => runtime.edit({
-    role: "user",
-    content: [{ type: "text", text: "New content" }],
-  });
-
-  return (
-    <div>
-      <p>Role: {role}</p>
-      <p>Status: {status}</p>
-    </div>
-  );
-}
-```
+Read message state with `useAuiState((s) => s.message...)` and act via `useAui().message()` (e.g. `.reload()`). On assistant messages `s.message.status` is an object; branch on `status.type`. See the `/runtime` skill for the full state API.

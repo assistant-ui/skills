@@ -2,9 +2,23 @@
 
 Tools that require user confirmation or input.
 
+## Contents
+
+- [Overview](#overview)
+- [Confirmation Pattern](#confirmation-pattern)
+- [Selection Pattern](#selection-pattern)
+- [Form Input Pattern](#form-input-pattern)
+- [Multi-Step Workflow](#multi-step-workflow)
+- [Rating/Feedback Pattern](#ratingfeedback-pattern)
+- [Timeout/Auto-Cancel](#timeoutauto-cancel)
+
 ## Overview
 
-Human-in-the-loop tools pause execution waiting for user input. Use `status === "requires-action"` to detect this state and `submitResult` to provide the user's response.
+Human-in-the-loop tools pause execution waiting for user input. Detect the paused state with `status.type === "requires-action"`. The render props give three ways to respond:
+
+- `addResult(result)` — the renderer itself supplies the tool result (the pattern used throughout this page).
+- `resume(payload)` — resume a frontend tool that paused by calling `context.human(payload)` inside its `execute` function.
+- `respondToApproval({ approved, reason? })` — answer a server-side approval gate (a backend tool defined with `needsApproval`).
 
 ## Confirmation Pattern
 
@@ -24,9 +38,9 @@ const deleteTool = tool({
 // Frontend shows confirmation UI
 const DeleteToolUI = makeAssistantToolUI({
   toolName: "delete_file",
-  render: ({ args, result, status, submitResult }) => {
+  render: ({ args, result, status, addResult }) => {
     // Initial state - show confirmation
-    if (status === "requires-action" || !result?.confirmed) {
+    if (status.type === "requires-action" || !result?.confirmed) {
       return (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-center gap-2 mb-3">
@@ -36,13 +50,13 @@ const DeleteToolUI = makeAssistantToolUI({
           <p className="mb-4">Are you sure you want to delete <code>{args.path}</code>?</p>
           <div className="flex gap-2">
             <button
-              onClick={() => submitResult({ confirmed: true })}
+              onClick={() => addResult({ confirmed: true })}
               className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
             >
               Delete
             </button>
             <button
-              onClick={() => submitResult({ confirmed: false })}
+              onClick={() => addResult({ confirmed: false })}
               className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
             >
               Cancel
@@ -78,8 +92,8 @@ Let user choose from options:
 ```tsx
 const SelectToolUI = makeAssistantToolUI({
   toolName: "select_option",
-  render: ({ args, result, status, submitResult }) => {
-    if (status !== "complete") {
+  render: ({ args, result, status, addResult }) => {
+    if (status.type !== "complete") {
       return (
         <div className="p-4 bg-blue-50 rounded-lg">
           <p className="mb-3">{args.prompt}</p>
@@ -87,7 +101,7 @@ const SelectToolUI = makeAssistantToolUI({
             {args.options.map((option: any) => (
               <button
                 key={option.id}
-                onClick={() => submitResult({ selected: option.id })}
+                onClick={() => addResult({ selected: option.id })}
                 className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
               >
                 {option.label}
@@ -114,15 +128,15 @@ Collect structured data from user:
 ```tsx
 const FormToolUI = makeAssistantToolUI({
   toolName: "collect_info",
-  render: ({ args, status, submitResult }) => {
+  render: ({ args, status, addResult }) => {
     const [formData, setFormData] = useState({});
 
-    if (status !== "complete") {
+    if (status.type !== "complete") {
       return (
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            submitResult(formData);
+            addResult(formData);
           }}
           className="p-4 bg-gray-50 rounded-lg space-y-4"
         >
@@ -166,14 +180,14 @@ Chain multiple interactions:
 ```tsx
 const WizardToolUI = makeAssistantToolUI({
   toolName: "setup_wizard",
-  render: ({ args, result, status, submitResult }) => {
+  render: ({ args, result, status, addResult }) => {
     const [step, setStep] = useState(0);
     const [data, setData] = useState({});
 
     const steps = args.steps || [];
     const currentStep = steps[step];
 
-    if (status === "complete") {
+    if (status.type === "complete") {
       return <div>Setup complete!</div>;
     }
 
@@ -199,7 +213,7 @@ const WizardToolUI = makeAssistantToolUI({
                     if (step < steps.length - 1) {
                       setStep(step + 1);
                     } else {
-                      submitResult(newData);
+                      addResult(newData);
                     }
                   }}
                   className="w-full p-3 text-left border rounded hover:bg-gray-100"
@@ -230,11 +244,11 @@ const WizardToolUI = makeAssistantToolUI({
 ```tsx
 const RatingToolUI = makeAssistantToolUI({
   toolName: "request_rating",
-  render: ({ args, status, submitResult }) => {
+  render: ({ args, status, addResult }) => {
     const [rating, setRating] = useState(0);
     const [comment, setComment] = useState("");
 
-    if (status === "complete") {
+    if (status.type === "complete") {
       return <div>Thank you for your feedback!</div>;
     }
 
@@ -264,7 +278,7 @@ const RatingToolUI = makeAssistantToolUI({
         />
 
         <button
-          onClick={() => submitResult({ rating, comment })}
+          onClick={() => addResult({ rating, comment })}
           disabled={rating === 0}
           className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
         >
@@ -281,16 +295,16 @@ const RatingToolUI = makeAssistantToolUI({
 ```tsx
 const TimedToolUI = makeAssistantToolUI({
   toolName: "timed_action",
-  render: ({ args, status, submitResult }) => {
+  render: ({ args, status, addResult }) => {
     const [timeLeft, setTimeLeft] = useState(args.timeout || 30);
 
     useEffect(() => {
-      if (status !== "requires-action") return;
+      if (status.type !== "requires-action") return;
 
       const timer = setInterval(() => {
         setTimeLeft((t) => {
           if (t <= 1) {
-            submitResult({ timeout: true });
+            addResult({ timeout: true });
             return 0;
           }
           return t - 1;
@@ -298,9 +312,9 @@ const TimedToolUI = makeAssistantToolUI({
       }, 1000);
 
       return () => clearInterval(timer);
-    }, [status, submitResult]);
+    }, [status, addResult]);
 
-    if (status !== "requires-action") {
+    if (status.type !== "requires-action") {
       return <div>Action completed</div>;
     }
 
@@ -311,7 +325,7 @@ const TimedToolUI = makeAssistantToolUI({
           Auto-cancelling in {timeLeft}s
         </p>
         <button
-          onClick={() => submitResult({ confirmed: true })}
+          onClick={() => addResult({ confirmed: true })}
           className="mt-2 px-4 py-2 bg-blue-500 text-white rounded"
         >
           Confirm

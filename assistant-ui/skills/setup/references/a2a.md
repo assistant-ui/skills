@@ -1,11 +1,11 @@
 # A2A Protocol Integration
 
-Connect assistant-ui to Agent-to-Agent (A2A) protocol backends for multi-agent systems.
+Connect assistant-ui to Agent-to-Agent (A2A) protocol servers via `@assistant-ui/react-a2a`.
 
 ## Installation
 
 ```bash
-npm install @assistant-ui/react-a2a
+npm install @assistant-ui/react @assistant-ui/react-a2a
 ```
 
 ## Exports
@@ -13,39 +13,39 @@ npm install @assistant-ui/react-a2a
 ```tsx
 import {
   useA2ARuntime,
-  useA2AMessages,
-  useA2ATaskState,
+  useA2ATask,
   useA2AArtifacts,
-  useA2ASend,
-  convertA2AMessages,
-  A2AMessageAccumulator,
-  appendA2AChunk,
+  useA2AAgentCard,
+  A2AClient,
+  A2AError,
+  // conversion utilities (advanced)
+  a2aMessageToContent,
+  taskStateToMessageStatus,
+  contentPartsToA2AParts,
+  isTerminalTaskState,
+  isInterruptedTaskState,
 } from "@assistant-ui/react-a2a";
 ```
 
 ## Basic Setup
 
+`useA2ARuntime` connects to an A2A server by `baseUrl` (it creates a client for you) or a pre-built `client`. There is no `stream` callback.
+
 ```tsx
+"use client";
+
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { Thread } from "@/components/assistant-ui/thread";
 import { useA2ARuntime } from "@assistant-ui/react-a2a";
 
-function Chat() {
+export function MyRuntimeProvider({ children }: { children: React.ReactNode }) {
   const runtime = useA2ARuntime({
-    stream: async function* (messages, config) {
-      const response = await fetch("/api/a2a", {
-        method: "POST",
-        body: JSON.stringify({ messages, config }),
-      });
-
-      const reader = response.body?.getReader();
-      // ... yield A2A events
-    },
+    baseUrl: "http://localhost:9999",
   });
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <Thread />
+      {children}
     </AssistantRuntimeProvider>
   );
 }
@@ -55,102 +55,68 @@ function Chat() {
 
 ```tsx
 const runtime = useA2ARuntime({
-  stream: A2AStreamCallback,                  // Required: streaming function
-  contextId: "thread-id",                     // Optional: thread context ID (deprecated)
-  autoCancelPendingToolCalls: true,           // Optional: auto-cancel pending tools
-  unstable_allowCancellation: false,          // Optional: enable cancellation
-  onSwitchToNewThread: () => {},              // Optional: new thread handler (deprecated)
-  onSwitchToThread: async (id) => ({          // Optional: switch thread handler
-    messages: [],
-    artifacts: [],
-  }),
-  adapters: {
-    attachments: AttachmentAdapter,
-    speech: SpeechSynthesisAdapter,
-    feedback: FeedbackAdapter,
+  // Provide a baseUrl OR a pre-built client
+  baseUrl: "https://my-agent.example.com",
+  // client: new A2AClient({ baseUrl: "https://my-agent.example.com" }),
+
+  // baseUrl-only options
+  basePath: "/v1",
+  tenant: "my-tenant",
+  headers: { Authorization: `Bearer ${token}` },
+  extensions: [],
+  fetchOptions: { credentials: "include" },
+
+  contextId: "conversation-context-id",
+  configuration: {
+    /* A2ASendMessageConfiguration */
   },
-  eventHandlers: {                            // Optional: A2A event callbacks
-    onTaskUpdate: (event) => {},
-    onArtifacts: (event) => {},
-    onError: (event) => {},
-    onStateUpdate: (event) => {},
-    onCustomEvent: (event) => {},
+
+  onError: (error) => {},
+  onCancel: () => {},
+  onArtifactComplete: (artifact) => {},
+
+  adapters: {
+    attachments: attachmentAdapter,
+    speech: speechAdapter,
+    feedback: feedbackAdapter,
+    history: historyAdapter,
   },
 });
+```
+
+## Pre-built Client
+
+```tsx
+import { A2AClient } from "@assistant-ui/react-a2a";
+
+const client = new A2AClient({ baseUrl: "https://my-agent.example.com" });
+const runtime = useA2ARuntime({ client });
 ```
 
 ## Accessing A2A State
 
 ```tsx
-import { useA2ATaskState, useA2AArtifacts, useA2ASend } from "@assistant-ui/react-a2a";
+import {
+  useA2ATask,
+  useA2AArtifacts,
+  useA2AAgentCard,
+} from "@assistant-ui/react-a2a";
 
-function MyComponent() {
-  const taskState = useA2ATaskState();  // Current task state
-  const artifacts = useA2AArtifacts();  // Accumulated artifacts
-  const send = useA2ASend();            // Send function for manual control
+function TaskStatus() {
+  const task = useA2ATask();         // current A2A task (state + status message)
+  const artifacts = useA2AArtifacts(); // accumulated artifacts
+  const agentCard = useA2AAgentCard(); // agent card (capabilities/skills)
 
-  // Send messages manually
-  await send(
-    [{ role: "user", content: "Hello" }],
-    { contextId: "my-context" }
-  );
+  return <div>{task?.status?.state}</div>;
 }
 ```
 
-## A2A Message Types
+## Thread Persistence
+
+Pass a `history` or `threadList` adapter via `adapters`, or combine with the cloud thread list runtime (exported from `@assistant-ui/react`):
 
 ```tsx
-type A2AMessage = {
-  id?: string;
-  role: "user" | "assistant" | "system" | "tool";
-  content: string | A2AMessageContent[];
-  tool_calls?: A2AToolCall[];
-  tool_call_id?: string;
-  artifacts?: A2AArtifact[];
-  status?: MessageStatus;
-};
-
-type A2AMessageContent =
-  | { type: "text"; text: string }
-  | { type: "image_url"; image_url: string | { url: string } }
-  | { type: "data"; data: any };
-
-type A2AToolCall = {
-  id: string;
-  name: string;
-  args: ReadonlyJSONObject;
-  argsText?: string;
-};
-
-type A2AArtifact = {
-  name: string;
-  parts: A2AArtifactPart[];
-};
-```
-
-## With Cloud Thread Management
-
-For thread persistence, use `useCloudThreadListRuntime`:
-
-```tsx
-import { useA2ARuntime } from "@assistant-ui/react-a2a";
-import { useCloudThreadListRuntime } from "assistant-cloud/react";
-
-function Chat() {
-  const runtime = useA2ARuntime({
-    stream: myStreamFunction,
-    // Don't use contextId/onSwitchToThread here
-  });
-
-  // Use cloud for thread management instead
-  const threadListRuntime = useCloudThreadListRuntime({ cloud });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <Thread />
-    </AssistantRuntimeProvider>
-  );
-}
+import { useCloudThreadListRuntime } from "@assistant-ui/react";
 ```
 
 ## When to Use A2A

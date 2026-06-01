@@ -2,6 +2,17 @@
 
 Connect assistant-ui to custom message stores (Redux, Zustand, etc.).
 
+## Contents
+
+- [Basic Usage](#basic-usage)
+- [Options](#options)
+- [With Redux](#with-redux)
+- [With Zustand](#with-zustand)
+- [Custom Message Format](#custom-message-format)
+- [Streaming Updates](#streaming-updates)
+- [With Edit and Reload](#with-edit-and-reload)
+- [Capabilities](#capabilities)
+
 ## Basic Usage
 
 ```tsx
@@ -31,7 +42,7 @@ function App() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: [{ type: "text", text: data.text }],
-        status: "complete",
+        status: { type: "complete" },
         createdAt: new Date(),
       }]);
       setIsRunning(false);
@@ -180,7 +191,7 @@ function Chat() {
       id: msg.uuid,
       role: msg.sender === "human" ? "user" : "assistant",
       content: [{ type: "text", text: msg.text }],
-      status: "complete",
+      status: { type: "complete" },
       createdAt: new Date(msg.timestamp),
     }),
     onNew: async (appendMessage) => {
@@ -222,7 +233,7 @@ const runtime = useExternalStoreRuntime({
       id: assistantId,
       role: "assistant",
       content: [{ type: "text", text: "" }],
-      status: "running",
+      status: { type: "running" },
       createdAt: new Date(),
     });
 
@@ -245,14 +256,14 @@ const runtime = useExternalStoreRuntime({
       // Update message in place
       updateMessage(assistantId, {
         content: [{ type: "text", text: fullText }],
-        status: "running",
+        status: { type: "running" },
       });
     }
 
     // Mark complete
     updateMessage(assistantId, {
       content: [{ type: "text", text: fullText }],
-      status: "complete",
+      status: { type: "complete" },
     });
     setRunning(false);
   },
@@ -280,7 +291,7 @@ const runtime = useExternalStoreRuntime({
         id: crypto.randomUUID(),
         role: "user",
         content: message.content,
-        status: "complete",
+        status: { type: "complete" },
         createdAt: new Date(),
       },
     ]);

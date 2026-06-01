@@ -2,6 +2,15 @@
 
 Build custom thread list interfaces.
 
+## Contents
+
+- [Using Primitives](#using-primitives)
+- [Fully Custom with Hooks](#fully-custom-with-hooks)
+- [With Search](#with-search)
+- [With Drag and Drop](#with-drag-and-drop)
+- [Modal/Dropdown Style](#modaldropdown-style)
+- [With Categories/Folders](#with-categoriesfolders)
+
 ## Using Primitives
 
 ```tsx
@@ -13,23 +22,20 @@ import {
 function CustomThreadList() {
   return (
     <ThreadListPrimitive.Root className="flex flex-col h-full">
-      {/* New thread button */}
       <ThreadListPrimitive.New className="m-2 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
         + New Conversation
       </ThreadListPrimitive.New>
 
-      {/* Thread items */}
       <div className="flex-1 overflow-y-auto">
         <ThreadListPrimitive.Items>
-          <CustomThreadItem />
+          {() => <CustomThreadItem />}
         </ThreadListPrimitive.Items>
       </div>
 
-      {/* Archived section */}
       <div className="border-t p-2">
         <h3 className="text-sm text-gray-500 mb-2">Archived</h3>
         <ThreadListPrimitive.Items archived>
-          <CustomThreadItem archived />
+          {() => <CustomThreadItem archived />}
         </ThreadListPrimitive.Items>
       </div>
     </ThreadListPrimitive.Root>
@@ -80,7 +86,6 @@ function FullyCustomThreadList() {
 
   return (
     <div className="w-64 h-full bg-gray-50">
-      {/* Header */}
       <div className="p-4 border-b">
         <button
           onClick={() => api.threads().switchToNewThread()}
@@ -90,7 +95,6 @@ function FullyCustomThreadList() {
         </button>
       </div>
 
-      {/* Thread list */}
       <nav className="p-2 space-y-1">
         {threads.map((threadId) => (
           <ThreadItem
@@ -101,7 +105,6 @@ function FullyCustomThreadList() {
         ))}
       </nav>
 
-      {/* Archived */}
       {archivedThreads.length > 0 && (
         <div className="border-t mt-4 pt-4 px-2">
           <h3 className="text-xs text-gray-500 uppercase mb-2">Archived</h3>
@@ -225,7 +228,6 @@ function SearchableThreadList() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Search */}
       <div className="p-2">
         <input
           value={search}
@@ -235,7 +237,6 @@ function SearchableThreadList() {
         />
       </div>
 
-      {/* New button */}
       <button
         onClick={() => api.threads().switchToNewThread()}
         className="mx-2 py-2 bg-blue-500 text-white rounded-lg"
@@ -243,7 +244,6 @@ function SearchableThreadList() {
         + New Chat
       </button>
 
-      {/* Results */}
       <div className="flex-1 overflow-y-auto p-2">
         {filteredThreads.length === 0 ? (
           <p className="text-gray-500 text-center py-4">No results</p>
@@ -320,11 +320,11 @@ function DraggableThreadList() {
 function ThreadDropdown() {
   const [open, setOpen] = useState(false);
   const api = useAui();
-  const { threads, mainThreadId } = useAuiState((s) => ({
+  const { threads, mainThreadId, currentItem } = useAuiState((s) => ({
     threads: s.threads.threadIds,
     mainThreadId: s.threads.mainThreadId,
+    currentItem: s.threadListItem,
   }));
-  const currentItem = api.threads().item("main").getState();
 
   return (
     <div className="relative">
@@ -332,7 +332,7 @@ function ThreadDropdown() {
         onClick={() => setOpen(!open)}
         className="px-4 py-2 border rounded-lg flex items-center gap-2"
       >
-        <span>{currentItem.title || "Select Thread"}</span>
+        <span>{currentItem?.title || "Select Thread"}</span>
         <span>{open ? "▲" : "▼"}</span>
       </button>
 
@@ -380,7 +380,6 @@ function CategorizedThreadList() {
   const api = useAui();
   const { threads } = useAuiState((s) => ({ threads: s.threads.threadIds }));
 
-  // Group by title first letter
   const grouped = threads.reduce((acc, id) => {
     const item = api.threads().item({ id }).getState();
     const category = (item.title || "Untitled").charAt(0).toUpperCase();
