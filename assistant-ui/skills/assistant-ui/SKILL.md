@@ -1,13 +1,12 @@
 ---
 name: assistant-ui
-description: Guide for assistant-ui library - AI chat UI components. Use when asking about architecture, debugging, or understanding the codebase.
-version: 0.0.1
+description: "Overview and router for assistant-ui, the React library for building AI chat interfaces from composable primitives. Use for high-level, cross-cutting, or architecture-overview questions: choosing packages, picking a runtime, or understanding the layered model (RuntimeCore, Runtime, context hooks, primitives) and message model. Covers the `@assistant-ui/react` core plus `@assistant-ui/react-ai-sdk`, `@assistant-ui/react-langgraph`, `assistant-stream`, and `assistant-cloud`; `AssistantRuntimeProvider`; the primitives `ThreadPrimitive`, `MessagePrimitive`, `ComposerPrimitive`; the hooks `useAui`, `useAuiState`, `useAuiEvent`; and runtime selection across `useChatRuntime`, `useExternalStoreRuntime`, `useLangGraphRuntime`, `useLocalRuntime`. For a specific area route to a focused sibling instead: setup, runtime, primitives, tools, streaming, cloud, thread-list, or update. Not for hands-on tasks already owned by those siblings."
 license: MIT
 ---
 
 # assistant-ui
 
-**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
+**Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
 React library for building AI chat interfaces with composable primitives.
 

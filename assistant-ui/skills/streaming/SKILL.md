@@ -1,13 +1,12 @@
 ---
 name: streaming
-description: Guide for assistant-stream package and streaming protocols. Use when implementing streaming backends, custom protocols, or debugging stream issues.
-version: 0.0.1
+description: "Streaming backends and wire protocols for assistant-ui via the assistant-stream package. Use when building a custom (non-AI-SDK) streaming endpoint with createAssistantStreamResponse or createAssistantStreamController, emitting parts through appendText/appendReasoning/appendSource/appendFile/addToolCallPart and setResponse; choosing between the AI SDK Data Stream format (toUIMessageStreamResponse) and the native Assistant Transport format; encoding or decoding streams with DataStreamEncoder/DataStreamDecoder, AssistantTransportEncoder/AssistantTransportDecoder, PlainTextEncoder, or UIMessageStreamDecoder; or wiring streamed chunks into useLocalRuntime or useChatRuntime. Use specifically for debugging stream wire issues: text-delta, part-start, result events, text/event-stream content-type, SSE format, tool calls not rendering, or partial text not showing. For general non-stream debugging route to the relevant focused skill, not the parent overview."
 license: MIT
 ---
 
 # assistant-ui Streaming
 
-**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
+**Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
 The `assistant-stream` package handles streaming from AI backends.
 
@@ -16,6 +15,7 @@ The `assistant-stream` package handles streaming from AI backends.
 - [./references/data-stream.md](./references/data-stream.md) -- AI SDK data stream format
 - [./references/assistant-transport.md](./references/assistant-transport.md) -- Native assistant-ui format
 - [./references/encoders.md](./references/encoders.md) -- Encoders and decoders
+- [./references/resumable.md](./references/resumable.md) -- Resumable streams
 
 ## When to Use
 
@@ -41,7 +41,6 @@ export async function POST(req: Request) {
     stream.appendText("Hello ");
     stream.appendText("world!");
 
-    // Tool call example
     const tool = stream.addToolCallPart({ toolCallId: "1", toolName: "get_weather" });
     tool.argsText.append('{"city":"NYC"}');
     tool.argsText.close();

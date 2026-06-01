@@ -1,13 +1,12 @@
 ---
 name: primitives
-description: Guide for assistant-ui UI primitives - ThreadPrimitive, ComposerPrimitive, MessagePrimitive. Use when customizing chat UI components.
-version: 0.0.1
+description: "Builds and customizes assistant-ui chat UI from composable, unstyled @assistant-ui/react primitives that follow Radix-style part composition. Use when assembling or styling a custom Thread, Composer, message rendering, action bar, or branch picker from building blocks: ThreadPrimitive (.Root, .Viewport, .Messages, .Empty, .ScrollToBottom), ComposerPrimitive (.Input, .Send, .Cancel, .Attachments), MessagePrimitive (.Parts/.Content, .Error), ActionBarPrimitive (.Copy, .Edit, .Reload, .Speak, feedback, .ExportMarkdown), BranchPickerPrimitive, AttachmentPrimitive, ThreadListPrimitive, ThreadListItemPrimitive. Covers MessagePrimitive.Parts children render functions for text, image, reasoning, and tool-call parts; conditional rendering with AuiIf (deprecated .If); and gotchas like wrapping in AssistantRuntimeProvider and adding className since primitives ship unstyled. For prebuilt drop-in UI and scaffolding use setup; for multi-thread sidebar behavior use thread-list."
 license: MIT
 ---
 
 # assistant-ui Primitives
 
-**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
+**Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
 Composable, unstyled components following Radix UI patterns.
 
@@ -17,6 +16,8 @@ Composable, unstyled components following Radix UI patterns.
 - [./references/composer.md](./references/composer.md) -- ComposerPrimitive deep dive
 - [./references/message.md](./references/message.md) -- MessagePrimitive deep dive
 - [./references/action-bar.md](./references/action-bar.md) -- ActionBarPrimitive deep dive
+- [./references/part-grouping.md](./references/part-grouping.md) -- Part grouping and chain-of-thought UI
+- [./references/mentions.md](./references/mentions.md) -- Composer mentions and slash commands
 
 ## Import
 
@@ -57,10 +58,15 @@ function CustomThread() {
       </ThreadPrimitive.Empty>
 
       <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto p-4">
-        <ThreadPrimitive.Messages components={{
-          UserMessage: CustomUserMessage,
-          AssistantMessage: CustomAssistantMessage,
-        }} />
+        <ThreadPrimitive.Messages>
+          {({ message }) =>
+            message.role === "user" ? (
+              <CustomUserMessage />
+            ) : (
+              <CustomAssistantMessage />
+            )
+          }
+        </ThreadPrimitive.Messages>
       </ThreadPrimitive.Viewport>
 
       <ComposerPrimitive.Root className="border-t p-4 flex gap-2">
@@ -96,27 +102,48 @@ Prefer `AuiIf` for new code. Primitive `.If` components still exist but are depr
 <AuiIf condition={({ thread }) => thread.isEmpty}>No messages</AuiIf>
 ```
 
-## Content Parts
+## Message Parts (children render function)
+
+As of 0.14, primitives that render lists (`ThreadPrimitive.Messages`, `MessagePrimitive.Parts`, `ThreadPrimitive.Suggestions`, `ThreadListPrimitive.Items`, `ComposerPrimitive.Attachments`) take a children render function instead of a `components` prop. The `components` prop still works but is deprecated.
+
+`MessagePrimitive.Parts` is the canonical name (`MessagePrimitive.Content` is a deprecated alias).
 
 ```tsx
-<MessagePrimitive.Content components={{
-  Text: ({ part }) => <p>{part.text}</p>,
-  Image: ({ part }) => <img src={part.image} alt="" />,
-  ToolCall: ({ part }) => <div>Tool: {part.toolName}</div>,
-  Reasoning: ({ part }) => <details><summary>Thinking</summary>{part.text}</details>,
-}} />
+<MessagePrimitive.Parts>
+  {({ part }) => {
+    switch (part.type) {
+      case "text":
+        return <p>{part.text}</p>;
+      case "image":
+        return <img src={part.image} alt="" />;
+      case "reasoning":
+        return (
+          <details>
+            <summary>Thinking</summary>
+            {part.text}
+          </details>
+        );
+      case "tool-call":
+        return part.toolUI ?? <div>Tool: {part.toolName}</div>;
+      default:
+        return null; // registered tool/data UIs still render
+    }
+  }}
+</MessagePrimitive.Parts>
 ```
+
+Returning `null` from the render function lets registered tool and data UIs render via the registry; return `<></>` to explicitly render nothing.
 
 ## Branch Picker
 
 ```tsx
-<MessagePrimitive.If hasBranches>
+<AuiIf condition={({ message }) => message.branchCount > 1}>
   <BranchPickerPrimitive.Root className="flex items-center gap-1">
     <BranchPickerPrimitive.Previous>←</BranchPickerPrimitive.Previous>
     <span><BranchPickerPrimitive.Number /> / <BranchPickerPrimitive.Count /></span>
     <BranchPickerPrimitive.Next>→</BranchPickerPrimitive.Next>
   </BranchPickerPrimitive.Root>
-</MessagePrimitive.If>
+</AuiIf>
 ```
 
 ## Common Gotchas

@@ -1,13 +1,12 @@
 ---
 name: tools
-description: Guide for tool registration and tool UI in assistant-ui. Use when implementing LLM tools, tool call rendering, or human-in-the-loop patterns.
-version: 0.0.1
+description: "Registers LLM tools and renders custom tool-call UI in assistant-ui (@assistant-ui/react). Use when adding frontend-only tools with makeAssistantTool / useAssistantTool (browser actions like clipboard, navigation, localStorage, async-generator streaming, AbortSignal), rendering backend AI SDK tool() calls with makeAssistantToolUI / useAssistantToolUI (status.type running/complete/incomplete/requires-action, args, result, artifact via ToolCallMessagePartProps), building generative UI from tool results, or implementing human-in-the-loop and approval flows (addResult, resume with context.human(), respondToApproval for server-side needsApproval gates). Covers registering tool components inside AssistantRuntimeProvider and the case-sensitive toolName matching that connects a tool to its UI. Reach for this when tool UI is not rendering, a tool is not being called, or a result is not showing."
 license: MIT
 ---
 
 # assistant-ui Tools
 
-**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
+**Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
 Tools let LLMs trigger actions with custom UI rendering.
 
@@ -16,6 +15,10 @@ Tools let LLMs trigger actions with custom UI rendering.
 - [./references/make-tool.md](./references/make-tool.md) -- makeAssistantTool/useAssistantTool
 - [./references/tool-ui.md](./references/tool-ui.md) -- makeAssistantToolUI rendering
 - [./references/human-in-loop.md](./references/human-in-loop.md) -- Confirmation patterns
+- [./references/toolkits.md](./references/toolkits.md) -- Toolkits and the Tools component
+- [./references/mcp-server.md](./references/mcp-server.md) -- Server-side MCP tools
+- [./references/generative-ui.md](./references/generative-ui.md) -- Declarative generative UI
+- [./references/registry-components.md](./references/registry-components.md) -- ToolFallback, ToolGroup, Image renderers
 
 ## Tool Types
 
@@ -31,38 +34,48 @@ Where does the tool execute?
 
 ```ts
 // Backend (app/api/chat/route.ts)
-import { tool, stepCountIs } from "ai";
+import { openai } from "@ai-sdk/openai";
+import {
+  streamText,
+  tool,
+  stepCountIs,
+  convertToModelMessages,
+  type UIMessage,
+} from "ai";
 import { z } from "zod";
 
-const tools = {
-  get_weather: tool({
-    description: "Get weather for a city",
-    inputSchema: z.object({ city: z.string() }),
-    execute: async ({ city }) => ({ temp: 22, city }),
-  }),
-};
+export async function POST(req: Request) {
+  const { messages }: { messages: UIMessage[] } = await req.json();
 
-const result = streamText({
-  model: openai("gpt-4o"),
-  messages,
-  tools,
-  stopWhen: stepCountIs(5),
-});
+  const result = streamText({
+    model: openai("gpt-4o"),
+    messages: await convertToModelMessages(messages),
+    stopWhen: stepCountIs(5),
+    tools: {
+      get_weather: tool({
+        description: "Get weather for a city",
+        inputSchema: z.object({ city: z.string() }),
+        execute: async ({ city }) => ({ temp: 22, city }),
+      }),
+    },
+  });
+
+  return result.toUIMessageStreamResponse();
+}
 ```
 
 ```tsx
-// Frontend
 import { makeAssistantToolUI } from "@assistant-ui/react";
 
 const WeatherToolUI = makeAssistantToolUI({
   toolName: "get_weather",
   render: ({ args, result, status }) => {
-    if (status === "running") return <div>Loading weather...</div>;
+    // status is an object; check status.type (not status === "running")
+    if (status.type === "running") return <div>Loading weather...</div>;
     return <div>{result?.city}: {result?.temp}°C</div>;
   },
 });
 
-// Register in app
 <AssistantRuntimeProvider runtime={runtime}>
   <WeatherToolUI />
   <Thread />
@@ -93,15 +106,29 @@ const CopyTool = makeAssistantTool({
 ## API Reference
 
 ```tsx
-// makeAssistantToolUI props
-interface ToolUIProps {
+// makeAssistantToolUI render props (ToolCallMessagePartProps)
+interface ToolCallMessagePartProps {
   toolCallId: string;
   toolName: string;
   args: Record<string, unknown>;
-  argsText: string;
+  argsText: string;          // raw streamed JSON
   result?: unknown;
-  status: "running" | "complete" | "incomplete" | "requires-action";
-  submitResult: (result: unknown) => void;  // For interactive tools
+  isError?: boolean;
+  artifact?: unknown;        // UI-only artifact attached to the result
+
+  // status is an OBJECT, not a string. Branch on status.type.
+  status:
+    | { type: "running" }
+    | { type: "complete" }
+    | { type: "incomplete"; reason: "cancelled" | "length" | "content-filter" | "other" | "error" }
+    | { type: "requires-action"; reason: "interrupt" };
+
+  // Supply a result from the renderer (instead of a tool execute function)
+  addResult: (result: unknown) => void;
+  // Resume a frontend tool paused via context.human(...)
+  resume: (payload: unknown) => void;
+  // Respond to a server-side approval gate
+  respondToApproval: (response: { approved: boolean; reason?: string }) => void;
 }
 ```
 
@@ -110,13 +137,13 @@ interface ToolUIProps {
 ```tsx
 const DeleteToolUI = makeAssistantToolUI({
   toolName: "delete_file",
-  render: ({ args, status, submitResult }) => {
-    if (status === "requires-action") {
+  render: ({ args, status, addResult }) => {
+    if (status.type === "requires-action") {
       return (
         <div>
           <p>Delete {args.path}?</p>
-          <button onClick={() => submitResult({ confirmed: true })}>Confirm</button>
-          <button onClick={() => submitResult({ confirmed: false })}>Cancel</button>
+          <button onClick={() => addResult({ confirmed: true })}>Confirm</button>
+          <button onClick={() => addResult({ confirmed: false })}>Cancel</button>
         </div>
       );
     }
@@ -137,4 +164,4 @@ const DeleteToolUI = makeAssistantToolUI({
 
 **Result not showing**
 - Tool must return a value
-- Check `status === "complete"` before accessing result
+- Check `status.type === "complete"` before accessing result
