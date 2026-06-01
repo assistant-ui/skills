@@ -37,11 +37,9 @@ import { createAssistantStreamResponse } from "assistant-stream";
 
 export async function POST(req: Request) {
   return createAssistantStreamResponse(async (stream) => {
-    // Text
     stream.appendText("Hello ");
     stream.appendText("world!");
 
-    // Tool call
     const tool = stream.addToolCallPart({
       toolCallId: "call_123",
       toolName: "search",
@@ -50,7 +48,6 @@ export async function POST(req: Request) {
     tool.argsText.close();
     tool.setResponse({ result: { temperature: 22 } });
 
-    // Finish
     stream.close();
   });
 }
@@ -91,32 +88,6 @@ Decoded `AssistantStreamChunk` shapes:
 - `result` (tool results)
 - `step-start` / `step-finish` / `message-finish`
 - `error`
-
-## With Tools Example
-
-```ts
-import { createAssistantStreamResponse } from "assistant-stream";
-
-async function streamWithTools(req: Request) {
-  return createAssistantStreamResponse(async (stream) => {
-    stream.appendText("Let me search for that...\n\n");
-
-    const toolCallId = "call_" + Date.now();
-    const tool = stream.addToolCallPart({
-      toolCallId,
-      toolName: "search",
-    });
-    tool.argsText.append('{"query":"weather NYC"}');
-    tool.argsText.close();
-
-    const result = await searchWeather("NYC");
-    tool.setResponse({ result });
-
-    stream.appendText(`The current weather in NYC is ${result.temp}°F`);
-    stream.close();
-  });
-}
-```
 
 ## Wire Format
 

@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Agent skills for building AI chat interfaces with assistant-ui",
-    "version": "0.0.1"
+    "version": "0.0.2"
   },
   "plugins": [
     {
@@ -22,7 +22,11 @@
         "./skills/streaming",
         "./skills/cloud",
         "./skills/thread-list",
-        "./skills/update"
+        "./skills/update",
+        "./skills/copilots",
+        "./skills/react-mcp",
+        "./skills/observability",
+        "./skills/markdown"
       ]
     }
   ]

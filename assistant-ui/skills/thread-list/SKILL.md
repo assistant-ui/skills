@@ -1,13 +1,12 @@
 ---
 name: thread-list
-description: Guide for multi-thread management in assistant-ui. Use when implementing thread lists, switching threads, or managing conversation history.
-version: 0.0.1
+description: "Implements multi-thread (conversation history) management in assistant-ui apps: rendering the prebuilt `ThreadList` next to `Thread`, or building a custom sidebar with `ThreadListPrimitive` and `ThreadListItemPrimitive` (Root, New, Items, Trigger, Title, Archive, Unarchive, Delete). Covers thread CRUD through the `useAui()`/`useAuiState()` API: `switchToThread`, `switchToNewThread`, and per item `rename`, `archive`, `unarchive`, `delete`, `generateTitle`, `initialize`, plus reading `s.threads.threadIds`/`archivedThreadIds`/`mainThreadId`. Includes cloud-backed persistence via `useChatRuntime` + `AssistantCloud` and a local `useRemoteThreadListRuntime` + `InMemoryThreadListAdapter` path. Use when a user wants a thread list/sidebar, switching, searching, sorting, drag-and-drop, or renaming/archiving/deleting conversations. For single-thread state, messages, or composer use runtime; for cloud auth/persistence setup use cloud."
 license: MIT
 ---
 
 # assistant-ui Thread List
 
-**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
+**Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
 Manage multiple chat threads with built-in or custom UI.
 
@@ -60,13 +59,10 @@ const { threadIds, mainThreadId } = useAuiState((s) => ({
   mainThreadId: s.threads.mainThreadId,
 }));
 
-// Switch to thread
 api.threads().switchToThread(threadId);
 
-// Create new thread
 api.threads().switchToNewThread();
 
-// Thread item operations
 const item = api.threads().item({ id: threadId });
 await item.rename("New Title");
 await item.archive();
@@ -86,13 +82,15 @@ function CustomThreadList() {
       </ThreadListPrimitive.New>
 
       <ThreadListPrimitive.Items>
-        <ThreadListItemPrimitive.Root className="flex p-2 hover:bg-gray-100">
-          <ThreadListItemPrimitive.Trigger className="flex-1">
-            <ThreadListItemPrimitive.Title />
-          </ThreadListItemPrimitive.Trigger>
-          <ThreadListItemPrimitive.Archive>Archive</ThreadListItemPrimitive.Archive>
-          <ThreadListItemPrimitive.Delete>Delete</ThreadListItemPrimitive.Delete>
-        </ThreadListItemPrimitive.Root>
+        {() => (
+          <ThreadListItemPrimitive.Root className="flex p-2 hover:bg-gray-100">
+            <ThreadListItemPrimitive.Trigger className="flex-1">
+              <ThreadListItemPrimitive.Title />
+            </ThreadListItemPrimitive.Trigger>
+            <ThreadListItemPrimitive.Archive>Archive</ThreadListItemPrimitive.Archive>
+            <ThreadListItemPrimitive.Delete>Delete</ThreadListItemPrimitive.Delete>
+          </ThreadListItemPrimitive.Root>
+        )}
       </ThreadListPrimitive.Items>
     </ThreadListPrimitive.Root>
   );
@@ -103,8 +101,8 @@ function CustomThreadList() {
 
 ```tsx
 import {
-  unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
-  unstable_InMemoryThreadListAdapter as InMemoryThreadListAdapter,
+  useRemoteThreadListRuntime,
+  InMemoryThreadListAdapter,
 } from "@assistant-ui/react";
 
 const runtime = useRemoteThreadListRuntime({

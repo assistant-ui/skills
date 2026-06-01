@@ -18,6 +18,7 @@
 | @assistant-ui/store | State management |
 | @assistant-ui/react-devtools | Developer tools |
 | @assistant-ui/react-hook-form | React Hook Form integration |
+| @assistant-ui/react-mcp | User-managed MCP server tools |
 | @assistant-ui/react-a2a | Agent-to-Agent protocol for multi-agent systems |
 | @assistant-ui/react-ag-ui | AG-UI protocol adapter for agent backends |
 | @assistant-ui/cloud-ai-sdk | AI SDK hooks for assistant-cloud persistence |
@@ -34,7 +35,6 @@
 | safe-content-frame | Sandboxed iframe content |
 | tw-shimmer | Tailwind shimmer effects |
 | tw-glass | Tailwind CSS v4 glass refraction effects |
-| mcp-app-studio | MCP app builder |
 
 ## Core Packages
 
@@ -95,6 +95,7 @@ npm install @assistant-ui/react-ai-sdk @ai-sdk/react
 - `useChatRuntime` - Main hook (recommended)
 - `useAISDKRuntime` - Lower-level hook
 - `AssistantChatTransport` - Custom transport class
+- `frontendTools` - Forward frontend-registered tools to the backend route
 
 ### @assistant-ui/react-langgraph
 
@@ -147,6 +148,6 @@ npm install @assistant-ui/react-syntax-highlighter
 
 ## Version Compatibility
 
-- `@assistant-ui/react` requires React 18+ or 19
-- `@assistant-ui/react-ai-sdk` requires AI SDK v6 (`ai@^6`)
-- Node.js >=24 recommended (monorepo requirement)
+- `@assistant-ui/react` requires React 18 or 19 (`react@^18 || ^19`)
+- `@assistant-ui/react-ai-sdk` depends on AI SDK v6 (`ai@^6`), which requires `zod@^3.25.76 || ^4.1.8`
+- Node.js >=24 is only required to build the assistant-ui monorepo itself; consuming apps follow their framework's Node requirement

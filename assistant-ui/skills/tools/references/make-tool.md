@@ -22,7 +22,6 @@ const WeatherTool = makeAssistantTool({
   },
 });
 
-// Use in app
 function App() {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
@@ -40,15 +39,18 @@ interface MakeAssistantToolOptions<TArgs, TResult> {
   // Required
   toolName: string;
   parameters: ZodSchema<TArgs>;
-  execute: (args: TArgs, context: ToolContext) => Promise<TResult>;
+  execute: (args: TArgs, context: ToolExecutionContext) => Promise<TResult>;
 
   // Optional
-  description?: string;  // For frontend-only tools
+  description?: string;                     // For frontend-only tools
+  disabled?: boolean;                       // Skip registering the tool
+  render?: ToolCallMessagePartComponent;    // Inline tool UI for this tool
 }
 
-interface ToolContext {
+interface ToolExecutionContext {
   toolCallId: string;
   abortSignal: AbortSignal;
+  human: (payload: unknown) => Promise<unknown>;  // Request human input (HITL)
 }
 ```
 
@@ -61,8 +63,6 @@ import { useAssistantTool } from "@assistant-ui/react";
 import { z } from "zod";
 
 function MyComponent() {
-  // Tool registered when component mounts
-  // Unregistered when component unmounts
   useAssistantTool({
     toolName: "search",
     parameters: z.object({
@@ -128,7 +128,6 @@ const StreamingTool = makeAssistantTool({
 Tools that run entirely in the browser:
 
 ```tsx
-// Copy to clipboard
 const CopyTool = makeAssistantTool({
   toolName: "copy_to_clipboard",
   description: "Copy text to user's clipboard",
@@ -139,7 +138,6 @@ const CopyTool = makeAssistantTool({
   },
 });
 
-// Open URL
 const OpenURLTool = makeAssistantTool({
   toolName: "open_url",
   description: "Open URL in new tab",
@@ -150,7 +148,6 @@ const OpenURLTool = makeAssistantTool({
   },
 });
 
-// Local storage
 const StorageTool = makeAssistantTool({
   toolName: "save_preference",
   parameters: z.object({
@@ -168,7 +165,6 @@ const StorageTool = makeAssistantTool({
 
 ```tsx
 function ConditionalTools({ features }: { features: string[] }) {
-  // Only register tool if feature is enabled
   useAssistantTool({
     toolName: "premium_feature",
     parameters: z.object({ action: z.string() }),
@@ -178,7 +174,7 @@ function ConditionalTools({ features }: { features: string[] }) {
       }
       return performPremiumAction(action);
     },
-    enabled: features.includes("premium"),
+    disabled: !features.includes("premium"),
   });
 
   return <Thread />;

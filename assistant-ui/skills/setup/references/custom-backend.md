@@ -2,6 +2,12 @@
 
 Connect assistant-ui to any backend using useLocalRuntime or useExternalStoreRuntime.
 
+## Contents
+
+- [useLocalRuntime](#uselocalruntime)
+- [useExternalStoreRuntime](#useexternalstoreruntime)
+- [Streaming Updates with External Store](#streaming-updates-with-external-store)
+
 ## useLocalRuntime
 
 For backends that return streaming responses. Emit `ChatModelRunResult` chunks (append-only `content` parts).
@@ -183,7 +189,7 @@ function Chat() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: [{ type: "text", text: response.text }],
-        status: "complete",
+        status: { type: "complete" },
         createdAt: new Date(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -267,7 +273,7 @@ function Chat() {
         id: crypto.randomUUID(),
         role: "assistant",
         content: [{ type: "text", text: response }],
-        status: "complete",
+        status: { type: "complete" },
         createdAt: new Date(),
       });
       setRunning(false);
@@ -299,7 +305,7 @@ const runtime = useExternalStoreRuntime<MyMessage>({
     id: msg.uuid,
     role: msg.sender === "human" ? "user" : "assistant",
     content: [{ type: "text", text: msg.text }],
-    status: "complete",
+    status: { type: "complete" },
     createdAt: new Date(msg.timestamp),
   }),
   onNew: async (appendMessage) => {
@@ -335,7 +341,7 @@ const runtime = useExternalStoreRuntime({
       id: assistantId,
       role: "assistant",
       content: [{ type: "text", text: "" }],
-      status: "running",
+      status: { type: "running" },
       createdAt: new Date(),
     });
 
@@ -358,7 +364,7 @@ const runtime = useExternalStoreRuntime({
       });
     }
 
-    updateMessage(assistantId, { status: "complete" });
+    updateMessage(assistantId, { status: { type: "complete" } });
     setIsRunning(false);
   },
 });

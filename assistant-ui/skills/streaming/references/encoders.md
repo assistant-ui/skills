@@ -17,10 +17,8 @@ AI SDK compatible format. You normally don't call it directly—wrap an `Assista
 ```ts
 import { AssistantStream, DataStreamEncoder, DataStreamDecoder } from "assistant-stream";
 
-// Server
 const response = AssistantStream.toResponse(stream, new DataStreamEncoder());
 
-// Client
 const stream = AssistantStream.fromResponse(response, new DataStreamDecoder());
 for await (const chunk of stream) {
   console.log(chunk);
@@ -37,10 +35,8 @@ import {
   AssistantTransportDecoder,
 } from "assistant-stream";
 
-// Encoding: wrap AssistantStream chunks
 const response = AssistantStream.toResponse(stream, new AssistantTransportEncoder());
 
-// Decoding
 const stream = AssistantStream.fromResponse(response, new AssistantTransportDecoder());
 for await (const chunk of stream) {
   console.log(chunk);
@@ -54,11 +50,9 @@ Simple text-only streaming.
 ```ts
 import { PlainTextEncoder, PlainTextDecoder } from "assistant-stream";
 
-// Encoding
 const encoder = new PlainTextEncoder();
 const stream = encoder.encode("Hello world!");
 
-// Decoding
 const decoder = new PlainTextDecoder();
 for await (const text of decoder.decode(stream)) {
   console.log(text);
@@ -91,27 +85,7 @@ const stream = AssistantStream.fromResponse(response, new DataStreamDecoder());
 
 ## Server Response Helpers
 
-### Create Streaming Response
-
-Use `createAssistantStreamController` to build an `AssistantStream` and encode it:
-
-```ts
-import {
-  AssistantStream,
-  AssistantTransportEncoder,
-  createAssistantStreamController,
-} from "assistant-stream";
-
-export async function POST() {
-  const [stream, controller] = createAssistantStreamController();
-
-  controller.appendText("Hello ");
-  controller.appendText("world!");
-  controller.close();
-
-  return AssistantStream.toResponse(stream, new AssistantTransportEncoder());
-}
-```
+Build a stream with `createAssistantStreamController` and encode it via `AssistantStream.toResponse(stream, encoder)`, or use `createAssistantStreamResponse` for the Data Stream default. See [./assistant-transport.md](./assistant-transport.md) and [./data-stream.md](./data-stream.md) for full server examples.
 
 ## Debugging
 
@@ -132,7 +106,6 @@ while (reader) {
 ### Validate Format
 
 ```ts
-// Check if response is valid SSE
 const contentType = response.headers.get("Content-Type");
 console.log("Content-Type:", contentType);  // Should be text/event-stream
 ```

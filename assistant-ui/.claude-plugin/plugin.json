@@ -1,7 +1,7 @@
 {
   "name": "assistant-ui",
   "description": "Skills for building AI chat interfaces with assistant-ui React library",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": {
     "name": "assistant-ui"
   },

@@ -1,11 +1,12 @@
 ---
 name: setup
-description: Setup and configure assistant-ui in a project. Use when installing packages, configuring runtimes, setting up chat UI, or troubleshooting setup issues.
-version: 0.1.0
+description: "Installs and configures assistant-ui in a project via the CLI, and picks the right runtime for a backend. Use for first-time install, scaffold, or config: `npx assistant-ui@latest create my-app` (templates default, minimal, cloud, cloud-clerk, langgraph, mcp), `npx assistant-ui@latest init [--yes] [--overwrite]` in an existing Next.js app, or `npx assistant-ui@latest add` registry components (markdown-text, thread-list). Also use to choose a runtime hook for a backend: useChatRuntime (AI SDK), useLangGraphRuntime, useAgUiRuntime, useA2ARuntime, useLocalRuntime (custom streaming API), or useExternalStoreRuntime (Redux/Zustand). Covers Vite/TanStack Start setup, shadcn styling, the playground --preset flag, and avoiding the deprecated @assistant-ui/styles and @assistant-ui/react-ui packages. For upgrading an existing install or post-upgrade breakage use update; for building UI from raw parts use primitives."
 license: MIT
 ---
 
 # assistant-ui Setup
+
+**Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
 ## CLI Commands
 
@@ -87,6 +88,13 @@ For runtimes other than AI SDK or frameworks other than Next.js, consult the ref
 | Custom streaming API | `useLocalRuntime` | [references/custom-backend.md](./references/custom-backend.md) |
 | Existing state (Redux/Zustand) | `useExternalStoreRuntime` | [references/custom-backend.md](./references/custom-backend.md) |
 | Vite / TanStack Start | — | [references/tanstack.md](./references/tanstack.md) |
+| LangChain agents | `useStreamRuntime` | [references/langchain.md](./references/langchain.md) |
+| Google ADK agents | `useAdkRuntime` | [references/google-adk.md](./references/google-adk.md) |
+| Mastra agents | `useChatRuntime` | [references/mastra.md](./references/mastra.md) |
+| Cloudflare Agents | `useAISDKRuntime` | [references/cloudflare-agents.md](./references/cloudflare-agents.md) |
+| Legacy AI SDK v4/v5 | `useVercelUseChatRuntime` / `useDataStreamRuntime` | [references/ai-sdk-legacy.md](./references/ai-sdk-legacy.md) |
+| Registry UI components (modal, sidebar, model selector) | registry | [references/registry-components.md](./references/registry-components.md) |
+| DevTools inspector | dev only | [references/devtools.md](./references/devtools.md) |
 
 ---
 

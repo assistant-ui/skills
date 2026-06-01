@@ -1,13 +1,12 @@
 ---
 name: cloud
-description: Guide for assistant-cloud persistence and authorization. Use when setting up thread persistence, file uploads, or authentication.
-version: 0.0.1
+description: "Sets up assistant-ui Cloud persistence and authorization with the assistant-cloud package and AssistantCloud client. Use when adding cross-session thread/message persistence, multi-device chat history, file uploads, or auth to an assistant-ui app: passing the cloud option to useChatRuntime (with AssistantChatTransport from @assistant-ui/react-ai-sdk), configuring AssistantCloud with authToken (JWT), apiKey plus userId/workspaceId (server-side), or anonymous mode, and wiring auth providers like NextAuth, Clerk, or Firebase. Covers cloud.threads.list/get/create/update/delete, cloud.threads.messages(threadId), cloud.files.generatePresignedUploadUrl, the aui/v0 message format, custom adapters (CloudMessagePersistence, createFormattedPersistence, ThreadHistoryAdapter, RemoteThreadListAdapter), auto title generation, external_id/metadata mapping, and env vars NEXT_PUBLIC_ASSISTANT_BASE_URL and ASSISTANT_API_KEY. For the thread-list sidebar UI itself use thread-list."
 license: MIT
 ---
 
 # assistant-ui Cloud
 
-**Always consult [assistant-ui.com/llms.txt](https://assistant-ui.com/llms.txt) for latest API.**
+**Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
 Cloud persistence for threads, messages, and files.
 
@@ -15,6 +14,8 @@ Cloud persistence for threads, messages, and files.
 
 - [./references/persistence.md](./references/persistence.md) -- Thread and message persistence
 - [./references/authorization.md](./references/authorization.md) -- Authentication patterns
+- [./references/custom-persistence.md](./references/custom-persistence.md) -- Self-hosted message persistence
+- [./references/auth-integrations.md](./references/auth-integrations.md) -- better-auth and Clerk integrations
 
 ## Installation
 
@@ -78,16 +79,13 @@ const cloud = new AssistantCloud({
 ## Cloud API
 
 ```tsx
-// Thread operations
 const threads = await cloud.threads.list();
 await cloud.threads.create({ title: "New Chat" });
 await cloud.threads.update(threadId, { title: "Updated" });
 await cloud.threads.delete(threadId);
 
-// Message operations
 const messages = await cloud.threads.messages(threadId).list();
 
-// File uploads
 const { signedUrl, publicUrl } = await cloud.files.generatePresignedUploadUrl({
   filename: "document.pdf",
 });

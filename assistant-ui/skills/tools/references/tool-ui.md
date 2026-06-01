@@ -12,7 +12,7 @@ import { makeAssistantToolUI } from "@assistant-ui/react";
 const WeatherToolUI = makeAssistantToolUI({
   toolName: "get_weather",
   render: ({ args, result, status }) => {
-    if (status === "running") {
+    if (status.type === "running") {
       return <div className="animate-pulse">Loading weather...</div>;
     }
 
@@ -29,7 +29,6 @@ const WeatherToolUI = makeAssistantToolUI({
   },
 });
 
-// Register in app
 <AssistantRuntimeProvider runtime={runtime}>
   <WeatherToolUI />
   <Thread />
@@ -38,31 +37,37 @@ const WeatherToolUI = makeAssistantToolUI({
 
 ## Render Props
 
+The render component receives `ToolCallMessagePartProps`:
+
 ```tsx
-interface ToolUIRenderProps {
-  // Tool call identification
+interface ToolCallMessagePartProps {
   toolCallId: string;
   toolName: string;
 
-  // Arguments
   args: Record<string, unknown>;
-  argsText: string;  // Raw JSON string
+  argsText: string;  // Raw streamed JSON string
 
   // Result (undefined while running)
   result?: unknown;
+  isError?: boolean;
+  artifact?: unknown;  // UI-only artifact attached to the result
 
-  // Status
-  status: ToolCallStatus;
+  // Status is an OBJECT, not a string. Branch on status.type.
+  status: ToolCallMessagePartStatus;
 
-  // For interactive tools
-  submitResult: (result: unknown) => void;
+  // Supply a result from the renderer (instead of a tool execute function)
+  addResult: (result: unknown) => void;
+  // Resume a frontend tool paused via context.human(...)
+  resume: (payload: unknown) => void;
+  // Respond to a server-side approval gate
+  respondToApproval: (response: { approved: boolean; reason?: string }) => void;
 }
 
-type ToolCallStatus =
-  | "running"         // Tool executing
-  | "complete"        // Finished successfully
-  | "incomplete"      // Stopped early (cancelled)
-  | "requires-action" // Waiting for user input
+type ToolCallMessagePartStatus =
+  | { type: "running" }       // Tool executing
+  | { type: "complete" }      // Finished successfully
+  | { type: "incomplete"; reason: "cancelled" | "length" | "content-filter" | "other" | "error" }
+  | { type: "requires-action"; reason: "interrupt" };  // Waiting for input
 ```
 
 ## useAssistantToolUI
@@ -90,7 +95,7 @@ function DynamicToolUI({ toolConfig }) {
 const ComprehensiveToolUI = makeAssistantToolUI({
   toolName: "process_data",
   render: ({ args, result, status }) => {
-    switch (status) {
+    switch (status.type) {
       case "running":
         return (
           <div className="flex items-center gap-2">
@@ -136,15 +141,13 @@ const SearchToolUI = makeAssistantToolUI({
   toolName: "search",
   render: ({ args, result, status }) => (
     <div className="my-4 border rounded-lg overflow-hidden">
-      {/* Header */}
       <div className="px-4 py-2 bg-gray-100 border-b flex items-center gap-2">
         <SearchIcon className="w-4 h-4" />
         <span className="font-medium">Search: {args.query}</span>
       </div>
 
-      {/* Body */}
       <div className="p-4">
-        {status === "running" && (
+        {status.type === "running" && (
           <div className="space-y-2">
             {[1, 2, 3].map((i) => (
               <div key={i} className="h-16 bg-gray-100 animate-pulse rounded" />
@@ -152,7 +155,7 @@ const SearchToolUI = makeAssistantToolUI({
           </div>
         )}
 
-        {status === "complete" && result?.results && (
+        {status.type === "complete" && result?.results && (
           <div className="space-y-3">
             {result.results.map((item: any) => (
               <a
@@ -177,7 +180,9 @@ const SearchToolUI = makeAssistantToolUI({
 
 ## Generative UI
 
-Dynamic component rendering:
+For assistant-ui's declarative generative UI system (`MessagePrimitive.GenerativeUI` + the `render_gui` tool and `parseRenderGuiResult`), see [./generative-ui.md](./generative-ui.md).
+
+You can also map a tool's result to a component yourself with `makeAssistantToolUI`. The tool name below (`render_widget`) is your own, not a built-in:
 
 ```tsx
 import { Chart, Table, Form, Card } from "./components";
@@ -189,8 +194,8 @@ const componentMap: Record<string, React.ComponentType<any>> = {
   card: Card,
 };
 
-const GenerativeUI = makeAssistantToolUI({
-  toolName: "render_ui",
+const WidgetToolUI = makeAssistantToolUI({
+  toolName: "render_widget",
   render: ({ args, result }) => {
     const Component = componentMap[args.type];
 
@@ -237,21 +242,19 @@ function ToolUIWithState() {
 }
 ```
 
-## Accessing Parent Context
+## Tool Call Metadata
+
+The render props already carry the tool call metadata (`toolCallId`, `toolName`, `status`, `args`, `result`), so no extra context hook is needed:
 
 ```tsx
-import { useToolCallContext } from "@assistant-ui/react";
-
-// Inside custom components
-function ToolCallMetadata() {
-  const { toolCallId, toolName, status } = useToolCallContext();
-
-  return (
+const MetadataToolUI = makeAssistantToolUI({
+  toolName: "process_data",
+  render: ({ toolCallId, toolName, status }) => (
     <div className="text-xs text-gray-500">
-      {toolName} ({toolCallId.slice(0, 8)}) - {status}
+      {toolName} ({toolCallId.slice(0, 8)}) - {status.type}
     </div>
-  );
-}
+  ),
+});
 ```
 
 ## Multiple Tools

@@ -19,12 +19,11 @@ Container for the entire chat thread.
 ```tsx
 <ThreadPrimitive.Root>
   <ThreadPrimitive.Viewport>
-    <ThreadPrimitive.Messages
-      components={{
-        UserMessage: MyUserMessage,
-        AssistantMessage: MyAssistantMessage,
-      }}
-    />
+    <ThreadPrimitive.Messages>
+      {({ message }) =>
+        message.role === "user" ? <MyUserMessage /> : <MyAssistantMessage />
+      }
+    </ThreadPrimitive.Messages>
   </ThreadPrimitive.Viewport>
 </ThreadPrimitive.Root>
 ```
@@ -57,22 +56,17 @@ Scrollable area containing messages. Handles auto-scroll on new messages.
 
 ## ThreadPrimitive.Messages
 
-Renders the message list.
+Renders the message list. As of 0.14 it takes a children render function that receives `{ message }` (with `role` and `composer.isEditing`). The `components` prop still works but is deprecated.
 
 ```tsx
-<ThreadPrimitive.Messages
-  components={{
-    // Required: Message components
-    UserMessage: () => <MessagePrimitive.Root>...</MessagePrimitive.Root>,
-    AssistantMessage: () => <MessagePrimitive.Root>...</MessagePrimitive.Root>,
-
-    // Optional: System message
-    SystemMessage: ({ message }) => <div>{message.content}</div>,
-
-    // Optional: Edit composer for message editing
-    EditComposer: () => <ComposerPrimitive.Root>...</ComposerPrimitive.Root>,
+<ThreadPrimitive.Messages>
+  {({ message }) => {
+    if (message.composer.isEditing) return <EditComposer />;
+    if (message.role === "user") return <UserMessage />;
+    if (message.role === "system") return <SystemMessage />;
+    return <AssistantMessage />;
   }}
-/>
+</ThreadPrimitive.Messages>
 ```
 
 ## ThreadPrimitive.Empty
@@ -102,18 +96,14 @@ Button that appears when scrolled up, scrolls to bottom on click.
 
 ## ThreadPrimitive.Suggestions
 
-Renders suggested quick replies.
+Renders suggested quick replies. The children render function receives `{ suggestion }`.
 
 ```tsx
-<ThreadPrimitive.Suggestions
-  components={{
-    Suggestion: ({ suggestion }) => (
-      <button onClick={() => suggestion.onClick()}>
-        {suggestion.text}
-      </button>
-    ),
-  }}
-/>
+<ThreadPrimitive.Suggestions>
+  {({ suggestion }) => (
+    <button onClick={() => suggestion.onClick()}>{suggestion.text}</button>
+  )}
+</ThreadPrimitive.Suggestions>
 ```
 
 ## Conditional Rendering (`AuiIf`)
@@ -149,48 +139,45 @@ Renders suggested quick replies.
 function CustomThread() {
   return (
     <ThreadPrimitive.Root className="relative flex flex-col h-full bg-white">
-      {/* Empty state */}
       <AuiIf condition={({ thread }) => thread.isEmpty}>
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center p-8">
             <h1 className="text-2xl font-bold mb-2">AI Assistant</h1>
             <p className="text-gray-500 mb-4">How can I help you today?</p>
-            <ThreadPrimitive.Suggestions
-              components={{
-                Suggestion: ({ suggestion }) => (
-                  <button
-                    className="m-1 px-4 py-2 bg-gray-100 rounded-full"
-                    onClick={suggestion.onClick}
-                  >
-                    {suggestion.text}
-                  </button>
-                ),
-              }}
-            />
+            <ThreadPrimitive.Suggestions>
+              {({ suggestion }) => (
+                <button
+                  className="m-1 px-4 py-2 bg-gray-100 rounded-full"
+                  onClick={suggestion.onClick}
+                >
+                  {suggestion.text}
+                </button>
+              )}
+            </ThreadPrimitive.Suggestions>
           </div>
         </div>
       </AuiIf>
 
-      {/* Messages */}
       <AuiIf condition={({ thread }) => !thread.isEmpty}>
         <ThreadPrimitive.Viewport className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto p-4">
-            <ThreadPrimitive.Messages
-              components={{
-                UserMessage: CustomUserMessage,
-                AssistantMessage: CustomAssistantMessage,
-              }}
-            />
+            <ThreadPrimitive.Messages>
+              {({ message }) =>
+                message.role === "user" ? (
+                  <CustomUserMessage />
+                ) : (
+                  <CustomAssistantMessage />
+                )
+              }
+            </ThreadPrimitive.Messages>
           </div>
         </ThreadPrimitive.Viewport>
       </AuiIf>
 
-      {/* Scroll to bottom */}
       <ThreadPrimitive.ScrollToBottom className="absolute bottom-24 right-4 p-2 rounded-full bg-white shadow-lg hover:bg-gray-50">
         <ChevronDownIcon className="w-5 h-5" />
       </ThreadPrimitive.ScrollToBottom>
 
-      {/* Composer */}
       <div className="border-t bg-white">
         <CustomComposer />
       </div>
@@ -201,22 +188,4 @@ function CustomThread() {
 
 ## Accessing Thread State
 
-```tsx
-import { useThread, useThreadRuntime } from "@assistant-ui/react";
-
-function ThreadInfo() {
-  // Reactive state
-  const { messages, isRunning } = useThread();
-
-  // Runtime API
-  const runtime = useThreadRuntime();
-  const handleClear = () => runtime.startRun();
-
-  return (
-    <div>
-      <p>{messages.length} messages</p>
-      {isRunning && <p>Generating...</p>}
-    </div>
-  );
-}
-```
+Read thread state with `useAuiState((s) => s.thread...)` (e.g. `s.thread.messages`, `s.thread.isRunning`) and act via `useAui().thread()`. See the `/runtime` skill for the full state API.

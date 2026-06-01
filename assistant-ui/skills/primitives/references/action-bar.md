@@ -56,7 +56,6 @@ Copy message content to clipboard.
   className="p-1 rounded hover:bg-gray-100"
   copiedDuration={2000}  // Duration of "copied" state
 >
-  {/* Default content */}
   <CopyIcon className="w-4 h-4" />
 </ActionBarPrimitive.Copy>
 
@@ -160,7 +159,6 @@ function MessageActionBar() {
       className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
       hideWhenRunning
     >
-      {/* Copy */}
       <ActionBarPrimitive.Copy
         className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100"
         copiedDuration={2000}
@@ -173,21 +171,18 @@ function MessageActionBar() {
         </AuiIf>
       </ActionBarPrimitive.Copy>
 
-      {/* Regenerate (assistant only) */}
       <AuiIf condition={({ message }) => message.role === "assistant"}>
         <ActionBarPrimitive.Reload className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100">
           <RefreshIcon className="w-4 h-4" />
         </ActionBarPrimitive.Reload>
       </AuiIf>
 
-      {/* Edit (user only) */}
       <AuiIf condition={({ message }) => message.role === "user"}>
         <ActionBarPrimitive.Edit className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100">
           <EditIcon className="w-4 h-4" />
         </ActionBarPrimitive.Edit>
       </AuiIf>
 
-      {/* Text-to-speech */}
       <AuiIf condition={({ message }) => message.speech == null}>
         <ActionBarPrimitive.Speak className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100">
           <SpeakerIcon className="w-4 h-4" />
@@ -199,7 +194,6 @@ function MessageActionBar() {
         </ActionBarPrimitive.StopSpeaking>
       </AuiIf>
 
-      {/* Feedback */}
       <div className="border-l pl-1 ml-1">
         <ActionBarPrimitive.FeedbackPositive
           className="p-1.5 rounded text-gray-500 hover:text-green-600 hover:bg-green-50"
@@ -225,7 +219,7 @@ function AssistantMessage() {
     <MessagePrimitive.Root className="group flex mb-4">
       <Avatar fallback="AI" />
       <div className="flex-1">
-        <MessagePrimitive.Content />
+        <MessagePrimitive.Parts />
         <MessageActionBar />
       </div>
     </MessagePrimitive.Root>

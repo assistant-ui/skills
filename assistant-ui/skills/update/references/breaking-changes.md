@@ -6,7 +6,10 @@ Fast lookup for breaking changes by version.
 
 | Version | Breaking Change | Migration |
 |---------|-----------------|-----------|
-| **0.11.0** | Runtime rearchitecture | Use `useAui`, `useAuiState`, `useAuiEvent` |
+| **0.14.0** | `components` prop → children render functions; deprecated hooks/aliases removed | Children render functions; `useAui`/`useAuiState`/`useAuiEvent`/`AuiIf`; drop `unstable_` prefixes |
+| **0.13.0** | `ThreadPrimitive.ViewportSlack` removed | Use `topAnchorMessageClamp` on `ThreadPrimitive.Viewport` |
+| **0.12.0** | Unified state API | Use `useAui`, `useAuiState`, `useAuiEvent`, `AuiIf` |
+| **0.11.0** | Runtime rearchitecture | Use `useAssistantApi`/`useAssistantState` (renamed to `useAui`/`useAuiState` in 0.12) |
 | **0.10.0** | CommonJS dropped | Use ESM, set `"type": "module"` |
 | **0.8.18** | `setResult`/`setArtifact` merged | Use `setResponse({ result, artifact })` |
 | **0.8.0** | UI moved out of core | Use shadcn registry (recommended) or primitives |
@@ -100,10 +103,13 @@ See [./ai-sdk-v6.md](./ai-sdk-v6.md) for AI SDK specific migrations:
 
 ## Version Compatibility
 
+Current latest: `@assistant-ui/react` 0.14.x, `@assistant-ui/react-ai-sdk` 1.3.x.
+
 | @assistant-ui/react | react-ai-sdk | AI SDK | Zod |
 |---------------------|--------------|--------|-----|
-| 0.12.x | 1.3.x | 6.x | 4.x |
+| 0.14.x | 1.3.x | 6.x | 3.25+ or 4.x |
+| 0.12.x to 0.13.x | 1.3.x | 6.x | 3.25+ or 4.x |
 | 0.11.x | 1.2.x | 6.x | 3.25+ or 4.x |
-| 0.10.x | 0.x | 4.x-5.x | 3.x |
-| 0.8.x-0.9.x | 0.x | 4.x | 3.x |
+| 0.10.x | 0.x | 4.x to 5.x | 3.x |
+| 0.8.x to 0.9.x | 0.x | 4.x | 3.x |
 | < 0.8.0 | 0.x | 4.x | 3.x |

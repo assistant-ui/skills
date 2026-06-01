@@ -21,6 +21,10 @@ npx skills add assistant-ui/skills
 | `/cloud` | Cloud persistence and authentication |
 | `/thread-list` | Multi-thread management |
 | `/update` | Update assistant-ui and AI SDK to latest versions |
+| `/copilots` | Ground the assistant in your app (instructions, context, visible components, interactables) |
+| `/markdown` | Markdown rendering (syntax highlighting, LaTeX, Mermaid, Streamdown) |
+| `/react-mcp` | User-managed MCP server UIs (connect, OAuth, manage) |
+| `/observability` | Backend tracing and telemetry (Langfuse, LangSmith, Helicone) |
 
 ## Usage
 
@@ -36,6 +40,10 @@ After installation, use skills in Claude Code by typing `/` followed by the skil
 /cloud           # Persistence and auth
 /thread-list     # Multi-thread management
 /update          # Update assistant-ui and AI SDK versions
+/copilots        # Ground the assistant in your app
+/markdown        # Markdown rendering and customization
+/react-mcp       # User-managed MCP servers
+/observability   # Backend tracing and telemetry
 ```
 
 ## Links

@@ -153,8 +153,8 @@ const item2 = threads.item({ index: 0 });
 // By index (archived)
 const item3 = threads.item({ index: 0, archived: true });
 
-// Current thread
-const mainItem = threads.item("main");
+// Current thread's item state is available reactively:
+// const current = useAuiState((s) => s.threadListItem);
 ```
 
 ## Batch Operations

@@ -96,25 +96,25 @@ interface LocalRuntimeOptions {
 
 ```tsx
 interface ChatModelAdapter {
-  run(options: ChatModelRunOptions): Promise<ChatModelRunResult> | AsyncGenerator<ChatModelRunResult>;
+  run(
+    options: ChatModelRunOptions,
+  ): Promise<ChatModelRunResult> | AsyncGenerator<ChatModelRunResult>;
 }
 
 interface ChatModelRunOptions {
-  messages: ThreadMessage[];
+  messages: readonly ThreadMessage[];
   abortSignal: AbortSignal;
-  config?: Record<string, unknown>;
+  runConfig: RunConfig;     // per-run configuration
+  context: ModelContext;    // tools, system prompt, callSettings, config
 }
 
-type ChatModelRunResult =
-  | ChatModelRunResultFinal
-  | ChatModelRunResultStream;
-
-interface ChatModelRunResultFinal {
-  content: MessagePart[];
+// Returned once (final) or yielded repeatedly (streaming).
+// All fields are optional; yield partial content to stream.
+interface ChatModelRunResult {
+  content?: MessagePart[];
+  status?: MessageStatus;   // object form, e.g. { type: "complete" }
+  metadata?: Record<string, unknown>;
 }
-
-// Streamed chunks are ChatModelRunResult objects
-type ChatModelRunResultStream = ChatModelRunResult;
 ```
 
 ## With OpenAI Direct
@@ -164,7 +164,6 @@ const runtime = useLocalRuntime({
     async *run({ messages, abortSignal }) {
       const toolCallId = "1";
 
-      // Yield tool call with parsed arguments
       yield {
         content: [
           {
@@ -177,7 +176,6 @@ const runtime = useLocalRuntime({
         ],
       };
 
-      // Execute tool
       const result = await getWeather({ city: "NYC" });
 
       // Send result on the same tool-call part
@@ -205,14 +203,11 @@ const runtime = useLocalRuntime({
 const runtime = useLocalRuntime({
   model: {
     async run({ messages }) {
-      // Access attachments from last message
       const lastMessage = messages[messages.length - 1];
       const attachments = lastMessage.attachments || [];
 
-      // Process attachments
       for (const attachment of attachments) {
         if (attachment.type === "image") {
-          // Handle image
         }
       }
 
@@ -221,18 +216,26 @@ const runtime = useLocalRuntime({
   },
   adapters: {
     attachments: {
-      accept: "image/*,application/pdf",
+      accept: "image/*",
+      // add() returns a PendingAttachment
       async add({ file }) {
-        const url = URL.createObjectURL(file);
         return {
           id: crypto.randomUUID(),
+          type: "image",
           name: file.name,
-          type: file.type.startsWith("image/") ? "image" : "file",
-          url,
+          contentType: file.type,
+          file,
+          status: { type: "requires-action", reason: "composer-send" },
         };
       },
+      // send() returns a CompleteAttachment with content parts
       async send(attachment) {
-        return attachment;
+        const dataUrl = await readAsDataURL(attachment.file);
+        return {
+          ...attachment,
+          status: { type: "complete" },
+          content: [{ type: "image", image: dataUrl }],
+        };
       },
       async remove() {},
     },
@@ -250,7 +253,7 @@ const runtime = useLocalRuntime({
       id: "1",
       role: "assistant",
       content: [{ type: "text", text: "Hello! How can I help you?" }],
-      status: "complete",
+      status: { type: "complete" },
       createdAt: new Date(),
     },
   ],

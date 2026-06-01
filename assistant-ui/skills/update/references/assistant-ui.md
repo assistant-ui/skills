@@ -2,12 +2,156 @@
 
 Migrations for upgrading between assistant-ui versions.
 
+## Contents
+
+- [Version Detection](#version-detection)
+- [Migration: → 0.14.x (Children API, deprecated removals)](#migration--014x-children-api-deprecated-removals)
+- [Migration: → 0.13.x (Top-turn anchoring)](#migration--013x-top-turn-anchoring)
+- [Migration: → 0.12.x (Unified State API)](#migration--012x-unified-state-api)
+- [Migration: → 0.11.x (Runtime Rearchitecture)](#migration--011x-runtime-rearchitecture)
+- [Migration: → 0.10.x (ESM Only)](#migration--010x-esm-only)
+- [Migration: → 0.9.x (Edge Split)](#migration--09x-edge-split)
+- [Migration: → 0.8.x (UI Split)](#migration--08x-ui-split)
+- [Migration: → 0.7.x (Thread API)](#migration--07x-thread-api)
+- [Migration: → 0.5.x (Runtime API)](#migration--05x-runtime-api)
+- [Migration: → 0.4.x (Message Types)](#migration--04x-message-types)
+- [Migration: → 0.3.x](#migration--03x)
+- [Migration: → 0.2.x](#migration--02x)
+- [Automated Search Commands](#automated-search-commands)
+- [Verification](#verification)
+
 ## Version Detection
 
 ```bash
 npm ls @assistant-ui/react
 npm view @assistant-ui/react version  # Latest
 ```
+
+## Migration: → 0.14.x (Children API, deprecated removals)
+
+### From 0.13.x
+
+Two themes: APIs deprecated in v0.11/v0.12 are removed, and list primitives move from a `components` prop to a children render function.
+
+**Automatic migration (hook renames):**
+```bash
+npx assistant-ui@latest upgrade
+```
+
+**Removed hook/adapter aliases (find-and-replace):**
+
+| Removed | Replacement |
+|---------|-------------|
+| `useAssistantApi` | `useAui` |
+| `useAssistantState` | `useAuiState` |
+| `useAssistantEvent` | `useAuiEvent` |
+| `AssistantIf` | `AuiIf` |
+| `useLocalThreadRuntime` | `useLocalRuntime` |
+| `unstable_useRemoteThreadListRuntime` | `useRemoteThreadListRuntime` |
+| `unstable_useCloudThreadListAdapter` | `useCloudThreadListAdapter` |
+| `unstable_RemoteThreadListAdapter` | `RemoteThreadListAdapter` |
+| `unstable_InMemoryThreadListAdapter` | `InMemoryThreadListAdapter` |
+
+**Runtime API cleanups:**
+
+```diff
+- runtime.threadList
++ runtime.threads
+
+- runtime.switchToThread(id)
++ runtime.threads.switchToThread(id)
+
+- runtime.registerModelConfigProvider(p)
++ runtime.registerModelContextProvider(p)
+
+- runtime.reset({ initialMessages })
++ runtime.thread.reset(initialMessages)
+
+- thread.startRun(parentId)
++ thread.startRun({ parentId })
+
+- thread.unstable_resumeRun(config)
++ thread.resumeRun(config)
+
+- thread.unstable_loadExternalState(state)
++ thread.importExternalState(state)
+
+- thread.getModelConfig()
++ thread.getModelContext()
+```
+
+**Custom `ChatModelAdapter`:** `options.config` removed, use `options.context`.
+
+```diff
+- async run({ messages, config }) { /* config.tools, config.config, ... */ }
++ async run({ messages, context }) { /* context.tools, context.config, ... */ }
+```
+
+**State and helpers:**
+
+```diff
+- useAuiState((s) => s.message.submittedFeedback)
++ useAuiState((s) => s.message.metadata.submittedFeedback)
+
+- const original = getExternalStoreMessage(threadMessage)
++ const [original] = getExternalStoreMessages(threadMessage)
+
+- import { toAISDKTools } from "@assistant-ui/react"
++ import { toToolsJSONSchema } from "assistant-stream"
+```
+
+**react-langgraph:** `useLangGraphRuntime`'s `onSwitchToThread` removed, use `load`.
+
+**Children render functions** (the `components` prop still works but is deprecated):
+
+```diff
+- <ThreadPrimitive.Messages components={{ UserMessage, AssistantMessage, EditComposer }} />
++ <ThreadPrimitive.Messages>
++   {({ message }) => {
++     if (message.composer.isEditing) return <EditComposer />;
++     if (message.role === "user") return <UserMessage />;
++     return <AssistantMessage />;
++   }}
++ </ThreadPrimitive.Messages>
+
+- <MessagePrimitive.Parts components={{ Text, tools: { Fallback: ToolFallback } }} />
++ <MessagePrimitive.Parts>
++   {({ part }) => {
++     if (part.type === "text") return <MarkdownText />;
++     if (part.type === "tool-call") return part.toolUI ?? <ToolFallback {...part} />;
++     return null;
++   }}
++ </MessagePrimitive.Parts>
+```
+
+The same change applies to `ThreadPrimitive.Suggestions`, `ThreadListPrimitive.Items`, and `ComposerPrimitive.Attachments`. Returning `null` from the render function still renders registered tool/data UIs; return `<></>` to render nothing.
+
+**Search for removed patterns:**
+```bash
+grep -rn "useAssistantApi\|useAssistantState\|useAssistantEvent\|AssistantIf\|unstable_useRemoteThreadListRuntime\|unstable_InMemoryThreadListAdapter\|getExternalStoreMessage\b\|toAISDKTools\|getModelConfig\|onSwitchToThread" --include="*.tsx" --include="*.ts"
+```
+
+---
+
+## Migration: → 0.13.x (Top-turn anchoring)
+
+### From 0.12.x
+
+`ThreadPrimitive.ViewportSlack` was removed; top-anchor registration is now automatic on `MessagePrimitive.Root` when `turnAnchor="top"`. Replace `fillClampThreshold` / `fillClampOffset` with `topAnchorMessageClamp` on `ThreadPrimitive.Viewport`:
+
+```diff
+- <ThreadPrimitive.ViewportSlack fillClampThreshold="10em" fillClampOffset="6em">
+-   ...
+- </ThreadPrimitive.ViewportSlack>
++ <ThreadPrimitive.Viewport
++   turnAnchor="top"
++   topAnchorMessageClamp={{ tallerThan: "10em", visibleHeight: "6em" }}
++ >
++   ...
++ </ThreadPrimitive.Viewport>
+```
+
+---
 
 ## Migration: → 0.12.x (Unified State API)
 
@@ -20,7 +164,7 @@ Unified state API replaces individual context hooks.
 npx assistant-ui@latest upgrade
 ```
 
-**Assistant API hooks renamed (deprecated until v0.13):**
+**Assistant API hooks renamed (the old names were removed in v0.14):**
 
 ```diff
 - import { useAssistantApi, useAssistantState, useAssistantEvent, AssistantIf } from "@assistant-ui/react";
@@ -90,7 +234,7 @@ Unchanged: `thread.initialize`, `composer.send`.
 - `"ctrlEnter"` — submit on Ctrl/Cmd+Enter, plain Enter for newlines
 - `"none"` — disable keyboard submission
 
-**Zod 4 required** — `@assistant-ui/react-ai-sdk` 1.3.x requires `zod@^4.3.6`
+**Zod**: AI SDK v6 (used by `@assistant-ui/react-ai-sdk` 1.3.x) requires `zod@^3.25.76 || ^4.1.8`; both Zod 3.25+ and Zod 4 work.
 
 **New primitives:**
 - `ChainOfThoughtPrimitive` (0.12.8)
@@ -125,12 +269,10 @@ import {
 const messages = useAssistantState(s => s.thread.messages);
 const isRunning = useAssistantState(s => s.thread.isRunning);
 
-// Actions
 const api = useAssistantApi();
 api.thread().append({ role: "user", content: [{ type: "text", text: "Hello" }] });
 api.thread().cancelRun();
 
-// Events
 useAssistantEvent("composer.send", (e) => {
   console.log("Message sent:", e.messageId);
 });

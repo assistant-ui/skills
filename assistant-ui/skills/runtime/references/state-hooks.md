@@ -140,7 +140,7 @@ interface AssistantState {
 
 ## Legacy Hooks
 
-These still work but prefer the modern API:
+These are deprecated. They still work (and the CLI `upgrade` codemod migrates them) but emit deprecation warnings and will be removed in a future release. Prefer the modern unified API above.
 
 ```tsx
 // Runtime access

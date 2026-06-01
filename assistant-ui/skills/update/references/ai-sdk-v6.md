@@ -8,6 +8,32 @@ Migrate a codebase from AI SDK v4 or v5 to v6. This is a methodical, careful pro
 
 ---
 
+## Contents
+
+- [Critical Rules](#critical-rules)
+- [Phase 1: Deep Research (Use Agents)](#phase-1-deep-research-use-agents)
+- [Phase 2: Create Detailed Migration Plan](#phase-2-create-detailed-migration-plan)
+- [Phase 3: Execute Migration](#phase-3-execute-migration)
+- [Phase 4: Build Verification](#phase-4-build-verification)
+- [Phase 5: Test Verification](#phase-5-test-verification)
+- [Phase 6: Final Verification](#phase-6-final-verification)
+- [Rollback Plan](#rollback-plan)
+- [Package Updates](#package-updates)
+- [Automated Migration](#automated-migration)
+- [Core Breaking Changes](#core-breaking-changes)
+- [UI & React Changes](#ui--react-changes)
+- [Tool System Changes](#tool-system-changes)
+- [Streaming Architecture](#streaming-architecture)
+- [Structured Output Changes](#structured-output-changes)
+- [Provider-Specific Changes](#provider-specific-changes)
+- [assistant-ui Specific Changes](#assistant-ui-specific-changes)
+- [Complete Migration Examples](#complete-migration-examples)
+- [Environment Configuration](#environment-configuration)
+- [Test Utilities](#test-utilities)
+- [New Utilities in v6](#new-utilities-in-v6)
+- [v4-Specific Changes (v4 → v6 Direct Migration)](#v4-specific-changes-v4--v6-direct-migration)
+- [Migration Checklist](#migration-checklist)
+
 ## Critical Rules
 
 1. **NEVER make changes without reading files first** - Always read the full file before editing
@@ -383,8 +409,8 @@ Then re-analyze what went wrong before retrying.
   "@ai-sdk/react": "^3.0.0",
   "@ai-sdk/provider": "^3.0.0",
   "@ai-sdk/provider-utils": "^4.0.0",
-  "@assistant-ui/react": "^0.12.14",
-  "@assistant-ui/react-ai-sdk": "^1.3.10"
+  "@assistant-ui/react": "^0.14.13",
+  "@assistant-ui/react-ai-sdk": "^1.3.31"
 }
 ```
 
@@ -708,7 +734,6 @@ type MessagePart =
 ### 3. Reading Text from Messages
 
 ```typescript
-// Extract text content from UIMessage
 const extractText = (messages: UIMessage[]): string => {
   return messages
     .map((m) =>
@@ -966,7 +991,6 @@ type ToolInvocationState =
   | "output-available"  // Execution complete with result
   | "output-error";     // Execution failed
 
-// Access in message parts:
 message.parts.forEach(part => {
   if (isToolUIPart(part)) {
     console.log(part.state);       // One of the above states
@@ -1020,10 +1044,8 @@ const dangerousTool = tool({
 // Client: Handle approval
 const { addToolApprovalResponse } = useChat();
 
-// User approves
 addToolApprovalResponse({ toolCallId, approved: true });
 
-// User denies
 addToolApprovalResponse({ toolCallId, approved: false });
 ```
 
@@ -1034,7 +1056,6 @@ When forwarding tools defined in the frontend to your backend:
 ```typescript
 import { frontendTools } from "@assistant-ui/react-ai-sdk";
 
-// In API route
 export async function POST(req: Request) {
   const { messages, tools } = await req.json();
 
@@ -1042,9 +1063,7 @@ export async function POST(req: Request) {
     model: openai("gpt-4o"),
     messages: await convertToModelMessages(messages),
     tools: {
-      // Wrap frontend tools
       ...frontendTools(tools),
-      // Add backend-only tools
       myBackendTool: tool({ /* ... */ }),
     },
   });
@@ -1586,9 +1605,7 @@ export async function POST(req: Request) {
     messages: await convertToModelMessages(messages),
     stopWhen: stepCountIs(10),
     tools: {
-      // Frontend tools forwarded from client
       ...frontendTools(clientTools ?? {}),
-      // Backend-only tools
       search_database: tool({
         description: "Search the database",
         inputSchema: zodSchema(
@@ -1674,7 +1691,7 @@ function WeatherTool() {
       return response.json();
     },
     render: ({ args, result, status }) => {
-      if (status === "running") return <div>Loading weather...</div>;
+      if (status.type === "running") return <div>Loading weather...</div>;
       if (result) return <WeatherCard data={result} />;
       return null;
     },
@@ -1855,8 +1872,8 @@ npx @ai-sdk/codemod v6       # v5→v6 only
 - [ ] Update `@ai-sdk/provider-utils` to `^4.0.0`
 - [ ] Update all `@ai-sdk/*` provider packages to `^3.0.0`
 - [ ] Update `zod` to `^3.25.76` or `^4.1.8` (both supported)
-- [ ] Update `@assistant-ui/react` to `^0.12.14`
-- [ ] Update `@assistant-ui/react-ai-sdk` to `^1.3.10`
+- [ ] Update `@assistant-ui/react` to `^0.14.13`
+- [ ] Update `@assistant-ui/react-ai-sdk` to `^1.3.31`
 - [ ] If using MCP: Install `@ai-sdk/mcp` to `^1.0.0`
 
 ### Automated Migration

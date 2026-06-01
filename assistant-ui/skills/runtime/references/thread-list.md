@@ -4,7 +4,7 @@ Managing multiple chat threads.
 
 ## Overview
 
-Thread list features are automatically available when using `useChatRuntime` with cloud persistence or `unstable_useRemoteThreadListRuntime`.
+Thread list features are automatically available when using `useChatRuntime` with cloud persistence or `useRemoteThreadListRuntime`.
 
 ## ThreadListRuntime API
 
@@ -69,17 +69,14 @@ import { useAui, useAuiState } from "@assistant-ui/react";
 function ThreadListComponent() {
   const api = useAui();
 
-  // Get thread list state
   const { threadIds, archivedThreadIds, isLoading } = useAuiState(
     (s) => s.threads
   );
 
-  // Switch threads
   const handleSwitch = (threadId: string) => {
     api.threads().switchToThread(threadId);
   };
 
-  // Create new thread
   const handleNew = () => {
     api.threads().switchToNewThread();
   };
@@ -144,6 +141,7 @@ function ThreadList() {
 
       <div className="space-y-1">
         <ThreadListPrimitive.Items>
+          {() => (
           <ThreadListItemPrimitive.Root className="flex items-center p-2 hover:bg-gray-100 rounded group">
             <ThreadListItemPrimitive.Trigger className="flex-1 text-left truncate">
               <ThreadListItemPrimitive.Title />
@@ -158,6 +156,7 @@ function ThreadList() {
               </ThreadListItemPrimitive.Delete>
             </div>
           </ThreadListItemPrimitive.Root>
+          )}
         </ThreadListPrimitive.Items>
       </div>
     </ThreadListPrimitive.Root>
@@ -214,7 +213,7 @@ For custom persistence:
 ```tsx
 import {
   AssistantRuntimeProvider,
-  unstable_useRemoteThreadListRuntime as useRemoteThreadListRuntime,
+  useRemoteThreadListRuntime,
   useLocalRuntime,
 } from "@assistant-ui/react";
 import { Thread } from "@/components/assistant-ui/thread";
