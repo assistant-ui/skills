@@ -77,7 +77,12 @@ Enable telemetry by setting `experimental_telemetry` directly on `streamText`. T
 
 ```ts
 import { openai } from "@ai-sdk/openai";
-import { streamText, convertToModelMessages } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 import type { UIMessage } from "ai";
 
 export async function POST(req: Request) {
@@ -85,11 +90,13 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: openai("gpt-4o"),
-    messages: convertToModelMessages(messages),
+    messages: await convertToModelMessages(messages),
     experimental_telemetry: { isEnabled: true },
   });
 
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
 ```
 
@@ -99,7 +106,12 @@ Wrap the call in `propagateAttributes` from `@langfuse/tracing` to attach a trac
 
 ```ts
 import { openai } from "@ai-sdk/openai";
-import { streamText, convertToModelMessages } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 import type { UIMessage } from "ai";
 import { propagateAttributes } from "@langfuse/tracing";
 
@@ -113,12 +125,14 @@ export async function POST(req: Request) {
     async () =>
       streamText({
         model: openai("gpt-4o"),
-        messages: convertToModelMessages(messages),
+        messages: await convertToModelMessages(messages),
         experimental_telemetry: { isEnabled: true },
       }),
   );
 
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
 ```
 

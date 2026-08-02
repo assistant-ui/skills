@@ -49,7 +49,11 @@ Wrap the response body in `ctx.run(streamId, makeStream)`. The first caller for 
 
 ```ts
 // /app/api/chat/route.ts
-import { streamText } from "ai";
+import {
+  streamText,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 import { RESUMABLE_STREAM_ID_HEADER } from "assistant-stream/resumable";
 import { resumableContext } from "@/lib/resumable-context";
 
@@ -58,7 +62,9 @@ export async function POST(req: Request) {
   const streamId = crypto.randomUUID();
 
   const result = streamText({ /* model, messages, tools, ... */ });
-  const sourceBody = result.toUIMessageStreamResponse().body!;
+  const sourceBody = createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  }).body!;
 
   const stream = await resumableContext.run(streamId, () => sourceBody);
 

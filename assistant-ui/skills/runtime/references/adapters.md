@@ -23,7 +23,7 @@ Optional capability adapters you register on the runtime `adapters` map: attachm
 Every adapter is registered under a named key on the runtime's `adapters` option. The same map works across runtime factories (`useChatRuntime`, `useLocalRuntime`, `useAISDKRuntime`).
 
 ```ts
-import { useChatRuntime } from "@assistant-ui/react";
+import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 
 const runtime = useChatRuntime({
   adapters: {
@@ -260,14 +260,14 @@ const runtime = useChatRuntime({
 });
 ```
 
-`ActionBarPrimitive.Speak` is automatically disabled when no speech adapter is configured. Toggle speak and stop buttons with `useMessageTTS`, which reports whether the current message is being spoken.
+`ActionBarPrimitive.Speak` is automatically disabled when no speech adapter is configured. Toggle speak and stop buttons off the message's `speech` state, which is `undefined` unless this message is the one being spoken.
 
 ```tsx
-import { ActionBarPrimitive, useMessageTTS } from "@assistant-ui/react";
+import { ActionBarPrimitive, useAuiState } from "@assistant-ui/react";
 import { AudioLinesIcon, StopCircleIcon } from "lucide-react";
 
 const AssistantActionBar = () => {
-  const isSpeaking = useMessageTTS();
+  const isSpeaking = useAuiState((s) => s.message.speech != null);
   return (
     <ActionBarPrimitive.Root>
       {!isSpeaking && (

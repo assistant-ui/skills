@@ -74,11 +74,11 @@ function ThreadListComponent() {
   );
 
   const handleSwitch = (threadId: string) => {
-    api.threads().switchToThread(threadId);
+    api.threads.switchToThread(threadId);
   };
 
   const handleNew = () => {
-    api.threads().switchToNewThread();
+    api.threads.switchToNewThread();
   };
 
   return (
@@ -99,7 +99,7 @@ function ThreadListComponent() {
 ```tsx
 function ThreadItem({ threadId }: { threadId: string }) {
   const api = useAui();
-  const item = api.threads().item({ id: threadId });
+  const item = api.threads.item({ id: threadId });
 
   const handleRename = async () => {
     await item.rename("New Title");
@@ -178,7 +178,7 @@ function SidebarWithThreadList() {
     <aside className="w-64 bg-gray-50 h-full">
       <div className="p-4">
         <button
-          onClick={() => api.threads().switchToNewThread()}
+          onClick={() => api.threads.switchToNewThread()}
           className="w-full p-2 bg-blue-500 text-white rounded"
         >
           New Chat
@@ -191,7 +191,7 @@ function SidebarWithThreadList() {
           return (
             <button
               key={threadId}
-              onClick={() => api.threads().switchToThread(threadId)}
+              onClick={() => api.threads.switchToThread(threadId)}
               className={`w-full p-2 text-left rounded ${
                 isActive ? "bg-blue-100" : "hover:bg-gray-100"
               }`}

@@ -2,6 +2,8 @@
 
 Render custom UI for tool calls.
 
+> **Deprecated.** `makeAssistantToolUI` and `useAssistantToolUI` carry `@deprecated` in the source. Put `render` / `renderText` on the matching toolkit entry, or use the inline tool render overrides on `MessagePrimitive.Parts` for per-message UI. See the [toolkit migration guide](https://assistant-ui.com/docs/migrations/toolkit-tools) and [toolkits.md](./toolkits.md). This page documents the existing API for codebases that still use it.
+
 ## makeAssistantToolUI
 
 Returns a React component that registers the tool UI renderer.

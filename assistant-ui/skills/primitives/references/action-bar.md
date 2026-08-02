@@ -148,7 +148,7 @@ const runtime = useChatRuntime({
 });
 ```
 
-Use `AuiIf` for copy/speech conditional rendering instead of `ActionBarPrimitive.If`.
+`ActionBarPrimitive` has no `.If` part. Use `AuiIf` for copy/speech conditional rendering.
 
 ## Complete Example
 

@@ -6,13 +6,13 @@ Encode and decode streaming formats.
 
 | Encoder | Format | Use Case |
 |---------|--------|----------|
-| `DataStreamEncoder` | AI SDK Data Stream | Default (used by `toUIMessageStreamResponse`) |
+| `DataStreamEncoder` | AI SDK Data Stream | Default (the wire format behind `toUIMessageStream`) |
 | `AssistantTransportEncoder` | Native SSE (`data: {chunk}`) | Custom backends that want all chunk types |
 | `PlainTextEncoder` | Text-only | Very simple demos |
 
 ## DataStreamEncoder
 
-AI SDK compatible format. You normally don't call it directly—wrap an `AssistantStream`:
+AI SDK compatible format. You normally don't call it directly. Wrap an `AssistantStream`:
 
 ```ts
 import { AssistantStream, DataStreamEncoder, DataStreamDecoder } from "assistant-stream";

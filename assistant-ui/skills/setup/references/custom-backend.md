@@ -14,7 +14,7 @@ For backends that return streaming responses. Emit `ChatModelRunResult` chunks (
 
 ### Basic Setup
 
-Plain-text streaming only. For AI SDK Data Stream responses, use `toUIMessageStreamResponse()` + `useChatRuntime` or decode with `DataStreamDecoder`.
+Plain-text streaming only. For AI SDK UI-message responses, build the route with `toUIMessageStream` + `createUIMessageStreamResponse` and use `useChatRuntime`, or decode with `DataStreamDecoder`.
 
 ```tsx
 import { useLocalRuntime, AssistantRuntimeProvider } from "@assistant-ui/react";

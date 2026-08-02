@@ -126,7 +126,7 @@ export default function McpPage() {
 
 ## Imperative connect and auth
 
-`aui.mcp().server({ id }).connect()`, called from an event handler, triggers the OAuth flow when the server needs it. See [./setup.md](./setup.md) for the full imperative API (`addCustomServer`, `connect`, `callTool`).
+`aui.mcp.server({ id }).connect()`, called from an event handler, triggers the OAuth flow when the server needs it. See [./setup.md](./setup.md) for the full imperative API (`addCustomServer`, `connect`, `callTool`).
 
 ## Reading connection state
 

@@ -1,6 +1,6 @@
 ---
 name: observability
-description: "Adds tracing, telemetry, and observability to an assistant-ui backend. Use when wiring an AI SDK route handler (streamText/generateText, toUIMessageStreamResponse) to a tracing backend: Langfuse via OpenTelemetry (LangfuseSpanProcessor and NodeSDK in instrumentation.ts, experimental_telemetry isEnabled, propagateAttributes with traceName/userId/sessionId, langfuseSpanProcessor.forceFlush on serverless), LangSmith via wrapAISDK(ai) from langsmith/experimental/vercel (createLangSmithProviderOptions, awaitPendingTraceBatches), or Helicone via createOpenAI baseURL https://oai.helicone.ai/v1 with the Helicone-Auth header. Also covers rendering collected spans with @assistant-ui/react-o11y headless primitives (SpanResource, SpanPrimitive Root/Indent/CollapseToggle/StatusIndicator/TypeBadge/Name/Children, SpanByIndexProvider, SpanData/SpanState) mounted via useAui/AuiProvider from @assistant-ui/store. Use for missing or empty traces, edge vs nodejs runtime telemetry, serverless flush issues, or trace waterfalls."
+description: "Adds tracing, telemetry, and observability to an assistant-ui backend. Use when wiring an AI SDK route handler (streamText/generateText, toUIMessageStream, createUIMessageStreamResponse) to a tracing backend: Langfuse via OpenTelemetry (LangfuseSpanProcessor and NodeSDK in instrumentation.ts, experimental_telemetry isEnabled, propagateAttributes with traceName/userId/sessionId, langfuseSpanProcessor.forceFlush on serverless), LangSmith via wrapAISDK(ai) from langsmith/experimental/vercel (createLangSmithProviderOptions, awaitPendingTraceBatches), or Helicone via createOpenAI baseURL https://oai.helicone.ai/v1 with the Helicone-Auth header. Also covers rendering collected spans with @assistant-ui/react-o11y headless primitives (SpanResource, SpanPrimitive Root/Indent/CollapseToggle/StatusIndicator/TypeBadge/Name/Children, SpanByIndexProvider, SpanData/SpanState) mounted via useAui/AuiProvider from @assistant-ui/store. Use for missing or empty traces, edge vs nodejs runtime telemetry, serverless flush issues, or trace waterfalls."
 license: MIT
 ---
 
@@ -52,7 +52,12 @@ Langfuse and any OTel backend reuse the AI SDK `experimental_telemetry` flag. En
 
 ```ts
 import { openai } from "@ai-sdk/openai";
-import { streamText, convertToModelMessages } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 import type { UIMessage } from "ai";
 
 export async function POST(req: Request) {
@@ -62,7 +67,9 @@ export async function POST(req: Request) {
     messages: await convertToModelMessages(messages),
     experimental_telemetry: { isEnabled: true },
   });
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
 ```
 
@@ -95,7 +102,7 @@ const result = await propagateAttributes(
 );
 ```
 
-LangSmith skips OTel entirely; wrap the `ai` module instead. `convertToModelMessages` is not wrapped, so import it from `ai` directly:
+LangSmith skips OTel entirely; wrap the `ai` module instead. `convertToModelMessages` and the stream-response helpers are not wrapped, so call them off the `ai` namespace directly:
 
 ```ts
 import * as ai from "ai";
@@ -108,7 +115,9 @@ const result = streamText({
   model: openai("gpt-5.4-nano"),
   messages: await ai.convertToModelMessages(messages),
 });
-return result.toUIMessageStreamResponse();
+return ai.createUIMessageStreamResponse({
+  stream: ai.toUIMessageStream({ stream: result.stream }),
+});
 ```
 
 See the per provider reference files for env vars, metadata tagging, and serverless flushing.
@@ -157,7 +166,7 @@ function SpanRow() {
 }
 
 export function TraceView({ spans }: { spans: SpanData[] }) {
-  const aui = useAui({ resource: SpanResource({ spans }) });
+  const aui = useAui({ span: SpanResource({ spans }) });
   return (
     <AuiProvider value={aui}>
       <SpanPrimitive.Children components={{ Span: SpanRow }} />
@@ -184,7 +193,7 @@ export function TraceView({ spans }: { spans: SpanData[] }) {
 - Confirm requests go to `oai.helicone.ai`, not `api.openai.com`, and carry both `Helicone-Auth` and `Authorization` headers.
 
 **react-o11y renders nothing**
-- Primitives must render inside `AuiProvider`; the resource mounts through `useAui({ resource: SpanResource({ spans }) })`.
+- Primitives must render inside `AuiProvider`; the resource mounts through `useAui({ span: SpanResource({ spans }) })`.
 
 ## Related Skills
 

@@ -1,6 +1,6 @@
 ---
 name: assistant-ui
-description: "Overview and router for assistant-ui, the React library for building AI chat interfaces from composable primitives. Use for high-level, cross-cutting, or architecture-overview questions: choosing packages, picking a runtime, or understanding the layered model (RuntimeCore, Runtime, context hooks, primitives) and message model. Covers the `@assistant-ui/react` core plus `@assistant-ui/react-ai-sdk`, `@assistant-ui/react-langgraph`, `assistant-stream`, and `assistant-cloud`; `AssistantRuntimeProvider`; the primitives `ThreadPrimitive`, `MessagePrimitive`, `ComposerPrimitive`; the hooks `useAui`, `useAuiState`, `useAuiEvent`; and runtime selection across `useChatRuntime`, `useExternalStoreRuntime`, `useLangGraphRuntime`, `useLocalRuntime`. For a specific area route to a focused sibling instead: setup, runtime, primitives, tools, streaming, cloud, thread-list, or update. Not for hands-on tasks already owned by those siblings."
+description: "Overview and router for assistant-ui, the React library for building AI chat interfaces from composable primitives. Use for high-level, cross-cutting, or architecture-overview questions: choosing packages, picking a runtime, or understanding the layered model (RuntimeCore, Runtime, the aui client, primitives) and message model. Covers the `@assistant-ui/react` core plus `@assistant-ui/react-ai-sdk`, `@assistant-ui/react-langchain`, `@assistant-ui/react-langgraph`, `assistant-stream`, and `assistant-cloud`, and the platform bindings `@assistant-ui/react-native` and `@assistant-ui/react-ink`; `AssistantRuntimeProvider`; the primitives `ThreadPrimitive`, `MessagePrimitive`, `ComposerPrimitive`; the hooks `useAui`, `useAuiState`, `useAuiEvent`; and runtime selection across `useChatRuntime`, `useExternalStoreRuntime`, `useLangGraphRuntime`, `useLocalRuntime`. Current line is `@assistant-ui/react` 0.15.x on AI SDK v7. For a specific area route to a focused sibling instead: setup, runtime, primitives, tools, streaming, cloud, thread-list, copilots, markdown, react-mcp, observability, or update. Not for hands-on tasks already owned by those siblings."
 license: MIT
 ---
 
@@ -34,8 +34,8 @@ React library for building AI chat interfaces with composable primitives.
 └─────────────────────────┬───────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────┐
-│                   Context Hooks                         │
-│   useAui, useAuiState, useAuiEvent │
+│                 aui client + hooks                      │
+│         useAui, useAuiState, useAuiEvent                │
 └─────────────────────────┬───────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────┐
@@ -67,11 +67,15 @@ Using AI SDK?
 | Package | Purpose |
 |---------|---------|
 | `@assistant-ui/react` | UI primitives & hooks |
-| `@assistant-ui/react-ai-sdk` | Vercel AI SDK v6 adapter |
-| `@assistant-ui/react-langgraph` | LangGraph adapter |
+| `@assistant-ui/core` | Framework-agnostic core runtime |
+| `@assistant-ui/store` | `useAui` / `AuiProvider` state layer |
+| `@assistant-ui/react-ai-sdk` | Vercel AI SDK v7 adapter |
+| `@assistant-ui/react-langchain` | LangChain / LangGraph `useStream` adapter |
 | `@assistant-ui/react-markdown` | Markdown rendering |
 | `assistant-stream` | Streaming protocol |
 | `assistant-cloud` | Cloud persistence |
+
+Non-web targets: `@assistant-ui/react-native` (Expo) and `@assistant-ui/react-ink` (terminal). See [./references/packages.md](./references/packages.md) for the full inventory.
 
 ## Quick Start
 
@@ -94,12 +98,15 @@ function App() {
 
 ## State Access
 
+Scope accessors on `aui` are properties (0.15+); methods on a scope keep their parentheses.
+
 ```tsx
 import { useAui, useAuiState } from "@assistant-ui/react";
 
-const api = useAui();
-api.thread().append({ role: "user", content: [{ type: "text", text: "Hi" }] });
-api.thread().cancelRun();
+const aui = useAui();
+aui.thread.append({ role: "user", content: [{ type: "text", text: "Hi" }] });
+aui.thread.cancelRun();
+aui.thread.composer().send();
 
 const messages = useAuiState(s => s.thread.messages);
 const isRunning = useAuiState(s => s.thread.isRunning);
@@ -114,4 +121,8 @@ const isRunning = useAuiState(s => s.thread.isRunning);
 - `/streaming` - Streaming protocols
 - `/cloud` - Persistence and auth
 - `/thread-list` - Multi-thread management
+- `/copilots` - Grounding the assistant in your app
+- `/markdown` - Markdown rendering
+- `/react-mcp` - User-managed MCP servers
+- `/observability` - Backend tracing and telemetry
 - `/update` - Version updates and migrations

@@ -74,14 +74,17 @@ interface ExternalStoreRuntimeOptions<T = ThreadMessage> {
   // Message conversion (for custom message formats)
   convertMessage?: (message: T) => ThreadMessage;
 
-  // Capabilities override
-  capabilities?: Partial<RuntimeCapabilities>;
+  // The only settable capability; everything else is derived (see below)
+  unstable_capabilities?: { copy?: boolean };
 
   // Adapters
   adapters?: {
     attachments?: AttachmentAdapter;
-    feedback?: FeedbackAdapter;
     speech?: SpeechSynthesisAdapter;
+    dictation?: DictationAdapter;
+    voice?: RealtimeVoiceAdapter;
+    feedback?: FeedbackAdapter;
+    threadList?: ExternalStoreThreadListAdapter;
   };
 }
 ```
@@ -314,19 +317,34 @@ const runtime = useExternalStoreRuntime({
 
 ## Capabilities
 
+There is no `capabilities` option. `ExternalStoreRuntime` derives every capability from which callbacks and adapters you supply, so a capability turns on by implementing it:
+
+| Capability | Turned on by |
+|------------|--------------|
+| `edit` | `onEdit` |
+| `reload` | `onReload` |
+| `cancel` | `onCancel` |
+| `delete` | `onDelete` or `setMessages` |
+| `switchToBranch` | `setMessages` |
+| `attachments` | `adapters.attachments` |
+| `feedback` | `adapters.feedback` |
+| `speech` | `adapters.speech` |
+| `dictation` | `adapters.dictation` |
+| `voice` | `adapters.voice` |
+| `queue` | `queue` |
+| `unstable_copy` | on unless `unstable_capabilities.copy === false` |
+| `switchBranchDuringRun` | always `false` |
+
 ```tsx
 const runtime = useExternalStoreRuntime({
   messages,
   isRunning,
   onNew: handleNew,
-  // Only enable capabilities you implement
-  capabilities: {
-    edit: false,   // Disable edit if onEdit not provided
-    reload: true,
-    cancel: true,
-    copy: true,
-    speak: false,
-    attachments: false,
-  },
+  onReload: handleReload,   // enables `reload`
+  onCancel: handleCancel,   // enables `cancel`
+  // omit onEdit to leave `edit` disabled
+  unstable_capabilities: { copy: false },  // the one capability you can force off
 });
 ```
+
+Read the resolved set with `useAuiState((s) => s.thread.capabilities)`.

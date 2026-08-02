@@ -4,7 +4,7 @@ AI SDK compatible streaming format.
 
 ## Overview
 
-Data Stream is the underlying format used by Vercel AI SDK. For assistant-ui, use `toUIMessageStreamResponse()` (preferred) which builds on Data Stream with additional features.
+Data Stream is the underlying format used by Vercel AI SDK. For assistant-ui, build the response with `toUIMessageStream` + `createUIMessageStreamResponse`, which layer the UI-message protocol on top of Data Stream.
 
 ## Usage
 
@@ -12,23 +12,28 @@ Data Stream is the underlying format used by Vercel AI SDK. For assistant-ui, us
 
 ```ts
 import { openai } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
 
   const result = streamText({
-    model: openai("gpt-4o"),
-    messages,
+    model: openai("gpt-5.4-nano"),
+    messages: await convertToModelMessages(messages),
   });
 
-  // Preferred for assistant-ui
-  return result.toUIMessageStreamResponse();
-
-  // Or use toDataStreamResponse() for raw Data Stream
-  // return result.toDataStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
 ```
+
+`result.toUIMessageStreamResponse()` is the older equivalent; it still compiles in `ai@7` but is deprecated. `toDataStreamResponse()` was removed after v5.
 
 ### Custom Backend (Data Stream SSE)
 

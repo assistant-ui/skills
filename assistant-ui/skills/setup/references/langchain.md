@@ -167,7 +167,7 @@ const runtime = useStreamRuntime({
 
 Both packages connect assistant-ui to LangGraph backends and both build on `useExternalStoreRuntime`. They are independent adapters for different upstream libraries; one is not a successor to the other. `react-langgraph` wraps the raw `@langchain/langgraph-sdk` (~7,500 lines); `react-langchain` wraps `useStream` from `@langchain/react` (~600 lines).
 
-Pick `react-langchain` when your app already depends on `@langchain/react`, when you want to read custom state keys reactively with `useLangChainState<T>(key)`, or when you prefer a thin wrapper pinned to upstream behavior. Pick `react-langgraph` when scaffolding via `npx create-assistant-ui -t langgraph` (the template uses it), or when you need per-message metadata, generative UI messages, subgraph/namespaced stream events, or end-to-end cancellation today. Features absent from `react-langchain` have not been ported, not deprecated.
+Pick `react-langchain` when your app already depends on `@langchain/react`, when you want to read custom state keys reactively with `useLangChainState<T>(key)`, or when you prefer a thin wrapper pinned to upstream behavior. Pick `react-langgraph` for the `with-langgraph` example (`npx assistant-ui@latest create <name> --example with-langgraph`), or when you need per-message metadata, generative UI messages, subgraph/namespaced stream events, or end-to-end cancellation today. Features absent from `react-langchain` have not been ported, not deprecated.
 
 Hook name mapping:
 

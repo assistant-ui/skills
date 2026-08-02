@@ -45,11 +45,13 @@ function Chat() {
 
 ### List Threads
 
+Paging is cursor based (`after`), not offset based.
+
 ```tsx
-const threads = await cloud.threads.list({
-  status: "active",     // "active" | "archived" | "all"
+const { threads } = await cloud.threads.list({
+  is_archived: false,
   limit: 50,
-  offset: 0,
+  after: cursor,        // id of the last thread from the previous page
 });
 
 // threads: Array<{
@@ -59,8 +61,10 @@ const threads = await cloud.threads.list({
 //   updated_at: Date;
 //   last_message_at: Date;
 //   is_archived: boolean;
-//   external_id?: string;
-//   metadata?: unknown;
+//   external_id: string | null;
+//   metadata: unknown;
+//   project_id: string;
+//   workspace_id: string;
 // }>
 ```
 
@@ -72,8 +76,11 @@ const thread = await cloud.threads.get(threadId);
 
 ### Create Thread
 
+`last_message_at` is required; everything else is optional.
+
 ```tsx
 const { thread_id } = await cloud.threads.create({
+  last_message_at: new Date(),   // Required
   title: "My New Chat",
   external_id: "custom-id-123",  // Optional external reference
   metadata: {                     // Optional custom data
@@ -103,25 +110,30 @@ await cloud.threads.delete(threadId);
 
 ### List Messages
 
+`messages` is a property on `cloud.threads`, and each method takes `threadId` as its first argument.
+
 ```tsx
-const messages = await cloud.threads.messages(threadId).list({
+const { messages } = await cloud.threads.messages.list(threadId, {
   format: "aui/v0",
 });
 
 // messages: Array<{
 //   id: string;
 //   parent_id: string | null;
-//   format: string;
-//   content: object;
+//   format: "aui/v0" | string;
+//   content: ReadonlyJSONObject;
 //   height: number;
 //   created_at: Date;
+//   updated_at: Date;
 // }>
 ```
+
+`list` accepts only `{ format? }`; there is no paging on the message endpoint.
 
 ### Create Message
 
 ```tsx
-await cloud.threads.messages(threadId).create({
+await cloud.threads.messages.create(threadId, {
   parent_id: null,  // Or parent message ID for branching
   format: "aui/v0",
   content: {
@@ -197,8 +209,8 @@ Titles are auto-generated from conversation:
 
 ```tsx
 // Manual trigger
-const item = api.threads().item({ id: threadId });
-await item.generateTitle();
+const item = api.threads.item({ id: threadId });
+item.generateTitle();
 ```
 
 The cloud backend uses the conversation to generate a concise title.
@@ -209,10 +221,11 @@ Link threads to your system:
 
 ```tsx
 await cloud.threads.create({
+  last_message_at: new Date(),
   external_id: "your-system-id-123",
 });
 
-const threads = await cloud.threads.list();
+const { threads } = await cloud.threads.list();
 const thread = threads.find(t => t.external_id === "your-system-id-123");
 ```
 
@@ -222,6 +235,7 @@ Store custom data with threads:
 
 ```tsx
 await cloud.threads.create({
+  last_message_at: new Date(),
   metadata: {
     userId: user.id,
     category: "sales",
@@ -242,7 +256,7 @@ Messages are loaded on thread switch:
 ```tsx
 // Thread list is cached in memory
 // Messages loaded when switching threads
-api.threads().switchToThread(threadId);
+api.threads.switchToThread(threadId);
 ```
 
 For real-time sync across devices, implement webhook handlers on your backend.

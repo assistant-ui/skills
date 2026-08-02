@@ -1,6 +1,6 @@
 # MCP manager setup
 
-Mount user-managed MCP servers on the `aui` instance with `@assistant-ui/react-mcp`. Connectors are presets, storage persists servers and tokens, and `aui.mcp()` drives the manager imperatively.
+Mount user-managed MCP servers on the `aui` instance with `@assistant-ui/react-mcp`. Connectors are presets, storage persists servers and tokens, and `aui.mcp` drives the manager imperatively.
 
 ## Contents
 
@@ -135,14 +135,14 @@ const aui = useAui({
 
 ## Imperative API
 
-Drive the manager through `useAui().mcp()` from inside event handlers, never during render. `addCustomServer` registers a user server with its own auth; `server({ id })` scopes to one server for `connect` and `callTool`.
+Drive the manager through `useAui().mcp` from inside event handlers, never during render. `addCustomServer` registers a user server with its own auth; `server({ id })` scopes to one server for `connect` and `callTool`.
 
 ```ts
 const aui = useAui();
 // inside an event handler:
-await aui.mcp().addCustomServer({ name, url, auth: { type: "bearer", token } });
-await aui.mcp().server({ id }).connect();
-const result = await aui.mcp().server({ id }).callTool("echo", { text: "hi" });
+await aui.mcp.addCustomServer({ name, url, auth: { type: "bearer", token } });
+await aui.mcp.server({ id }).connect();
+const result = await aui.mcp.server({ id }).callTool("echo", { text: "hi" });
 ```
 
 Read reactive state with `useAuiState` from `@assistant-ui/store`, scoped under `s.mcp` (manager) and `s.mcpServer` (current item inside a `McpServerPrimitive` subtree).

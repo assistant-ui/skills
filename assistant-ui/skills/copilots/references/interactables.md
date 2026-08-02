@@ -2,8 +2,11 @@
 
 Persistent UI components whose state the AI can read and update through auto-generated tools.
 
+> **Two generations of this API exist.** The legacy one (`Interactables()`, `useAssistantInteractable`, `useInteractableState`) is deprecated as of 2026-06-14 and scheduled for removal on or after 2026-09-14. The current one is the `unstable_` family (`unstable_Interactables()`, `unstable_useInteractable`, `unstable_interactableTool`); it is marked unstable and may change in any release. The two scopes are **mutually exclusive**: mount only one per `useAui` provider. Write new code against the `unstable_` API; the rest of this page documents the legacy API for codebases still on it.
+
 ## Contents
 
+- [Current API (unstable_)](#current-api-unstable_)
 - [Overview](#overview)
 - [Register the scope](#register-the-scope)
 - [useAssistantInteractable](#useassistantinteractable)
@@ -16,11 +19,104 @@ Persistent UI components whose state the AI can read and update through auto-gen
 - [Export and import](#export-and-import)
 - [Schema evolution](#schema-evolution)
 
+## Current API (unstable_)
+
+Two shapes, depending on where the interactable lives.
+
+**App-scoped**: a component you mount anywhere. `unstable_useInteractable(name, config)` returns `[state, controls]`, where controls carry `id`, `version`, `setState`, `isPending`, `error`, and `flush`. State is shared across every thread and survives a reload only with a persistence adapter.
+
+```tsx
+import { unstable_useInteractable } from "@assistant-ui/react";
+import { z } from "zod";
+
+const taskBoardSchema = z.object({
+  tasks: z.array(z.object({ id: z.string(), title: z.string(), done: z.boolean() })),
+});
+
+function TaskBoard() {
+  const [state, { setState }] = unstable_useInteractable("taskBoard", {
+    description:
+      "A task board panel that lists tasks. Use update_taskBoard with tasks.add/update/remove/clear.",
+    stateSchema: taskBoardSchema,
+    initialState: { tasks: [] },
+  });
+
+  return (
+    <ul>
+      {state.tasks.map((task) => (
+        <li key={task.id}>
+          <input
+            type="checkbox"
+            checked={task.done}
+            onChange={() =>
+              setState((prev) => ({
+                tasks: prev.tasks.map((t) =>
+                  t.id === task.id ? { ...t, done: !t.done } : t,
+                ),
+              }))
+            }
+          />
+          {task.title}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+**Thread-scoped**: an interactable tool UI the model calls in-thread. Define it with `unstable_interactableTool` inside `defineToolkit`; its state rides the thread history, so it survives a reload with nothing extra to persist.
+
+```tsx
+"use generative";
+
+import { defineToolkit, unstable_interactableTool } from "@assistant-ui/react";
+import { z } from "zod";
+
+const toolkit = defineToolkit({
+  notepad: unstable_interactableTool({
+    description: "A notepad with drafted text the user can read and edit.",
+    stateSchema: z.object({ title: z.string(), content: z.string() }),
+    render: ({ state, setState, version, streaming }) => (
+      <Notepad
+        value={state}
+        onChange={setState}
+        busy={streaming}
+        readOnly={version ? !version.isLatest : false}
+      />
+    ),
+  }),
+});
+```
+
+Register the scope (and the toolkit, for the thread-scoped form):
+
+```tsx
+import { Tools, unstable_Interactables, useAui } from "@assistant-ui/react";
+
+const aui = useAui({
+  unstable_interactables: unstable_Interactables(),
+  tools: Tools({ toolkit }),
+});
+```
+
+On an AI SDK backend, `convertToModelMessages` drops message metadata, so interactable snapshots need to be injected explicitly:
+
+```ts
+import { unstable_injectInteractableContext } from "@assistant-ui/react-ai-sdk";
+
+const result = streamText({
+  model: openai("gpt-5.4"),
+  messages: await convertToModelMessages(unstable_injectInteractableContext(messages)),
+});
+```
+
+Related exports: `unstable_useInteractableState(id)`, `unstable_useInteractableVersions(id, name)`, `unstable_getInteractableSnapshots`, `unstable_getInteractableVersions`, `unstable_formatInteractableSnapshot`.
+
 ## Overview
 
 An interactable is a React component with state that is shared between the user and the AI. State persists across messages, supports partial updates, and the framework auto-registers a tool so the model can change it. Unlike a tool UI (which only renders a tool call), an interactable lives anywhere in your app and stays mounted across turns.
 
-All APIs come from `@assistant-ui/react`.
+Everything below documents the **legacy** API. All of it comes from `@assistant-ui/react`.
 
 ```tsx
 import {
@@ -276,7 +372,7 @@ function PersistenceSetup() {
   const aui = useAui();
 
   useEffect(() => {
-    aui.interactables().setPersistenceAdapter({
+    aui.interactables.setPersistenceAdapter({
       save: async (state) => {
         localStorage.setItem("interactables", JSON.stringify(state));
       },
@@ -284,7 +380,7 @@ function PersistenceSetup() {
 
     const saved = localStorage.getItem("interactables");
     if (saved) {
-      aui.interactables().importState(JSON.parse(saved));
+      aui.interactables.importState(JSON.parse(saved));
     }
   }, [aui]);
 
@@ -303,10 +399,10 @@ Read or replace the full snapshot directly through the scope.
 ```tsx
 const aui = useAui();
 
-const snapshot = aui.interactables().exportState();
+const snapshot = aui.interactables.exportState();
 // => { "note-1": { name: "note", state: { title: "Hello" } }, ... }
 
-aui.interactables().importState(snapshot);
+aui.interactables.importState(snapshot);
 ```
 
 ## Schema evolution

@@ -8,7 +8,7 @@ Inspect assistant-ui runtime state, context, and events in the browser without `
 npm install @assistant-ui/react-devtools
 ```
 
-The package peer-depends on `@assistant-ui/react` (`^0.14.12`); it reads from the same Assistant API context, so it only works inside a runtime provider.
+The package peer-depends on `@assistant-ui/react` (`^0.15.0`) and `@assistant-ui/tap` (`^0.9.0`); it reads from the same Assistant API context, so it only works inside a runtime provider.
 
 ## Basic Setup
 
@@ -18,6 +18,7 @@ Render `<DevToolsModal />` as a child of `AssistantRuntimeProvider`, alongside y
 "use client";
 
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { DevToolsModal } from "@assistant-ui/react-devtools";
 import { Thread } from "@/components/assistant-ui/thread";
 
@@ -48,23 +49,44 @@ Note: the guard keys off `process.env.NODE_ENV`. If your bundler does not define
 {process.env.NODE_ENV !== "production" && <DevToolsModal />}
 ```
 
-## Inline Frame
+## Inline Panel
 
-`DevToolsFrame` embeds the same inspector inline instead of behind a modal button. Use it to dock DevTools into a panel of your own layout. It accepts standard iframe props such as `style`.
+`DevToolsPanel` embeds the same inspector inline instead of behind a modal button. Use it to dock DevTools into a panel of your own layout.
 
 ```tsx
-import { DevToolsFrame } from "@assistant-ui/react-devtools";
+import { DevToolsPanel } from "@assistant-ui/react-devtools";
 
 <div className="h-96 w-full">
-  <DevToolsFrame style={{ width: "100%", height: "100%", border: "none" }} />
+  <DevToolsPanel theme="dark" onClose={() => setOpen(false)} />
 </div>
 ```
 
-`DevToolsModal` itself wraps a `DevToolsFrame`, so both surfaces show the same event log, context viewer, and runtime inspector.
+`DevToolsModal` wraps a `DevToolsPanel`, so both surfaces show the same event log, context viewer, and runtime inspector.
 
-## Dark Mode
+## Theme
 
-The modal reads dark mode from the `dark` class on `<html>` or `<body>` and reacts to changes via a `MutationObserver`, matching the shadcn class-based dark mode used by registry components. No configuration is required.
+Both surfaces take a `theme` prop. `DevToolsModal` accepts `"dark" | "light" | "system"` and defaults to following the page; `DevToolsPanel` takes an explicit `"dark" | "light"`. Styles are isolated inside a `ShadowRoot`, so the inspector does not inherit or leak your app's CSS.
+
+## Custom Tabs
+
+The panel's tab list is a plugin array. `builtinPlugins` is the default set; `createDevToolsPlugin` types a custom entry.
+
+```tsx
+import {
+  DevToolsModal,
+  builtinPlugins,
+  createDevToolsPlugin,
+} from "@assistant-ui/react-devtools";
+
+const myTab = createDevToolsPlugin({
+  id: "my-tab",
+  label: "My Tab",
+  order: 100,
+  Component: ({ client }) => <pre>{JSON.stringify(client, null, 2)}</pre>,
+});
+
+<DevToolsModal plugins={[...builtinPlugins, myTab]} />;
+```
 
 ## Chrome Extension
 
@@ -74,7 +96,11 @@ A standalone Chrome extension consumes the same package and connects to any page
 
 | Export | Purpose |
 |-------|-------|
-| `DevToolsModal` | Floating button plus modal overlay; dev-only, no props |
-| `DevToolsFrame` | Inline iframe host for the inspector; accepts iframe props |
+| `DevToolsModal` | Floating button plus modal overlay; dev-only. Props: `plugins`, `theme`, `client` |
+| `DevToolsPanel` | Inline inspector surface. Props: `plugins`, `theme`, `onClose`, `client` |
+| `ShadowRoot` | Style-isolated container the panel renders into |
+| `builtinPlugins` / `createDevToolsPlugin` | Default tab set and helper for custom tabs |
+| `DevToolsClient` / `createInProcessClient` / `inProcessClient` | Client the panel reads from; swap it to inspect a remote page |
+| `serializeModelContext` / `normalizeToolList` | Serialization helpers used by custom hosts such as the Chrome extension |
 
-Lower-level host and frame bridges (`FrameHost`, `DevToolsHost`, `ExtensionHost`, `FrameClient`) and serialization helpers (`sanitizeForMessage`, `serializeModelContext`, `normalizeToolList`) are also exported for building custom hosts such as the Chrome extension. Most apps only need `DevToolsModal`.
+Most apps only need `DevToolsModal`.

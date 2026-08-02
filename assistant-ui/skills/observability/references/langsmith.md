@@ -41,11 +41,13 @@ export async function POST(req: Request) {
     model: openai("gpt-5.4-nano"),
     messages: await ai.convertToModelMessages(messages),
   });
-  return result.toUIMessageStreamResponse();
+  return ai.createUIMessageStreamResponse({
+    stream: ai.toUIMessageStream({ stream: result.stream }),
+  });
 }
 ```
 
-Note: `convertToModelMessages` is not part of the wrapper, so import it from `ai` directly.
+Note: `convertToModelMessages`, `toUIMessageStream`, and `createUIMessageStreamResponse` are not part of the wrapper; call them off the `ai` namespace directly.
 
 ## Metadata for grouping (optional)
 
