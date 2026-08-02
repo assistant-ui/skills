@@ -48,7 +48,7 @@ type SpanData = {
 A Tap resource that ingests raw spans and produces reactive, tree-aware state. Mount it with `useAui`, then provide the result through `AuiProvider`.
 
 ```tsx
-const aui = useAui({ resource: SpanResource({ spans }) });
+const aui = useAui({ span: SpanResource({ spans }) });
 ```
 
 ## SpanState
@@ -130,7 +130,7 @@ function SpanRow() {
 }
 
 export function TraceView({ spans }: { spans: SpanData[] }) {
-  const aui = useAui({ resource: SpanResource({ spans }) });
+  const aui = useAui({ span: SpanResource({ spans }) });
   return (
     <AuiProvider value={aui}>
       <SpanPrimitive.Children components={{ Span: SpanRow }} />

@@ -1,6 +1,6 @@
 ---
 name: cloud
-description: "Sets up assistant-ui Cloud persistence and authorization with the assistant-cloud package and AssistantCloud client. Use when adding cross-session thread/message persistence, multi-device chat history, file uploads, or auth to an assistant-ui app: passing the cloud option to useChatRuntime (with AssistantChatTransport from @assistant-ui/react-ai-sdk), configuring AssistantCloud with authToken (JWT), apiKey plus userId/workspaceId (server-side), or anonymous mode, and wiring auth providers like NextAuth, Clerk, or Firebase. Covers cloud.threads.list/get/create/update/delete, cloud.threads.messages(threadId), cloud.files.generatePresignedUploadUrl, the aui/v0 message format, custom adapters (CloudMessagePersistence, createFormattedPersistence, ThreadHistoryAdapter, RemoteThreadListAdapter), auto title generation, external_id/metadata mapping, and env vars NEXT_PUBLIC_ASSISTANT_BASE_URL and ASSISTANT_API_KEY. For the thread-list sidebar UI itself use thread-list."
+description: "Sets up assistant-ui Cloud persistence and authorization with the assistant-cloud package and AssistantCloud client. Use when adding cross-session thread/message persistence, multi-device chat history, file uploads, or auth to an assistant-ui app: passing the cloud option to useChatRuntime (with AssistantChatTransport from @assistant-ui/react-ai-sdk), configuring AssistantCloud with authToken (JWT), apiKey plus userId/workspaceId (server-side), or anonymous mode, and wiring auth providers like NextAuth, Clerk, or Firebase. Covers cloud.threads.list/get/create/update/delete, cloud.threads.messages.list/create/update(threadId, ...), cloud.files.generatePresignedUploadUrl and pdfToImages, cloud.projects, cloud.runs, the aui/v0 message format, custom adapters (CloudMessagePersistence, createFormattedPersistence, ThreadHistoryAdapter, RemoteThreadListAdapter), auto title generation, external_id/metadata mapping, and env vars NEXT_PUBLIC_ASSISTANT_BASE_URL and ASSISTANT_API_KEY. For the thread-list sidebar UI itself use thread-list."
 license: MIT
 ---
 
@@ -79,12 +79,16 @@ const cloud = new AssistantCloud({
 ## Cloud API
 
 ```tsx
-const threads = await cloud.threads.list();
-await cloud.threads.create({ title: "New Chat" });
+const { threads } = await cloud.threads.list();
+const { thread_id } = await cloud.threads.create({
+  title: "New Chat",
+  last_message_at: new Date(), // required
+});
 await cloud.threads.update(threadId, { title: "Updated" });
 await cloud.threads.delete(threadId);
 
-const messages = await cloud.threads.messages(threadId).list();
+// messages is a property on threads; every method takes threadId as its first argument
+const { messages } = await cloud.threads.messages.list(threadId);
 
 const { signedUrl, publicUrl } = await cloud.files.generatePresignedUploadUrl({
   filename: "document.pdf",

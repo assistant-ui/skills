@@ -21,7 +21,7 @@ Connect a realtime voice backend (ElevenLabs, LiveKit, OpenAI Realtime, etc.) to
 Pass an adapter via `adapters.voice`. When provided, `capabilities.voice` is automatically set to `true`.
 
 ```ts
-import { useChatRuntime } from "@assistant-ui/react";
+import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 
 const runtime = useChatRuntime({
   adapters: {
