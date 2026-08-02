@@ -6,6 +6,7 @@ Fast lookup for breaking changes by version.
 
 | Version | Breaking Change | Migration |
 |---------|-----------------|-----------|
+| **0.15.0** | `aui` scope accessors become properties; v0.12-era legacy context hooks removed; `ToolsState.tools` removed; `"mcp-app"` group key removed; `useAui(clients, { parent })` removed | `aui.thread` not `aui.thread()`; `useAui`/`useAuiState`; `s.tools.toolUIs[n]?.[0]?.render`; `"standalone-tool-call"`; `AuiProvider` |
 | **0.14.0** | `components` prop → children render functions; deprecated hooks/aliases removed | Children render functions; `useAui`/`useAuiState`/`useAuiEvent`/`AuiIf`; drop `unstable_` prefixes |
 | **0.13.0** | `ThreadPrimitive.ViewportSlack` removed | Use `topAnchorMessageClamp` on `ThreadPrimitive.Viewport` |
 | **0.12.0** | Unified state API | Use `useAui`, `useAuiState`, `useAuiEvent`, `AuiIf` |
@@ -36,7 +37,7 @@ Fast lookup for breaking changes by version.
 - import type { AssistantMessage, UserMessage } from "@assistant-ui/react";
 + import type { ThreadAssistantMessage, ThreadUserMessage } from "@assistant-ui/react";
 
-# AI SDK v6 (react-ai-sdk 1.0+)
+# AI SDK v6+ (react-ai-sdk 1.0+)
 - import { useChat } from "ai/react";
 - import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
 + import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
@@ -64,7 +65,21 @@ Fast lookup for breaking changes by version.
 
 # Actions (0.11.0+)
 - useThreadActions().append(...)
-+ useAui().thread().append(...)
++ useAui().thread.append(...)
+
+# Scope accessors are properties (0.15.0+)
+- aui.thread().getState();
+- aui.threads().switchToNewThread();
++ aui.thread.getState();
++ aui.threads.switchToNewThread();
+
+# Tool UI registry (0.15.0+)
+- useAuiState((s) => s.tools.tools[toolName]?.[0]);
++ useAuiState((s) => s.tools.toolUIs[toolName]?.[0]?.render);
+
+# Part grouping (0.15.0+)
+- groupPartByType({ "mcp-app": [] });
++ groupPartByType({ "standalone-tool-call": [] });
 ```
 
 ### Config Changes
@@ -88,11 +103,11 @@ grep -rn "from ['\"]@assistant-ui/react['\"]" --include="*.tsx" | grep -v Primit
 grep -rn "Message\.InProgress" --include="*.tsx"  # 0.3.0
 ```
 
-## AI SDK v6 Changes (Separate)
+## AI SDK Changes (Separate)
 
-See [./ai-sdk-v6.md](./ai-sdk-v6.md) for AI SDK specific migrations:
+See [./ai-sdk-v6.md](./ai-sdk-v6.md) for the v4/v5 → v6 migration, which is still the bulk of the work for older projects:
 
-| Old | New |
+| Old (v4/v5) | v6 |
 |-----|-----|
 | `maxSteps` | `stopWhen: stepCountIs(n)` |
 | `parameters` | `inputSchema` (in `tool()`) |
@@ -101,12 +116,22 @@ See [./ai-sdk-v6.md](./ai-sdk-v6.md) for AI SDK specific migrations:
 | `CoreMessage` | `ModelMessage` |
 | `Message` | `UIMessage` |
 
+v6 → v7 is a much smaller step, but the route response and the `@ai-sdk/*` major line both move:
+
+| v6 | v7 |
+|----|----|
+| `ai@^6`, `@ai-sdk/react@^3`, `@ai-sdk/openai@^3` | `ai@^7`, `@ai-sdk/react@^4`, `@ai-sdk/openai@^4` |
+| `result.toUIMessageStreamResponse()` | `createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) })` (the method still compiles but is deprecated) |
+| `inputSchema: z.object({...})` | `inputSchema: zodSchema(z.object({...}))` |
+| n/a | `toolApproval` call-level option + `lastAssistantMessageIsCompleteWithApprovalResponses` |
+
 ## Version Compatibility
 
-Current latest: `@assistant-ui/react` 0.14.x, `@assistant-ui/react-ai-sdk` 1.3.x.
+Current latest: `@assistant-ui/react` 0.15.x, `@assistant-ui/react-ai-sdk` 1.4.x, `@assistant-ui/core` 0.3.x, `@assistant-ui/store` 0.3.x, `assistant-stream` 0.3.x.
 
 | @assistant-ui/react | react-ai-sdk | AI SDK | Zod |
 |---------------------|--------------|--------|-----|
+| 0.15.x | 1.4.x | 7.x | 3.25+ or 4.x |
 | 0.14.x | 1.3.x | 6.x | 3.25+ or 4.x |
 | 0.12.x to 0.13.x | 1.3.x | 6.x | 3.25+ or 4.x |
 | 0.11.x | 1.2.x | 6.x | 3.25+ or 4.x |
