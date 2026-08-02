@@ -1,6 +1,6 @@
 ---
 name: react-mcp
-description: "Lets end users add, authenticate, and manage MCP servers from the browser in assistant-ui apps with @assistant-ui/react-mcp. Use when building user-managed MCP server UIs: mounting McpManagerResource via useAui({ mcp }), declaring presets with defineConnector, dropping in McpConfigDialog, or composing McpManagerPrimitive (Root, Connectors, CustomServers, AddCustomTrigger), McpServerPrimitive (Root, Name, Icon, Status, ConnectButton, DisconnectButton, OAuthLink, RemoveButton, Error), and McpAddFormPrimitive (NameField, UrlField, AuthSelect, AuthFields, Submit, Cancel). Covers auth modes none/bearer/oauth, the OAuth flow with McpOAuthCallback, connection states, storage via McpLocalStorage/McpMemoryStorage/McpCustomStorage, reading state with useAuiState (s.mcp, s.mcpServer), and imperative addCustomServer/connect/callTool. Distinct from developer-defined backend @ai-sdk/mcp tools in the tools skill. Reach for this when connected-server tools are missing, OAuth never completes, or servers do not persist."
+description: "Lets end users add, authenticate, and manage MCP servers from the browser in assistant-ui apps with @assistant-ui/react-mcp. Use when building user-managed MCP server UIs: mounting McpManagerResource via useAui({ mcp }), declaring presets with defineConnector, dropping in McpConfigDialog, or composing McpManagerPrimitive (Root, Connectors, CustomServers, AddCustomTrigger), McpServerPrimitive (Root, Name, Icon, Status, ConnectButton, DisconnectButton, OAuthLink, RemoveButton, Error, Tools, ToolName), McpAddFormPrimitive (NameField, UrlField, AuthSelect, AuthFields, Submit, Cancel), and McpElicitationPrimitive (Root, Message, Fields, Items, Accept, Decline, Cancel, Error) for server-initiated input requests. Covers auth modes none/bearer/oauth, the OAuth flow with McpOAuthCallback and useMcpOAuthCallback, connection states, storage via McpLocalStorage/McpMemoryStorage/McpCustomStorage, reading state with useAuiState (s.mcp, s.mcpServer) and useMcpElicitation/useMcpElicitationField/useMcpServerTool, and imperative addCustomServer/connect/callTool. Distinct from developer-defined backend @ai-sdk/mcp tools in the tools skill. Reach for this when connected-server tools are missing, OAuth never completes, an elicitation prompt does not render, or servers do not persist."
 license: MIT
 ---
 
@@ -12,7 +12,7 @@ Let end users add, authenticate, and manage MCP servers from the browser with `@
 
 ## Contents
 
-- [References](#references) | [Routes vs tools](#routes-vs-tools) | [Mount the manager](#mount-the-manager) | [Drop-in dialog](#drop-in-dialog) | [Compose from primitives](#compose-from-primitives) | [OAuth connect flow](#oauth-connect-flow) | [Custom storage](#custom-storage) | [Imperative API](#imperative-api) | [Common Gotchas](#common-gotchas) | [Related Skills](#related-skills)
+- [References](#references) | [Routes vs tools](#routes-vs-tools) | [Mount the manager](#mount-the-manager) | [Drop-in dialog](#drop-in-dialog) | [Compose from primitives](#compose-from-primitives) | [OAuth connect flow](#oauth-connect-flow) | [Custom storage](#custom-storage) | [Elicitation](#elicitation) | [Imperative API](#imperative-api) | [Common Gotchas](#common-gotchas) | [Related Skills](#related-skills)
 
 ## References
 
@@ -160,15 +160,38 @@ const aui = useAui({
 });
 ```
 
+## Elicitation
+
+A connected server can ask the user for structured input mid-run. Render the request with `McpElicitationPrimitive`; the parts read the active request and its JSON Schema, so no manual form wiring is needed.
+
+```tsx
+import { McpElicitationPrimitive } from "@assistant-ui/react-mcp";
+
+<McpElicitationPrimitive.Root>
+  <McpElicitationPrimitive.Message />
+  <McpElicitationPrimitive.Fields>
+    <McpElicitationPrimitive.Items />
+  </McpElicitationPrimitive.Fields>
+  <McpElicitationPrimitive.Error />
+  <McpElicitationPrimitive.Accept>Submit</McpElicitationPrimitive.Accept>
+  <McpElicitationPrimitive.Decline>Decline</McpElicitationPrimitive.Decline>
+  <McpElicitationPrimitive.Cancel>Cancel</McpElicitationPrimitive.Cancel>
+</McpElicitationPrimitive.Root>;
+```
+
+`useMcpElicitation()` returns the active `MCPElicitation` (`id`, `message`, `requestedSchema`, and a validation `error` when the server rejects a submission). Inside a field, `useMcpElicitationField()` gives `{ name, schema, value, setValue }` for a fully custom input. Drafts are seeded from the schema's defaults.
+
+The three responses are distinct: `accept` sends `content`, `decline` refuses this request, `cancel` dismisses it without answering.
+
 ## Imperative API
 
-Inside event handlers, drive the manager through `useAui().mcp()`.
+Inside event handlers, drive the manager through `useAui().mcp`.
 
 ```ts
 const aui = useAui();
-await aui.mcp().addCustomServer({ name, url, auth: { type: "bearer", token } });
-await aui.mcp().server({ id }).connect();
-await aui.mcp().server({ id }).callTool("echo", { text: "hi" });
+await aui.mcp.addCustomServer({ name, url, auth: { type: "bearer", token } });
+await aui.mcp.server({ id }).connect();
+await aui.mcp.server({ id }).callTool("echo", { text: "hi" });
 ```
 
 Read reactive state with `useAuiState`, scoped under `s.mcp` (manager) and `s.mcpServer` (current item inside a `McpServerPrimitive` subtree):
@@ -194,8 +217,11 @@ const connectionState = useAuiState((s) => s.mcpServer.connectionState);
 **Custom server cannot be removed**
 - `RemoveButton` hides on connector presets by design; only user-added servers are removable.
 
+**Elicitation prompt never renders**
+- `McpElicitationPrimitive.Root` renders nothing when there is no active request; mount it inside the same provider as the manager and check `useMcpElicitation()`.
+
 **Transport**
-- Only StreamableHTTP is supported; resources, prompts, sampling, and auto-reconnect are not yet wired.
+- Only StreamableHTTP is supported. `listResources()` supports pagination; prompts, sampling, and auto-reconnect are not yet wired.
 
 ## Related Skills
 
