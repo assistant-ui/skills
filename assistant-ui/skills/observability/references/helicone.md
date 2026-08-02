@@ -21,7 +21,12 @@ Create the provider with `createOpenAI` from `@ai-sdk/openai`, override `baseURL
 
 ```ts
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText, convertToModelMessages } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 import type { UIMessage } from "ai";
 
 const openai = createOpenAI({
@@ -37,7 +42,9 @@ export async function POST(req: Request) {
     model: openai("gpt-5.4-mini"),
     messages: await convertToModelMessages(messages),
   });
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
 ```
 

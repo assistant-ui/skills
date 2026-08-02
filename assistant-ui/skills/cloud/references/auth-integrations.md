@@ -40,7 +40,12 @@ Resolve the session server-side with `auth.api.getSession`. It takes the request
 import { auth } from "@/auth";
 import { headers } from "next/headers";
 import { openai } from "@ai-sdk/openai";
-import { streamText, convertToModelMessages } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 import type { UIMessage } from "ai";
 
 export async function POST(req: Request) {
@@ -52,7 +57,9 @@ export async function POST(req: Request) {
     model: openai("gpt-5.4-nano"),
     messages: await convertToModelMessages(messages),
   });
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
 ```
 
@@ -110,7 +117,7 @@ export function ReloadOnAuth() {
   const aui = useAui();
   const { data: session, isPending } = authClient.useSession();
   useEffect(() => {
-    if (!isPending && session) aui.threads().reload();
+    if (!isPending && session) aui.threads.reload();
   }, [isPending, session?.user?.id]);
   return null;
 }
@@ -125,7 +132,12 @@ Clerk's `auth()` from `@clerk/nextjs/server` runs in any Next.js server context 
 ```ts title="app/api/chat/route.ts"
 import { auth } from "@clerk/nextjs/server";
 import { openai } from "@ai-sdk/openai";
-import { streamText, convertToModelMessages } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 import type { UIMessage } from "ai";
 
 export async function POST(req: Request) {
@@ -137,7 +149,9 @@ export async function POST(req: Request) {
     model: openai("gpt-5.4-nano"),
     messages: await convertToModelMessages(messages),
   });
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
 ```
 
@@ -202,7 +216,7 @@ export function ReloadOnAuth() {
   const aui = useAui();
   const { isLoaded, isSignedIn, user } = useUser();
   useEffect(() => {
-    if (isLoaded && isSignedIn) aui.threads().reload();
+    if (isLoaded && isSignedIn) aui.threads.reload();
   }, [isLoaded, isSignedIn, user?.id]);
   return null;
 }

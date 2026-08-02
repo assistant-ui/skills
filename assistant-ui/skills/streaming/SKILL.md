@@ -1,6 +1,6 @@
 ---
 name: streaming
-description: "Streaming backends and wire protocols for assistant-ui via the assistant-stream package. Use when building a custom (non-AI-SDK) streaming endpoint with createAssistantStreamResponse or createAssistantStreamController, emitting parts through appendText/appendReasoning/appendSource/appendFile/addToolCallPart and setResponse; choosing between the AI SDK Data Stream format (toUIMessageStreamResponse) and the native Assistant Transport format; encoding or decoding streams with DataStreamEncoder/DataStreamDecoder, AssistantTransportEncoder/AssistantTransportDecoder, PlainTextEncoder, or UIMessageStreamDecoder; or wiring streamed chunks into useLocalRuntime or useChatRuntime. Use specifically for debugging stream wire issues: text-delta, part-start, result events, text/event-stream content-type, SSE format, tool calls not rendering, or partial text not showing. For general non-stream debugging route to the relevant focused skill, not the parent overview."
+description: "Streaming backends and wire protocols for assistant-ui via the assistant-stream package. Use when building a custom (non-AI-SDK) streaming endpoint with createAssistantStreamResponse or createAssistantStreamController, emitting parts through appendText/appendReasoning/appendSource/appendFile/addToolCallPart and setResponse; choosing between the AI SDK UI-message format (toUIMessageStream + createUIMessageStreamResponse) and the native Assistant Transport format; encoding or decoding streams with DataStreamEncoder/DataStreamDecoder, AssistantTransportEncoder/AssistantTransportDecoder, PlainTextEncoder, or UIMessageStreamDecoder; or wiring streamed chunks into useLocalRuntime or useChatRuntime. Use specifically for debugging stream wire issues: text-delta, part-start, result events, text/event-stream content-type, SSE format, tool calls not rendering, or partial text not showing. For general non-stream debugging route to the relevant focused skill, not the parent overview."
 license: MIT
 ---
 
@@ -21,7 +21,7 @@ The `assistant-stream` package handles streaming from AI backends.
 
 ```
 Using Vercel AI SDK?
-├─ Yes → toUIMessageStreamResponse() (no assistant-stream needed)
+├─ Yes → createUIMessageStreamResponse + toUIMessageStream (no assistant-stream needed)
 └─ No → assistant-stream for custom backends
 ```
 
