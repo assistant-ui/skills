@@ -193,4 +193,4 @@ Use `MessagePrimitive.Error` to render a fallback UI only when the message has a
 
 ## Accessing Message State
 
-Read message state with `useAuiState((s) => s.message...)` and act via `useAui().message()` (e.g. `.reload()`). On assistant messages `s.message.status` is an object; branch on `status.type`. See the `/runtime` skill for the full state API.
+Read message state with `useAuiState((s) => s.message...)` and act via `useAui().message` (e.g. `.reload()`). On assistant messages `s.message.status` is an object; branch on `status.type`. See the `/runtime` skill for the full state API.

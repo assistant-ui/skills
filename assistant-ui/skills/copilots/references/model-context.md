@@ -6,7 +6,7 @@ Provide instructions, tools, and lazy app state to the assistant. Multiple provi
 
 - [useAssistantContext](#useassistantcontext) (lazy send-time string state)
 - [useAssistantInstructions](#useassistantinstructions) (static instructions)
-- [Imperative register](#imperative-register) (useAui().modelContext().register)
+- [Imperative register](#imperative-register) (useAui().modelContext.register)
 - [Provider shape](#provider-shape) (getModelContext return)
 - [ModelContextRegistry](#modelcontextregistry) (standalone addTool / addInstruction / addProvider)
 - [Handles](#handles) (update() and remove())
@@ -51,7 +51,7 @@ function Setup() {
 
 ## Imperative register
 
-`useAui().modelContext().register(provider)` returns an unsubscribe function. Register inside `useEffect` and return the result so the provider is cleaned up on unmount.
+`useAui().modelContext.register(provider)` returns an unsubscribe function. Register inside `useEffect` and return the result so the provider is cleaned up on unmount.
 
 ```tsx
 import { useAui, tool } from "@assistant-ui/react";
@@ -70,7 +70,7 @@ const myTool = tool({
 function MyComponent() {
   const aui = useAui();
   useEffect(() => {
-    return aui.modelContext().register({
+    return aui.modelContext.register({
       getModelContext: () => ({
         system: "You are a helpful search assistant...",
         tools: { myTool },
@@ -88,7 +88,7 @@ Because `getModelContext` runs at send-time, you can close over changing props o
 function SmartHistory({ userProfile }) {
   const aui = useAui();
   useEffect(() => {
-    return aui.modelContext().register({
+    return aui.modelContext.register({
       getModelContext: () => ({
         system: `User spending patterns:
 - Average transaction: ${userProfile.avgTransaction}
@@ -116,7 +116,7 @@ Minimal provider that injects model config:
 ```tsx
 useEffect(() => {
   const config = { config: { modelName } };
-  return aui.modelContext().register({
+  return aui.modelContext.register({
     getModelContext: () => config,
   });
 }, [aui, modelName]);

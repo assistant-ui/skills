@@ -135,7 +135,7 @@ import { useAui } from "@assistant-ui/react";
 function Provider() {
   const aui = useAui();
   useEffect(() => {
-    return aui.modelContext().register({
+    return aui.modelContext.register({
       getModelContext: () => ({ system: "You are a search assistant." }),
     });
   }, [aui]);

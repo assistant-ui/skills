@@ -59,14 +59,14 @@ const { threadIds, mainThreadId } = useAuiState((s) => ({
   mainThreadId: s.threads.mainThreadId,
 }));
 
-api.threads().switchToThread(threadId);
+api.threads.switchToThread(threadId);
 
-api.threads().switchToNewThread();
+api.threads.switchToNewThread();
 
-const item = api.threads().item({ id: threadId });
-await item.rename("New Title");
-await item.archive();
-await item.delete();
+const item = api.threads.item({ id: threadId });
+item.rename("New Title");
+item.archive();
+item.delete();
 ```
 
 ## Custom Thread List

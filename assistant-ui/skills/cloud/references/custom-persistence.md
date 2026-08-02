@@ -291,7 +291,7 @@ export const threadListAdapter: RemoteThreadListAdapter = {
         async append() {},
         withFormat: (fmt) => ({
           async load() {
-            const { remoteId } = aui.threadListItem().getState();
+            const { remoteId } = aui.threadListItem.getState();
             if (!remoteId) return { messages: [] };
             const rows = await fetch(`/api/threads/${remoteId}/messages`).then((r) => r.json());
             return {
@@ -306,7 +306,7 @@ export const threadListAdapter: RemoteThreadListAdapter = {
             };
           },
           async append(item) {
-            const { remoteId } = await aui.threadListItem().initialize();
+            const { remoteId } = await aui.threadListItem.initialize();
             await fetch(`/api/threads/${remoteId}/messages`, {
               method: "POST",
               body: JSON.stringify({
@@ -330,7 +330,7 @@ export const threadListAdapter: RemoteThreadListAdapter = {
 };
 ```
 
-Note: `append` awaits `aui.threadListItem().initialize()` so the thread row exists before its first message is written; `load` uses `getState()` and bails out when there is no `remoteId` yet.
+Note: `append` awaits `aui.threadListItem.initialize()` so the thread row exists before its first message is written; `load` uses `getState()` and bails out when there is no `remoteId` yet.
 
 ## Runtime provider
 
@@ -369,7 +369,7 @@ export function MyProvider({ children }: { children: React.ReactNode }) {
 | `fmt.encode(item)` | `UIMessage` to stored `content` |
 | `fmt.getId(item.message)` | Extracts the message id |
 | `fmt.format` | Format string written to the `format` column (for example `"ai-sdk/v6"`) |
-| `aui.threadListItem().getState()` | Reads the active thread's `remoteId` for loading |
-| `aui.threadListItem().initialize()` | Awaited before appending to ensure the thread row exists |
+| `aui.threadListItem.getState()` | Reads the active thread's `remoteId` for loading |
+| `aui.threadListItem.initialize()` | Awaited before appending to ensure the thread row exists |
 | `useRemoteThreadListRuntime` | Combines the thread list adapter with a per-thread `runtimeHook` |
 | `RuntimeAdapterProvider` | Mounts `{ history }` for the active thread |

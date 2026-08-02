@@ -303,7 +303,15 @@ const toolkit = {
 </MessagePrimitive.GroupedParts>
 ```
 
-Note: `"mcp-app"` is a deprecated key superseded by `"standalone-tool-call"`.
+Note: the `"mcp-app"` key was **removed in 0.15**. Use `"standalone-tool-call"`, a superset that matches MCP-app tool calls plus any tool call whose registered UI opts into standalone display.
+
+```diff
+  groupPartByType({
+    "tool-call": ["group-tool"],
+-   "mcp-app": [],
++   "standalone-tool-call": [],
+  })
+```
 
 ## Legacy: Unstable_PartsGrouped
 

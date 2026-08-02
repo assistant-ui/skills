@@ -188,4 +188,4 @@ function CustomThread() {
 
 ## Accessing Thread State
 
-Read thread state with `useAuiState((s) => s.thread...)` (e.g. `s.thread.messages`, `s.thread.isRunning`) and act via `useAui().thread()`. See the `/runtime` skill for the full state API.
+Read thread state with `useAuiState((s) => s.thread...)` (e.g. `s.thread.messages`, `s.thread.isRunning`) and act via `useAui().thread`. See the `/runtime` skill for the full state API.

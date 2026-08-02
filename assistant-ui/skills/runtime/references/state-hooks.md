@@ -12,28 +12,30 @@ Get the runtime API for imperative actions.
 import { useAui } from "@assistant-ui/react";
 
 function Controls() {
-  const api = useAui();
+  const aui = useAui();
 
-  // Thread operations
-  const thread = api.thread();
+  // Thread operations (scope accessors are properties as of 0.15)
+  const thread = aui.thread;
   thread.append({ role: "user", content: [{ type: "text", text: "Hi" }] });
   thread.cancelRun();
-  thread.startRun();
+  thread.startRun({ parentId: null });
 
-  // Message operations
-  const message = thread.message(0);
-  message.edit({ ... });
+  // Message operations - selector object, not a bare index
+  const message = thread.message({ index: 0 });
   message.reload();
+  message.composer().beginEdit();
 
   // Thread list operations
-  const threads = api.threads();
+  const threads = aui.threads;
   threads.switchToThread(threadId);
   threads.switchToNewThread();
 
-  // Get state snapshot
-  const state = api.getState();
+  // State snapshots come from a scope, not from the client
+  const state = thread.getState();
 }
 ```
+
+There is no `aui.getState()`. The client exposes only the scope accessors plus `subscribe(listener)` and `on(selector, callback)`; read state through `aui.<scope>.getState()` or, in React, `useAuiState`.
 
 ### useAuiState
 
@@ -96,104 +98,149 @@ function Analytics() {
 }
 ```
 
-Available events:
-- `composer.send` - Message submitted from composer
-- `composer.attachmentAdd` - Attachment added in composer
-- `thread.runStart` - Generation started
-- `thread.runEnd` - Generation ended
-- `thread.initialize` - Thread is initialized
-- `thread.modelContextUpdate` - Thread model context updated
-- `threadListItem.switchedTo` - Active thread changed
-- `threadListItem.switchedAway` - Active thread changed away
+Available events. Nearly all are deprecated as state-derivable: prefer observing the equivalent state with `useAuiState`, which is correct on first render and on replay, where an event handler is not.
+
+| Event | Payload | Status |
+|-------|---------|--------|
+| `thread.modelContextUpdate` | `{ threadId }` | Current: model context lives in a provider, so there is no state equivalent |
+| `composer.attachmentAddError` | error details | Current |
+| `composer.send` | `{ threadId, messageId? }` | Deprecated: observe composer `text` clearing |
+| `composer.attachmentAdd` | `{ threadId, messageId? }` | Deprecated: observe composer `attachments` |
+| `thread.runStart` | `{ threadId }` | Deprecated: observe `s.thread.isRunning` flipping to `true` |
+| `thread.runEnd` | `{ threadId }` | Deprecated: observe `s.thread.isRunning` flipping to `false` |
+| `thread.initialize` | `{ threadId }` | Deprecated: observe `s.thread.messages` becoming non-empty |
+| `threadListItem.switchedTo` | `{ threadId }` | Deprecated: compare `s.threads.mainThreadId` |
+| `threadListItem.switchedAway` | `{ threadId }` | Deprecated: compare `s.threads.mainThreadId` |
 
 ## State Shape
 
+`AssistantState` is the union of every registered scope's state, plus an `optional` view of the same scopes:
+
 ```typescript
-interface AssistantState {
-  thread: {
-    messages: ThreadMessage[];
-    isRunning: boolean;
-    capabilities: RuntimeCapabilities;
-    composer: {
-      text: string;
-      attachments: Attachment[];
-    };
-  };
-  threads: {
-    mainThreadId: string;
-    newThreadId: string | null;
-    threadIds: readonly string[];
-    archivedThreadIds: readonly string[];
-    isLoading: boolean;
-    threadItems: readonly ThreadListItemState[];
-    main: ThreadState;
-  };
-  threadListItem: {
-    id: string;
-    remoteId?: string;
-    externalId?: string;
-    title?: string;
-    status: "archived" | "regular" | "new" | "deleted";
-  };
+type AssistantState = ScopeStates & {
+  readonly optional: { readonly [K in keyof ScopeStates]: ScopeStates[K] | undefined };
+};
+```
+
+Registered scopes: `threads`, `threadListItem`, `thread`, `message`, `part`, `composer`, `attachment`, `modelContext`, `suggestions`, `suggestion`, `chainOfThought`, `queueItem`, plus `tools`, `dataRenderers`, and `interactables` from the React layer. `on`, `optional`, and `subscribe` are reserved names and cannot be scopes.
+
+```typescript
+// s.thread
+{
+  isEmpty: boolean;
+  isDisabled: boolean;
+  isLoading: boolean;
+  isRunning: boolean;
+  capabilities: RuntimeCapabilities;
+  messages: readonly MessageState[];
+  suggestions: readonly ThreadSuggestion[];
+  extras: unknown;
+  speech: SpeechState | undefined;
+  voice: VoiceSessionState | undefined;
+  composer: ComposerState;
+}
+
+// s.threads
+{
+  mainThreadId: string;
+  newThreadId: string | null;
+  isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
+  threadIds: readonly string[];
+  archivedThreadIds: readonly string[];
+  threadItems: readonly ThreadListItemState[];
+  main: ThreadState;
+}
+
+// s.composer (thread composer or edit composer, depending on scope)
+{
+  text: string;
+  role: MessageRole;
+  attachments: readonly Attachment[];
+  runConfig: RunConfig;
+  isEditing: boolean;
+  canCancel: boolean;
+  canSend: boolean;
+  attachmentAccept: string;
+  isEmpty: boolean;
+  type: "thread" | "edit";
+  dictation: DictationState | undefined;
+  quote: QuoteInfo | undefined;
+  queue: readonly QueueItemState[];
+}
+
+// s.message = ThreadMessage & { ... }
+{
+  parentId: string | null;
+  isLast: boolean;
+  index: number;
+  branchNumber: number;
+  branchCount: number;
+  composer: ComposerState;   // the edit composer
+  parts: readonly PartState[];
+  isCopied: boolean;
+  isHovering: boolean;
+  speech: SpeechState | undefined;
 }
 ```
 
-## Legacy Hooks
+## Optional Scope Reads
 
-These are deprecated. They still work (and the CLI `upgrade` codemod migrates them) but emit deprecation warnings and will be removed in a future release. Prefer the modern unified API above.
+`s.optional.<scope>` yields `undefined` rather than throwing when the scope is not mounted. Use it in a component that renders both inside and outside a scope:
 
 ```tsx
-// Runtime access
-import {
-  useAssistantRuntime,
-  useThreadRuntime,
-  useMessageRuntime,
-  useComposerRuntime,
-} from "@assistant-ui/react";
-
-const assistantRuntime = useAssistantRuntime();
-const threadRuntime = useThreadRuntime();
-const messageRuntime = useMessageRuntime();  // Needs message context
-const composerRuntime = useComposerRuntime();
-
-// State subscriptions
-import {
-  useThread,
-  useThreadMessages,
-  useComposer,
-  useMessage,
-  useThreadList,
-} from "@assistant-ui/react";
-
-const thread = useThread();           // { messages, isRunning, ... }
-const messages = useThreadMessages(); // ThreadMessage[]
-const composer = useComposer();       // { text, attachments, ... }
-const message = useMessage();         // Current message (needs context)
-const threadList = useThreadList();   // Thread list state
+const partType = useAuiState((s) => s.optional.part?.type);
+const inThread = useAuiState((s) => s.optional.thread != null);
 ```
+
+Imperatively, the equivalent guard is `aui.<scope>.source != null`.
+
+## Removed Legacy Hooks
+
+The v0.12-era context hooks were **removed in 0.15**. They no longer exist as exports; importing one is a build error, not a deprecation warning.
+
+| Removed | Replacement |
+|---------|-------------|
+| `useAssistantRuntime()` | `useAui()` |
+| `useThreadRuntime()` | `useAui().thread` |
+| `useThread(selector)` | `useAuiState((s) => s.thread)` |
+| `useThreadList(selector)` | `useAuiState((s) => s.threads)` |
+| `useThreadComposer(selector)` | `useAuiState((s) => s.thread.composer)` |
+| `useThreadModelContext(selector)` | `useAuiState((s) => s.modelContext)` |
+| `useMessageRuntime()` | `useAui().message` |
+| `useMessage(selector)` | `useAuiState((s) => s.message)` |
+| `useEditComposer(selector)` | `useAuiState((s) => s.message.composer)` |
+| `useComposerRuntime()` | `useAui().composer` |
+| `useComposer(selector)` | `useAuiState((s) => s.composer)` |
+| `useMessagePartRuntime()` | `useAui().part` |
+| `useMessagePart(selector)` | `useAuiState((s) => s.part)` |
+| `useAttachmentRuntime()` | `useAui().attachment` |
+| `useAttachment(selector)` | `useAuiState((s) => s.attachment)` |
+| `useThreadListItemRuntime()` | `useAui().threadListItem` |
+| `useThreadListItem(selector)` | `useAuiState((s) => s.threadListItem)` |
+
+`useThreadMessages` was removed earlier and has no current export; use `useAuiState((s) => s.thread.messages)` (or `unstable_useThreadMessageIds()` when you only need ids and want to avoid re-rendering on content changes).
+
+Still present but deprecated: `useMessagePartText`, `useMessagePartReasoning`, `useMessagePartSource`, `useMessagePartImage`, `useMessagePartFile`, `useMessagePartData`. Replace them by selecting and narrowing `s.part`.
 
 ## Context Requirements
 
-Some hooks require being inside specific contexts:
-
 ```tsx
-// These work anywhere inside AssistantRuntimeProvider
+// Work anywhere inside AssistantRuntimeProvider
 useAui()
 useAuiState()
 useAuiEvent()
-useAssistantRuntime()
-useThreadRuntime()
-useThread()
-useThreadMessages()
-useComposer()
 
-// These require message context (inside ThreadPrimitive.Messages)
-useMessageRuntime()
-useMessage()
-
-// These require message part context
-useMessagePartRuntime()
+// Scopes that require a surrounding provider before they resolve:
+//   s.message / aui.message        - inside ThreadPrimitive.Messages
+//   s.part / aui.part              - inside MessagePrimitive.Parts
+//   s.attachment / aui.attachment  - inside a ComposerPrimitive.Attachments or
+//                                    MessagePrimitive.Attachments render function
+//   s.threadListItem               - inside ThreadListPrimitive.Items
 ```
+
+Reading one of those outside its provider throws. Use `s.optional.<scope>` or `aui.<scope>.source != null` when the component can render in both places.
 
 ## Performance Tips
 
@@ -264,20 +311,18 @@ function RunningIndicator() {
 
 ## Direct Subscription
 
-For non-React contexts:
+`subscribe` and `on` live on the client itself, not on the scope accessors. Read the scope's state inside the callback:
 
 ```tsx
-const api = useAui();
+const aui = useAui();
 
 useEffect(() => {
-  const runtime = api.thread();
-
-  // Subscribe to changes
-  const unsubscribe = runtime.subscribe(() => {
-    const state = runtime.getState();
-    console.log("State changed:", state);
+  const unsubscribe = aui.subscribe(() => {
+    console.log("State changed:", aui.thread.getState());
   });
 
   return unsubscribe;
-}, [api]);
+}, [aui]);
 ```
+
+`aui.on(selector, callback)` is the imperative form of `useAuiEvent`; both take the same event selectors and return an unsubscribe function.

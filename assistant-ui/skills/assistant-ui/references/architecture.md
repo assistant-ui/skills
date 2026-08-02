@@ -25,46 +25,52 @@ interface ThreadRuntimeCore {
 
 ### Layer 2: Runtime (Public API)
 
-Public API exposed via hooks:
+The object you hand to `AssistantRuntimeProvider`. `thread` and `threads` are properties:
 
 ```typescript
 type AssistantRuntime = {
-  thread(): ThreadRuntime;
-  threads(): ThreadListRuntime;
-  getState(): AssistantState;
-  subscribe(callback: () => void): Unsubscribe;
+  readonly thread: ThreadRuntime;
+  readonly threads: ThreadListRuntime;
+  registerModelContextProvider(provider: ModelContextProvider): Unsubscribe;
 };
 
 type ThreadRuntime = {
+  readonly path: ThreadRuntimePath;
+  readonly composer: ThreadComposerRuntime;
   getState(): ThreadState;
-  append(message: AppendMessage): void;
+  append(message: CreateAppendMessage): void;
+  startRun(config: CreateStartRunConfig): void;
+  resumeRun(config: CreateResumeRunConfig): void;
   cancelRun(): void;
-  message(index: number): MessageRuntime;
-  composer(): ComposerRuntime;
-};
-
-type MessageRuntime = {
-  getState(): MessageState;
-  edit(message: EditMessage): void;
-  reload(): void;
-  part(index: number): MessagePartRuntime;
+  getMessageByIndex(idx: number): MessageRuntime;
+  getMessageById(messageId: string): MessageRuntime;
+  subscribe(callback: () => void): Unsubscribe;
 };
 ```
 
-### Layer 3: Context Hooks
+### Layer 3: The aui client and hooks
 
-React hooks for accessing runtime:
+`useAui()` returns an `AssistantClient`: one property accessor per registered scope, plus `subscribe` and `on`. It is the API application code should use; `AssistantRuntime` is the object that backs it.
 
 ```tsx
-// Modern API (recommended)
 import { useAui, useAuiState, useAuiEvent } from "@assistant-ui/react";
 
-const api = useAui();
+const aui = useAui();
 
-const messages = useAuiState(s => s.thread.messages);
+// Scope accessors are properties (0.15+); methods on a scope keep their parens
+aui.thread.append({ role: "user", content: [{ type: "text", text: "Hi" }] });
+aui.thread.message({ index: 0 }).reload();
+aui.thread.composer().send();
+aui.threads.switchToNewThread();
 
-useAuiEvent("composer.send", (e) => console.log(e));
+const messages = useAuiState((s) => s.thread.messages);
+
+useAuiEvent("thread.modelContextUpdate", (e) => console.log(e));
 ```
+
+Scopes: `threads`, `threadListItem`, `thread`, `message`, `part`, `composer`, `attachment`, `modelContext`, `suggestions`, `suggestion`, `chainOfThought`, `queueItem`, `tools`, `dataRenderers`, `interactables`.
+
+An unavailable scope does not throw at selection time: `aui.thread` is always truthy, `source` is `null`, and any other read throws. Guard with `aui.thread.source != null`, or select through `s.optional.thread` in `useAuiState`.
 
 ### Layer 4: Primitives (UI)
 
@@ -111,51 +117,64 @@ type ThreadMessage =
   | ThreadAssistantMessage
   | ThreadSystemMessage;
 
-interface ThreadUserMessage {
+type ThreadUserMessage = {
   id: string;
   role: "user";
-  content: MessagePart[];
-  attachments?: Attachment[];
+  content: readonly ThreadUserMessagePart[];
+  attachments: readonly CompleteAttachment[];
+  metadata: { custom: Record<string, unknown>; isOptimistic?: boolean };
   createdAt: Date;
-}
+};
 
-interface ThreadAssistantMessage {
+type ThreadAssistantMessage = {
   id: string;
   role: "assistant";
-  content: MessagePart[];
-  // status is an object, not a string. Check status.type.
-  status: MessageStatus; // { type: "running" | "complete" | "incomplete" | "requires-action"; reason?: string }
+  content: readonly ThreadAssistantMessagePart[];
+  // status is an object, not a string. Branch on status.type.
+  status: MessageStatus;
+  metadata: {
+    steps: readonly ThreadStep[];
+    submittedFeedback?: { type: "positive" | "negative" };
+    timing?: MessageTiming;
+    custom: Record<string, unknown>;
+    // unstable_state / unstable_annotations / unstable_data
+  };
   createdAt: Date;
-}
+};
 
-type MessagePart =
-  | { type: "text"; text: string }
-  | { type: "image"; image: string }
+type MessageStatus =
+  | { type: "running" }
+  | { type: "requires-action"; reason: "interrupt" | "tool-calls" }
+  | { type: "complete"; reason: "stop" | "unknown" }
   | {
-      type: "tool-call";
-      toolCallId: string;
-      toolName: string;
-      args: unknown;
-      argsText: string;
-      result?: unknown;
-      isError?: boolean;
-      artifact?: unknown;
-    }
-  | { type: "reasoning"; text: string }
-  | {
-      type: "source";
-      sourceType: "url";
-      id: string;
-      url: string;
-      title?: string;
-    }
-  | {
-      type: "file";
-      filename?: string;
-      data: string;
-      mimeType: string;
+      type: "incomplete";
+      reason: "cancelled" | "content-filter" | "error" | "length" | "other" | "tool-calls";
+      error?: ReadonlyJSONValue;
     };
 ```
+
+The two roles carry different part unions:
+
+```typescript
+type ThreadUserMessagePart =
+  | TextMessagePart
+  | ImageMessagePart
+  | FileMessagePart
+  | DataMessagePart
+  | Unstable_AudioMessagePart;
+
+type ThreadAssistantMessagePart =
+  | TextMessagePart          // { type: "text"; text: string }
+  | ReasoningMessagePart     // { type: "reasoning"; text: string }
+  | ToolCallMessagePart      // { type: "tool-call"; toolCallId; toolName; args; argsText; result?; isError?; artifact? }
+  | SourceMessagePart        // { type: "source"; sourceType: "url"; id; url; title? }
+  | FileMessagePart          // { type: "file"; data; mimeType; filename?; sourceType?: "id" | "url" }
+  | ImageMessagePart         // { type: "image"; image: string; filename? }
+  | DataMessagePart          // { type: "data"; name: string; data: T }
+  | GenerativeUIMessagePart; // { type: "generative-ui"; spec: GenerativeUISpec }
+```
+
+In UI code you usually read `MessageState`, which is `ThreadMessage` plus `parentId`, `index`, `isLast`, `branchNumber`, `branchCount`, `parts` (`PartState[]`, part data plus per-part status), `composer` (the edit composer), `isCopied`, and `isHovering`.
 
 ## Branching Model
 

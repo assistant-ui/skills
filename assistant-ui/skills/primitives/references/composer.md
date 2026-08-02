@@ -225,4 +225,4 @@ function CustomComposer() {
 
 ## Accessing Composer State
 
-Read composer state with `useAuiState((s) => s.composer...)` (e.g. `s.composer.text`, `s.composer.attachments`) and act via `useAui().composer()` (e.g. `.setText("")`). See the `/runtime` skill for the full state API.
+Read composer state with `useAuiState((s) => s.composer...)` (e.g. `s.composer.text`, `s.composer.attachments`) and act via `useAui().composer` (e.g. `.setText("")`). See the `/runtime` skill for the full state API.

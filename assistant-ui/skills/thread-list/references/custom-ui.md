@@ -88,7 +88,7 @@ function FullyCustomThreadList() {
     <div className="w-64 h-full bg-gray-50">
       <div className="p-4 border-b">
         <button
-          onClick={() => api.threads().switchToNewThread()}
+          onClick={() => api.threads.switchToNewThread()}
           className="w-full py-2 bg-blue-500 text-white rounded-lg"
         >
           New Chat
@@ -127,13 +127,13 @@ function ThreadItem({
   archived?: boolean;
 }) {
   const api = useAui();
-  const item = api.threads().item({ id });
+  const item = api.threads.item({ id });
   const state = item.getState();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(state.title || "");
 
   const handleRename = async () => {
-    await item.rename(title);
+    item.rename(title);
     setIsEditing(false);
   };
 
@@ -222,7 +222,7 @@ function SearchableThreadList() {
 
   const filteredThreads = threads.filter((id) => {
     if (!search) return true;
-    const item = api.threads().item({ id }).getState();
+    const item = api.threads.item({ id }).getState();
     return item.title?.toLowerCase().includes(search.toLowerCase());
   });
 
@@ -238,7 +238,7 @@ function SearchableThreadList() {
       </div>
 
       <button
-        onClick={() => api.threads().switchToNewThread()}
+        onClick={() => api.threads.switchToNewThread()}
         className="mx-2 py-2 bg-blue-500 text-white rounded-lg"
       >
         + New Chat
@@ -340,7 +340,7 @@ function ThreadDropdown() {
         <div className="absolute top-full left-0 mt-1 w-64 bg-white border rounded-lg shadow-lg z-50">
           <button
             onClick={() => {
-              api.threads().switchToNewThread();
+              api.threads.switchToNewThread();
               setOpen(false);
             }}
             className="w-full px-4 py-2 text-left hover:bg-gray-100 border-b"
@@ -349,12 +349,12 @@ function ThreadDropdown() {
           </button>
           <div className="max-h-64 overflow-y-auto">
             {threads.map((id) => {
-              const item = api.threads().item({ id }).getState();
+              const item = api.threads.item({ id }).getState();
               return (
                 <button
                   key={id}
                   onClick={() => {
-                    api.threads().switchToThread(id);
+                    api.threads.switchToThread(id);
                     setOpen(false);
                   }}
                   className={`w-full px-4 py-2 text-left hover:bg-gray-100 ${
@@ -381,7 +381,7 @@ function CategorizedThreadList() {
   const { threads } = useAuiState((s) => ({ threads: s.threads.threadIds }));
 
   const grouped = threads.reduce((acc, id) => {
-    const item = api.threads().item({ id }).getState();
+    const item = api.threads.item({ id }).getState();
     const category = (item.title || "Untitled").charAt(0).toUpperCase();
     if (!acc[category]) acc[category] = [];
     acc[category].push(id);
