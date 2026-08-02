@@ -40,7 +40,19 @@ Two themes: `aui` scope accessors become properties, and the v0.12-era legacy co
 npx assistant-ui@latest upgrade
 ```
 
-This runs the `v0-15/aui-accessor-calls-to-properties` codemod, which rewrites nullary accessor calls to property access. It also migrates the still-deprecated primitive `If` components onto `AuiIf`.
+`upgrade` runs the whole codemod bundle in order, not just the newest one:
+
+```
+v0-8/ui-package-split
+v0-9/edge-package-split
+v0-11/content-part-to-message-part
+v0-12/assistant-api-to-aui
+v0-12/event-names-to-camelcase
+v0-12/primitive-if-to-aui-if
+v0-15/aui-accessor-calls-to-properties
+```
+
+`v0-15/aui-accessor-calls-to-properties` is the one that rewrites nullary accessor calls to property access. The primitive `If` migration onto `AuiIf` comes from `v0-12/primitive-if-to-aui-if`, so running the v0-15 codemod alone (`npx assistant-ui@latest codemod v0-15/aui-accessor-calls-to-properties ./src`) does not do it.
 
 **Scope accessors are properties.** Calling them still works but is deprecated:
 
