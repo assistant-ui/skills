@@ -1,6 +1,6 @@
 # Toolkits
 
-Declare a group of tools as a plain object and mount them with the `<Tools />` component.
+Declare a group of tools as a plain object and register it with `useAui({ tools: Tools({ toolkit }) })`. `Tools` is a resource, not a component.
 
 ## Contents
 

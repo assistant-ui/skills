@@ -91,6 +91,8 @@ const toolkit = defineToolkit({
 Register the scope (and the toolkit, for the thread-scoped form):
 
 ```tsx
+import { Tools, unstable_Interactables, useAui } from "@assistant-ui/react";
+
 const aui = useAui({
   unstable_interactables: unstable_Interactables(),
   tools: Tools({ toolkit }),

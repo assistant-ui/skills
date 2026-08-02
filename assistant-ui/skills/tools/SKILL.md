@@ -194,7 +194,7 @@ Render props also carry the enriched part state, so `toolUI`, `argsText`, and th
 
 ## Server-Side Approval Gates
 
-AI SDK v7 pauses a tool call server-side via the call-level `toolApproval` option. assistant-ui surfaces the gate as `approval` on the tool part; `respondToApproval` is the only correct way to acknowledge it.
+AI SDK v7 can pause a tool call server-side two ways, and they coexist: `needsApproval` on the tool definition gates that tool everywhere, and the call-level `toolApproval` option gates per call so the decision can vary by input. Either way assistant-ui surfaces the gate as `approval` on the tool part, and `respondToApproval` is the only correct way to acknowledge it.
 
 ```ts
 // Backend

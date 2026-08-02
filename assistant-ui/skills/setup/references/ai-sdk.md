@@ -142,7 +142,9 @@ const runtime = useChatRuntime({
 
 ## Tools (AI SDK v7 shape)
 
-Use `tool({ inputSchema })` and `stopWhen: stepCountIs(...)` for multi-step tool loops. Wrapping the schema in `zodSchema()` is the documented v7 form.
+Use `tool({ inputSchema })` and `stopWhen: stepCountIs(...)` for multi-step tool loops.
+
+`inputSchema` is typed `FlexibleSchema`, which accepts a raw Zod schema, a Standard Schema, or the result of `zodSchema()` / `jsonSchema()`. Passing `z.object({ ... })` directly is valid; `zodSchema(z.object({ ... }))` is the explicit form the upstream quickstart uses. Both work, so pick one and stay consistent within a project.
 
 ```ts
 import { openai } from "@ai-sdk/openai";
@@ -184,7 +186,9 @@ Without a `stopWhen`, AI SDK runs a single inference step; set `stepCountIs(n)` 
 
 ## Server-Side Tool Approval
 
-AI SDK v7 gates tool execution with the call-level `toolApproval` option. The server pauses, emits an `approval-requested` part, and resumes once the client posts a response. assistant-ui surfaces the gate as `approval` on the tool part and passes `respondToApproval` into the renderer.
+AI SDK v7 gates tool execution either with `needsApproval` on the tool definition or with the call-level `toolApproval` option; both exist and can be used together. The server pauses, emits an `approval-requested` part, and resumes once the client posts a response. assistant-ui surfaces the gate as `approval` on the tool part and passes `respondToApproval` into the renderer.
+
+`toolApproval` is the per-call form, which is what the example below uses because the decision depends on the input:
 
 ```ts
 const result = streamText({

@@ -18,7 +18,9 @@ Human-in-the-loop tools pause execution waiting for user input. Detect the pause
 
 - `addResult(result)`: the renderer itself supplies the tool result (the pattern used throughout this page).
 - `resume(payload)`: resume a frontend tool that paused by calling `context.human(payload)` inside its `execute` function.
-- `respondToApproval({ approved, reason? })`: answer a server-side approval gate (a backend tool defined with `needsApproval`).
+- `respondToApproval({ approved, reason? })`: answer a server-side approval gate.
+
+AI SDK v7 has two ways to raise that gate, and they coexist rather than replacing one another: `needsApproval` on the tool definition (a boolean or a function of the input) gates that one tool everywhere it is used, while the call-level `toolApproval` option on `streamText` / `generateText` gates per call and can vary by input. Either one pauses the run and surfaces `approval` on the tool part; `respondToApproval` answers both, reading the approval id off the part.
 
 ## Confirmation Pattern
 
