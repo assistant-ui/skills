@@ -88,4 +88,4 @@ For building entirely custom layouts, compose directly with `ThreadPrimitive`, `
 ## Legacy / Deprecated
 
 - Never install `@assistant-ui/styles` or `@assistant-ui/react-ui`, they are deprecated legacy packages.
-- Existing `aui-*` classes in registry components are legacy identifiers — they do not impact styling and can be safely ignored.
+- Existing `aui-*` classes in registry components are legacy identifiers; they do not impact styling and can be safely ignored.

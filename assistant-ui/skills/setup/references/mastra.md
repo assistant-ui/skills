@@ -18,7 +18,7 @@ Wire Mastra agents into assistant-ui. There is no `@assistant-ui/react-mastra` p
 | Full-stack | Next.js API route in the same app | `agent.stream()` + `toAISdkStream` + `createUIMessageStream` | default (`AssistantChatTransport` to `/api/chat`) |
 | Separate server | Standalone Mastra server | `chatRoute({ path })` from `@mastra/ai-sdk` | `AssistantChatTransport` pointed at the Mastra URL |
 
-Both modes use `useChatRuntime` from `@assistant-ui/react-ai-sdk`. Mastra never exposes a dedicated assistant-ui package; the integration rides the AI SDK v6 runtime. Do not reach for `@mastra/client-js` for the chat stream; the browser talks to the Mastra HTTP route directly through `AssistantChatTransport`.
+Both modes use `useChatRuntime` from `@assistant-ui/react-ai-sdk`. Mastra never exposes a dedicated assistant-ui package; the integration rides the AI SDK runtime. Do not reach for `@mastra/client-js` for the chat stream; the browser talks to the Mastra HTTP route directly through `AssistantChatTransport`.
 
 ## Full-Stack (agent in a Next.js route)
 
@@ -188,7 +188,7 @@ For auth, `AssistantChatTransport` accepts `headers` and `credentials` options; 
 - No `@assistant-ui/react-mastra` exists. Anything claiming such an import is wrong.
 - `toAISdkStream(stream, { from: "agent" })` adapts the Mastra-native stream from `agent.stream()` into AI SDK parts; `from: "agent"` tags the source.
 - Mastra runs its own server with `.env.development`; the assistant-ui frontend uses `.env.local`. Keep them separate.
-- Because the integration is the AI SDK v6 runtime, the AI SDK reference (frontend tool forwarding, attachments, cloud persistence) applies unchanged. See the AI SDK reference.
+- Because the integration is the AI SDK runtime, the AI SDK reference (frontend tool forwarding, attachments, cloud persistence) applies unchanged. See the AI SDK reference.
 
 ## Troubleshooting
 

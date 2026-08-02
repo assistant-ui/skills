@@ -4,10 +4,39 @@ Optional UI components installed via `npx assistant-ui add <name>`. Like all reg
 
 ## Contents
 
+- [Available items](#available-items)
+- [Radix vs Base UI flavors](#radix-vs-base-ui-flavors)
 - [AssistantModal](#assistantmodal)
 - [AssistantSidebar](#assistantsidebar)
 - [ModelSelector](#modelselector)
 - [Attachment UI](#attachment-ui)
+
+## Available items
+
+`npx assistant-ui@latest add <name>` currently serves:
+
+| Group | Items |
+|-------|-------|
+| Chat surfaces | `thread`, `thread-list`, `threadlist-sidebar`, `assistant-modal`, `assistant-sidebar`, `eve-chat` |
+| Message rendering | `markdown-text`, `shiki-highlighter`, `syntax-highlighter`, `mermaid-diagram`, `reasoning`, `sources`, `quote`, `message-timing`, `directive-text` |
+| Tools and generative UI | `tool-fallback`, `tool-group`, `generative-ui`, `generative-ui-style`, `mcp-config`, `context-display` |
+| Composer and input | `composer-trigger-popover`, `attachment`, `file`, `image`, `voice`, `follow-up-suggestions` |
+| Backend routes | `ai-sdk-backend`, `ai-sdk-backend-resumable` |
+| Shared UI | `accordion`, `badge`, `select`, `tabs`, `tooltip-icon-button`, `dot-matrix`, `number-roll`, `diff-viewer`, `heat-graph`, `logos`, `shimmer-style`, `direction`, `model-selector` |
+
+## Radix vs Base UI flavors
+
+The registry ships both a Radix and a Base UI flavor of each component. Point `components.json` at the style-aware URL so installs follow your shadcn style:
+
+```json
+{
+  "registries": {
+    "@assistant-ui": "https://r.assistant-ui.com/styles/{style}/{name}.json"
+  }
+}
+```
+
+`{style}` comes from the `style` field in `components.json`. A style whose name starts with `base-` resolves to the Base UI components; every other style resolves to Radix. Existing Radix projects can keep the flat `https://r.assistant-ui.com/{name}.json` URL as a fallback.
 
 ## AssistantModal
 
@@ -128,7 +157,7 @@ Render it inside `AssistantRuntimeProvider`. Each `ModelOption` is `{ id, name, 
 
 ### How registration works
 
-The component subscribes the selected model into the model context via `useAui().modelContext().register`. The `register` callback returns its own unsubscribe function, so returning it from `useEffect` cleans up on change:
+The component subscribes the selected model into the model context via `useAui().modelContext.register`. The `register` callback returns its own unsubscribe function, so returning it from `useEffect` cleans up on change:
 
 ```tsx
 import { useEffect } from "react";
@@ -138,7 +167,7 @@ const api = useAui();
 
 useEffect(() => {
   const config = { config: { modelName: value } };
-  return api.modelContext().register({
+  return api.modelContext.register({
     getModelContext: () => config,
   });
 }, [api, value]);
@@ -151,15 +180,22 @@ The `config` object rides along in the request body. With the AI SDK route the r
 ```ts
 // app/api/chat/route.ts
 import { openai } from "@ai-sdk/openai";
-import { streamText, convertToModelMessages } from "ai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
 
 export async function POST(req: Request) {
   const { messages, config } = await req.json();
   const result = streamText({
     model: openai(config?.modelName ?? "gpt-5.4-nano"),
-    messages: convertToModelMessages(messages),
+    messages: await convertToModelMessages(messages),
   });
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
 }
 ```
 
