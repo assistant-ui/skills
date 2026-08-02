@@ -2,6 +2,8 @@
 
 Create reusable tool definitions that execute in the browser.
 
+> **Deprecated.** `makeAssistantTool` and `useAssistantTool` carry `@deprecated` in the source and point at the [toolkit migration guide](https://assistant-ui.com/docs/migrations/toolkit-tools). New tools belong in a `defineToolkit({ ... })` entry registered with `useAui({ tools: Tools({ toolkit }) })`; see [toolkits.md](./toolkits.md). This page documents the existing API for codebases that still use it.
+
 ## makeAssistantTool
 
 Returns a React component that registers the tool when mounted.

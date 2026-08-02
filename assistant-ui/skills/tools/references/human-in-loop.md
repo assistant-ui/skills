@@ -16,9 +16,9 @@ Tools that require user confirmation or input.
 
 Human-in-the-loop tools pause execution waiting for user input. Detect the paused state with `status.type === "requires-action"`. The render props give three ways to respond:
 
-- `addResult(result)` — the renderer itself supplies the tool result (the pattern used throughout this page).
-- `resume(payload)` — resume a frontend tool that paused by calling `context.human(payload)` inside its `execute` function.
-- `respondToApproval({ approved, reason? })` — answer a server-side approval gate (a backend tool defined with `needsApproval`).
+- `addResult(result)`: the renderer itself supplies the tool result (the pattern used throughout this page).
+- `resume(payload)`: resume a frontend tool that paused by calling `context.human(payload)` inside its `execute` function.
+- `respondToApproval({ approved, reason? })`: answer a server-side approval gate (a backend tool defined with `needsApproval`).
 
 ## Confirmation Pattern
 
