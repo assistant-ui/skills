@@ -1,169 +1,57 @@
-# TanStack Router Setup
+# Vite / TanStack Start Setup
 
-Setup assistant-ui with Vite + TanStack Router (compatible with React 19).
+There is no `create` template for Vite or TanStack Start; wire assistant-ui into an existing Vite project by hand. No dedicated docs page covers this combination as of this writing, so this reference tracks the general Vite integration path rather than a single source page: verify against [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) if the setup drifts.
 
-## Installation
+## Contents
+
+- [Install](#install) | [Vite plugin](#vite-plugin) | [Route and runtime](#route-and-runtime)
+
+## Install
 
 ```bash
-npm install @assistant-ui/react @tanstack/react-router @tanstack/react-start
-npm install vite @vitejs/plugin-react
+npm install @assistant-ui/react @assistant-ui/ai-sdk @assistant-ui/vite
+npm install @tanstack/react-router @tanstack/react-start
+npm install -D vite @vitejs/plugin-react vite-tsconfig-paths
 ```
 
-## Vite Configuration
+## Vite plugin
 
-```ts
-// vite.config.ts
+`@assistant-ui/vite`'s `aui()` plugin is required for `"use generative"` toolkit files to compile (see [tools](../../tools/SKILL.md)); add it alongside TanStack Start's own plugin:
+
+```ts title="vite.config.ts"
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import viteTsConfigPaths from "vite-tsconfig-paths";
-import tailwindcss from "@tailwindcss/vite";
+import { aui } from "@assistant-ui/vite";
 
 export default defineConfig({
-  plugins: [
-    viteTsConfigPaths({
-      projects: ["./tsconfig.json"],
-    }),
-    tailwindcss(),
-    tanstackStart(),
-    viteReact(),
-  ],
+  plugins: [viteTsConfigPaths({ projects: ["./tsconfig.json"] }), tanstackStart(), viteReact(), aui()],
 });
 ```
 
-## Router Setup
+## Route and runtime
 
-```tsx
-// src/router.tsx
-import { createRouter } from "@tanstack/react-router";
-import { routeTree } from "./routeTree.gen";
+Install the styled Thread through the registry once `components.json` exists (`npx assistant-ui@latest init`, or add it manually per [elements](../../elements/SKILL.md)), then mount it from a route:
 
-export const getRouter = () => {
-  return createRouter({
-    routeTree,
-    scrollRestoration: true,
-    defaultPreloadStaleTime: 0,
-  });
-};
-```
-
-## Route with assistant-ui
-
-```tsx
-// src/routes/index.tsx
+```tsx title="src/routes/index.tsx"
 import { createFileRoute } from "@tanstack/react-router";
-import { Thread } from "@/components/assistant-ui/thread";
-import { MyRuntimeProvider } from "@/components/MyRuntimeProvider";
+import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { useChatRuntime } from "@assistant-ui/ai-sdk";
 
 export const Route = createFileRoute("/")({ component: App });
 
 function App() {
+  const runtime = useChatRuntime();
   return (
-    <MyRuntimeProvider>
+    <AssistantRuntimeProvider runtime={runtime}>
       <main className="h-dvh">
         <Thread />
       </main>
-    </MyRuntimeProvider>
-  );
-}
-```
-
-## Runtime Provider
-
-```tsx
-// src/components/MyRuntimeProvider.tsx
-import { useState, type ReactNode } from "react";
-import {
-  useExternalStoreRuntime,
-  ThreadMessageLike,
-  AppendMessage,
-  AssistantRuntimeProvider,
-} from "@assistant-ui/react";
-
-type MyMessage = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-};
-
-const generateId = () => Math.random().toString(36).substring(2, 9);
-
-const convertMessage = (message: MyMessage): ThreadMessageLike => ({
-  id: message.id,
-  role: message.role,
-  content: [{ type: "text", text: message.content }],
-});
-
-export function MyRuntimeProvider({ children }: { children: ReactNode }) {
-  const [isRunning, setIsRunning] = useState(false);
-  const [messages, setMessages] = useState<MyMessage[]>([]);
-
-  const onNew = async (message: AppendMessage) => {
-    if (message.content[0]?.type !== "text")
-      throw new Error("Only text messages are supported");
-
-    const input = message.content[0].text;
-    const userMessage: MyMessage = {
-      id: generateId(),
-      role: "user",
-      content: input,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setIsRunning(true);
-
-    const assistantId = generateId();
-    setMessages((prev) => [
-      ...prev,
-      { id: assistantId, role: "assistant", content: "" },
-    ]);
-
-    try {
-      // Your streaming implementation here
-      const stream = await fetchStream([...messages, userMessage]);
-      for await (const chunk of stream) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + chunk } : m
-          )
-        );
-      }
-    } finally {
-      setIsRunning(false);
-    }
-  };
-
-  const runtime = useExternalStoreRuntime({
-    isRunning,
-    messages,
-    convertMessage,
-    onNew,
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      {children}
     </AssistantRuntimeProvider>
   );
 }
 ```
 
-## Key Dependencies
-
-```json
-{
-  "@assistant-ui/react": "latest",
-  "@tanstack/react-router": "^1.162.9",
-  "@tanstack/react-start": "^1.162.9",
-  "@tailwindcss/vite": "^4.2.1",
-  "react": "^19.2.4",
-  "vite": "^7.3.1"
-}
-```
-
-## Notes
-
-- Uses `useExternalStoreRuntime` for custom state management
-- Compatible with React 19
-- TanStack Start provides SSR/file-based routing
-- Tailwind v4 via Vite plugin
+A TanStack Start server route can host the AI SDK backend directly (see [ai-sdk.md](./ai-sdk.md)) since Start ships its own server functions; a plain Vite SPA instead needs a separate API server, or a [custom backend](./custom-backend.md) runtime pointed at it. `npx assistant-ui@latest create my-app -e with-tanstack` scaffolds a complete reference project.

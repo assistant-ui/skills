@@ -1,371 +1,117 @@
-# Custom Backend Integration
+# Custom Backend: LocalRuntime and ExternalStoreRuntime
 
-Connect assistant-ui to any backend using useLocalRuntime or useExternalStoreRuntime.
+Four building blocks cover any backend with no dedicated adapter; all four are built on one of two core runtimes (see [runtime](../../runtime/SKILL.md) for the full architecture).
 
 ## Contents
 
-- [useLocalRuntime](#uselocalruntime)
-- [useExternalStoreRuntime](#useexternalstoreruntime)
-- [Streaming Updates with External Store](#streaming-updates-with-external-store)
+- [Decision tree](#decision-tree) | [LocalRuntime](#localruntime) | [ExternalStoreRuntime](#externalstoreruntime)
 
-## useLocalRuntime
+## Decision tree
 
-For backends that return streaming responses. Emit `ChatModelRunResult` chunks (append-only `content` parts).
+| Path | Layered on | Wire shape | Choose when |
+| --- | --- | --- | --- |
+| `useLocalRuntime` | Core | You write a `ChatModelAdapter.run` function | Simplest case: a `fetch` call, runtime owns state |
+| `useExternalStoreRuntime` | Core | You provide messages + callbacks | State already lives in redux, zustand, tanstack-query, or your own store |
+| `useDataStreamRuntime` | `LocalRuntime` + protocol | Backend emits the data stream protocol | A thin message-stream contract, or migrating from AI SDK v4 (see [ai-sdk-legacy.md](./ai-sdk-legacy.md)) |
+| `useAssistantTransportRuntime` | `ExternalStoreRuntime` + protocol | Backend streams full agent-state snapshots | Rich internal agent state, or bidirectional commands |
 
-### Basic Setup
-
-Plain-text streaming only. For AI SDK UI-message responses, build the route with `toUIMessageStream` + `createUIMessageStreamResponse` and use `useChatRuntime`, or decode with `DataStreamDecoder`.
-
-```tsx
-import { useLocalRuntime, AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Thread } from "@/components/assistant-ui/thread";
-
-function Chat() {
-  const runtime = useLocalRuntime({
-    model: {
-      async *run({ messages, abortSignal }) {
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages }),
-          signal: abortSignal,
-        });
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (reader) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split("\n");
-          buffer = parts.pop() ?? "";
-
-          for (const textChunk of parts.filter(Boolean)) {
-            yield { content: [{ type: "text", text: textChunk }] };
-          }
-        }
-
-        if (buffer) {
-          yield { content: [{ type: "text", text: buffer }] };
-        }
-      },
-    },
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <Thread />
-    </AssistantRuntimeProvider>
-  );
-}
+```text
+have an AI SDK / LangGraph / Google ADK / A2A / AG-UI / Eve / OpenCode backend?
+  yes -> use that adapter instead (see SKILL.md's pick-a-runtime table)
+  no  -> already have message state in redux / zustand / tanstack-query?
+           yes -> ExternalStoreRuntime
+           no  -> control the backend wire format?
+                    yes, want simple fetch calls   -> LocalRuntime
+                    yes, want to stream agent state -> AssistantTransport (see ../../streaming/SKILL.md)
+                    no, backend speaks data stream  -> DataStream (see ../../streaming/SKILL.md)
 ```
 
-### With SSE Parsing
+The data stream and assistant transport protocols are documented in depth in [../../streaming/SKILL.md](../../streaming/SKILL.md); this page covers only the two core runtimes.
 
-Simple SSE `data:` lines only (not AI SDK Data Stream prefixes like `0:`/`b:`/`c:`).
+## LocalRuntime
 
-```tsx
-const runtime = useLocalRuntime({
-  model: {
-    async *run({ messages, abortSignal }) {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        body: JSON.stringify({ messages }),
-        signal: abortSignal,
-      });
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (reader) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          if (line === "data: [DONE]") return;
-
-          const data = JSON.parse(line.slice(6));
-          yield { content: [{ type: "text", text: data.content }] };
-        }
-      }
-    },
-  },
-});
-```
-
-### With Tools
+Implement one method (`run`, or `async *run` for streaming). Branching, editing, regeneration, multi-thread, and every adapter slot work without extra code.
 
 ```tsx
-const runtime = useLocalRuntime({
-  model: {
-    async *run({ messages, abortSignal }) {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        body: JSON.stringify({ messages }),
-        signal: abortSignal,
-      });
+import { useLocalRuntime, AssistantRuntimeProvider, type ChatModelAdapter } from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 
-      const toolCalls = new Map<
-        string,
-        { toolCallId: string; toolName: string; args: unknown; argsText: string }
-      >();
-
-      for await (const event of parseResponse(response)) {
-        if (event.type === "text") {
-          yield { content: [{ type: "text", text: event.content }] };
-        }
-
-        if (event.type === "tool_use") {
-          const toolCall = {
-            toolCallId: event.id,
-            toolName: event.name,
-            args: event.input ?? {},
-            argsText: JSON.stringify(event.input ?? {}),
-          };
-          toolCalls.set(event.id, toolCall);
-          yield { content: [{ type: "tool-call", ...toolCall }] };
-        }
-
-        if (event.type === "tool_result") {
-          const toolCall = toolCalls.get(event.tool_use_id);
-          yield {
-            content: [
-              {
-                type: "tool-call",
-                toolCallId: event.tool_use_id,
-                toolName: toolCall?.toolName ?? "tool",
-                args: toolCall?.args ?? {},
-                argsText: toolCall?.argsText ?? "{}",
-                result: event.content,
-              },
-            ],
-          };
-        }
-      }
-    },
-  },
-});
-```
-
-## useExternalStoreRuntime
-
-For apps with existing state management (Redux, Zustand, etc.).
-
-### Basic Setup
-
-```tsx
-import { useExternalStoreRuntime, AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Thread } from "@/components/assistant-ui/thread";
-
-function Chat() {
-  const [messages, setMessages] = useState<ThreadMessage[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
-
-  const runtime = useExternalStoreRuntime({
-    messages,
-    isRunning,
-    onNew: async (message) => {
-      const userMessage: ThreadMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: message.content,
-        createdAt: new Date(),
-      };
-      setMessages((prev) => [...prev, userMessage]);
-      setIsRunning(true);
-
-      const response = await myAPI.chat([...messages, userMessage]);
-
-      const assistantMessage: ThreadMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: [{ type: "text", text: response.text }],
-        status: { type: "complete" },
-        createdAt: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setIsRunning(false);
-    },
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <Thread />
-    </AssistantRuntimeProvider>
-  );
-}
-```
-
-### With Redux
-
-```tsx
-import { useSelector, useDispatch } from "react-redux";
-
-function Chat() {
-  const dispatch = useDispatch();
-  const messages = useSelector(selectMessages);
-  const isRunning = useSelector(selectIsRunning);
-
-  const runtime = useExternalStoreRuntime({
-    messages,
-    isRunning,
-    onNew: async (message) => {
-      dispatch(addMessage({ role: "user", content: message.content }));
-      dispatch(setRunning(true));
-
-      const response = await chatAPI(messages);
-
-      dispatch(addMessage({ role: "assistant", content: response }));
-      dispatch(setRunning(false));
-    },
-    onReload: async (parentId) => {
-      dispatch(reloadFrom(parentId));
-    },
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <Thread />
-    </AssistantRuntimeProvider>
-  );
-}
-```
-
-### With Zustand
-
-```tsx
-import { create } from "zustand";
-
-const useChatStore = create((set) => ({
-  messages: [],
-  isRunning: false,
-  addMessage: (msg) => set((state) => ({ messages: [...state.messages, msg] })),
-  setRunning: (running) => set({ isRunning: running }),
-}));
-
-function Chat() {
-  const { messages, isRunning, addMessage, setRunning } = useChatStore();
-
-  const runtime = useExternalStoreRuntime({
-    messages,
-    isRunning,
-    onNew: async (message) => {
-      addMessage({
-        id: crypto.randomUUID(),
-        role: "user",
-        content: message.content,
-        createdAt: new Date(),
-      });
-      setRunning(true);
-
-      const response = await myAPI.chat(messages);
-
-      addMessage({
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: [{ type: "text", text: response }],
-        status: { type: "complete" },
-        createdAt: new Date(),
-      });
-      setRunning(false);
-    },
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <Thread />
-    </AssistantRuntimeProvider>
-  );
-}
-```
-
-### Custom Message Format
-
-```tsx
-interface MyMessage {
-  uuid: string;
-  sender: "human" | "ai";
-  text: string;
-  timestamp: number;
-}
-
-const runtime = useExternalStoreRuntime<MyMessage>({
-  messages: myMessages,
-  isRunning,
-  convertMessage: (msg): ThreadMessage => ({
-    id: msg.uuid,
-    role: msg.sender === "human" ? "user" : "assistant",
-    content: [{ type: "text", text: msg.text }],
-    status: { type: "complete" },
-    createdAt: new Date(msg.timestamp),
-  }),
-  onNew: async (appendMessage) => {
-    const text = appendMessage.content
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("");
-
-    const myMessage: MyMessage = {
-      uuid: crypto.randomUUID(),
-      sender: "human",
-      text,
-      timestamp: Date.now(),
-    };
-
-    addMyMessage(myMessage);
-  },
-});
-```
-
-## Streaming Updates with External Store
-
-```tsx
-const runtime = useExternalStoreRuntime({
-  messages,
-  isRunning,
-  onNew: async (message) => {
-    addUserMessage(message);
-    setIsRunning(true);
-
-    const assistantId = crypto.randomUUID();
-    addMessage({
-      id: assistantId,
-      role: "assistant",
-      content: [{ type: "text", text: "" }],
-      status: { type: "running" },
-      createdAt: new Date(),
-    });
-
+const modelAdapter: ChatModelAdapter = {
+  async *run({ messages, abortSignal }) {
     const response = await fetch("/api/chat", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages }),
+      signal: abortSignal,
     });
 
-    const reader = response.body?.getReader();
-    let fullText = "";
-
-    while (reader) {
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = "";
+    while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
-      fullText += new TextDecoder().decode(value);
-
-      updateMessage(assistantId, {
-        content: [{ type: "text", text: fullText }],
-      });
+      text += decoder.decode(value, { stream: true });
+      yield { content: [{ type: "text", text }] };
     }
-
-    updateMessage(assistantId, { status: { type: "complete" } });
-    setIsRunning(false);
   },
-});
+};
+
+function Chat() {
+  const runtime = useLocalRuntime(modelAdapter);
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <Thread />
+    </AssistantRuntimeProvider>
+  );
+}
 ```
+
+Each yielded `ChatModelRunResult` is a full snapshot (append-only `content`), not a delta. For an AI SDK UI-message-stream backend, use [ai-sdk.md](./ai-sdk.md)'s `useChatRuntime` instead of hand-rolling this loop.
+
+## ExternalStoreRuntime
+
+You own the message array and provide callbacks per interaction; which UI features turn on follows from which callbacks you provide.
+
+```tsx
+import { useState } from "react";
+import {
+  useExternalStoreRuntime,
+  AssistantRuntimeProvider,
+  type ThreadMessageLike,
+  type AppendMessage,
+} from "@assistant-ui/react";
+import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+
+type MyMessage = { id: string; role: "user" | "assistant"; content: string };
+
+const convertMessage = (message: MyMessage): ThreadMessageLike => ({
+  id: message.id,
+  role: message.role,
+  content: [{ type: "text", text: message.content }],
+});
+
+function MyRuntimeProvider({ children }: { children: React.ReactNode }) {
+  const [isRunning, setIsRunning] = useState(false);
+  const [messages, setMessages] = useState<MyMessage[]>([]);
+
+  const onNew = async (message: AppendMessage) => {
+    if (message.content[0]?.type !== "text") throw new Error("Only text messages are supported");
+    const userMessage: MyMessage = { id: crypto.randomUUID(), role: "user", content: message.content[0].text };
+    setMessages((prev) => [...prev, userMessage]);
+    setIsRunning(true);
+    try {
+      const reply = await fetchReply([...messages, userMessage]);
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "assistant", content: reply }]);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  const runtime = useExternalStoreRuntime({ isRunning, messages, convertMessage, onNew });
+
+  return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;
+}
+```
+
+`onEdit`, `onReload`, `onCancel`, `onAddToolResult`, and `onRespondToToolApproval` enable editing, regeneration, cancellation, and tool/approval flows the same way; omit a callback to leave that feature unsupported. For a state-tree store instead of a flat array, or streaming updates into `onNew`, see [runtime](../../runtime/SKILL.md).

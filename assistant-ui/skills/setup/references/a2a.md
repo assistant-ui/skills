@@ -1,127 +1,127 @@
-# A2A Protocol Integration
+# A2A Runtime
 
-Connect assistant-ui to Agent-to-Agent (A2A) protocol servers via `@assistant-ui/react-a2a`.
+`@assistant-ui/react-a2a` is a runtime adapter for the [A2A (Agent-to-Agent) v1.0 protocol](https://github.com/a2aproject/A2A): streaming task state, artifacts, the protocol's full state machine, and multi-tenant clients.
 
-## Installation
+## Contents
+
+- [Install](#install) | [Quickstart](#quickstart) | [A2AClient](#a2aclient) | [useA2ARuntime options](#usea2aruntime-options) | [Hooks](#hooks) | [Task states](#task-states) | [Artifacts](#artifacts) | [Errors](#error-handling) | [Multi-tenancy](#multi-tenancy)
+
+## Install
 
 ```bash
 npm install @assistant-ui/react @assistant-ui/react-a2a
 ```
 
-## Exports
+## Quickstart
 
-```tsx
-import {
-  useA2ARuntime,
-  useA2ATask,
-  useA2AArtifacts,
-  useA2AAgentCard,
-  A2AClient,
-  A2AError,
-  // conversion utilities (advanced)
-  a2aMessageToContent,
-  taskStateToMessageStatus,
-  contentPartsToA2AParts,
-  isTerminalTaskState,
-  isInterruptedTaskState,
-} from "@assistant-ui/react-a2a";
-```
-
-## Basic Setup
-
-`useA2ARuntime` connects to an A2A server by `baseUrl` (it creates a client for you) or a pre-built `client`. There is no `stream` callback.
-
-```tsx
+```tsx title="app/MyRuntimeProvider.tsx"
 "use client";
 
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Thread } from "@/components/assistant-ui/thread";
 import { useA2ARuntime } from "@assistant-ui/react-a2a";
 
 export function MyRuntimeProvider({ children }: { children: React.ReactNode }) {
-  const runtime = useA2ARuntime({
-    baseUrl: "http://localhost:9999",
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      {children}
-    </AssistantRuntimeProvider>
-  );
+  const runtime = useA2ARuntime({ baseUrl: "http://localhost:9999" });
+  return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;
 }
 ```
 
-## useA2ARuntime Options
+The runtime negotiates streaming versus non-streaming from the agent card's `capabilities.streaming` flag once the server is reachable. A2A has no `create --example` scaffold; wire it into an existing project with the provider above, or start from `create` (any template) and swap in this runtime.
+
+Auth headers, static or dynamic:
 
 ```tsx
 const runtime = useA2ARuntime({
-  // Provide a baseUrl OR a pre-built client
-  baseUrl: "https://my-agent.example.com",
-  // client: new A2AClient({ baseUrl: "https://my-agent.example.com" }),
-
-  // baseUrl-only options
-  basePath: "/v1",
-  tenant: "my-tenant",
-  headers: { Authorization: `Bearer ${token}` },
-  extensions: [],
-  fetchOptions: { credentials: "include" },
-
-  contextId: "conversation-context-id",
-  configuration: {
-    /* A2ASendMessageConfiguration */
-  },
-
-  onError: (error) => {},
-  onCancel: () => {},
-  onArtifactComplete: (artifact) => {},
-
-  adapters: {
-    attachments: attachmentAdapter,
-    speech: speechAdapter,
-    feedback: feedbackAdapter,
-    history: historyAdapter,
-  },
+  baseUrl: "http://localhost:9999",
+  headers: async () => ({ Authorization: `Bearer ${await getAccessToken()}` }),
 });
 ```
 
-## Pre-built Client
+Adapters (attachments, speech, feedback, history, thread list) use the standard slots; see [runtime](../../runtime/SKILL.md).
 
-```tsx
+## A2AClient
+
+Handles JSON serialization, SSE streaming, ProtoJSON enum normalization, and structured errors. Build one directly for `tenant`, `extensions`, or custom `fetchOptions`, then hand it to the runtime as `client` instead of `baseUrl`:
+
+```ts
 import { A2AClient } from "@assistant-ui/react-a2a";
 
-const client = new A2AClient({ baseUrl: "https://my-agent.example.com" });
+const client = new A2AClient({
+  baseUrl: "https://my-agent.example.com",
+  headers: { Authorization: "Bearer <token>" },
+  tenant: "my-org",
+  extensions: ["urn:a2a:ext:my-extension"],
+  fetchOptions: { credentials: "include" },
+});
 const runtime = useA2ARuntime({ client });
 ```
 
-## Accessing A2A State
+Methods: `sendMessage`, `streamMessage`, `getTask(taskId, historyLength?)`, `listTasks(request?)`, `cancelTask(taskId, metadata?)`, `subscribeToTask(taskId)`, `getAgentCard()`, `getExtendedAgentCard()`, and the push-notification-config CRUD (`create`/`get`/`list`/`deleteTaskPushNotificationConfig`).
+
+## useA2ARuntime options
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `client` or `baseUrl` | `A2AClient` / `string` | Provide exactly one; `baseUrl` builds a client for you |
+| `basePath`, `tenant`, `extensions`, `fetchOptions`, `headers` | -- | Only used with `baseUrl`; mirror the `A2AClient` constructor |
+| `contextId` | `string` | Initial conversation context id |
+| `configuration` | `A2ASendMessageConfiguration` | Default send-message configuration |
+| `onError` | `(error: Error) => void` | Error callback |
+| `onCancel` | `() => void` | Cancellation callback |
+| `onArtifactComplete` | `(artifact: A2AArtifact) => void` | Fires when an incremental artifact finishes |
+| `adapters.*` | -- | `attachments`, `speech`, `feedback`, `history`, `threadList` |
+
+## Hooks
 
 ```tsx
-import {
-  useA2ATask,
-  useA2AArtifacts,
-  useA2AAgentCard,
-} from "@assistant-ui/react-a2a";
+import { useA2ATask, useA2AArtifacts, useA2AAgentCard } from "@assistant-ui/react-a2a";
 
-function TaskStatus() {
-  const task = useA2ATask();         // current A2A task (state + status message)
-  const artifacts = useA2AArtifacts(); // accumulated artifacts
-  const agentCard = useA2AAgentCard(); // agent card (capabilities/skills)
-
-  return <div>{task?.status?.state}</div>;
-}
+const task = useA2ATask();              // current task, or undefined
+const artifacts = useA2AArtifacts();    // artifacts generated by the current task
+const card = useA2AAgentCard();         // agent card fetched on initialization: name, description, skills
 ```
 
-## Thread Persistence
+## Task states
 
-Pass a `history` or `threadList` adapter via `adapters`, or combine with the cloud thread list runtime (exported from `@assistant-ui/react`):
+The protocol's 9 states map to assistant-ui message status:
+
+| A2A state | Message status |
+| --- | --- |
+| `unspecified`, `submitted`, `working` | `running` |
+| `completed` | `complete` |
+| `failed`, `rejected` | `incomplete` (error) |
+| `canceled` | `incomplete` (cancelled) |
+| `input_required`, `auth_required` | `requires-action` |
+
+When a task enters `input_required`, the user continues normally; the runtime sends the next message with the same `taskId` to resume it.
+
+## Artifacts
+
+Incremental artifact streaming (`append` mode), completion notification via `onArtifactComplete`, and automatic reset on each new run:
 
 ```tsx
-import { useCloudThreadListRuntime } from "@assistant-ui/react";
+const runtime = useA2ARuntime({
+  baseUrl: "http://localhost:9999",
+  onArtifactComplete: (artifact) => console.log("Artifact ready:", artifact.name),
+});
 ```
 
-## When to Use A2A
+## Error handling
 
-- Multi-agent orchestration systems
-- Agents with artifact generation (files, images, etc.)
-- Complex task state tracking
-- Human-in-the-loop tool execution
+`A2AError` follows `google.rpc.Status`: `error.code` (HTTP status), `error.status` (e.g. `"NOT_FOUND"`), `error.details` (`google.rpc.ErrorInfo`).
+
+```tsx
+import { A2AError } from "@assistant-ui/react-a2a";
+
+onError: (error) => {
+  if (error instanceof A2AError) console.log(error.code, error.status, error.details);
+};
+```
+
+## Multi-tenancy
+
+```ts
+const client = new A2AClient({ baseUrl: "https://agent.example.com", tenant: "my-org" });
+```
+
+Prepends `/{tenant}` to every API path (e.g. `/my-org/message:send`).

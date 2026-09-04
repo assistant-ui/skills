@@ -1,49 +1,55 @@
-# AI SDK v7 Integration
+# AI SDK Runtime (v7, current)
 
-Use this when the app uses `@assistant-ui/react-ai-sdk` and an `/api/chat` route powered by `ai@^7`.
+`@assistant-ui/ai-sdk` integrates assistant-ui with the [Vercel AI SDK](https://ai-sdk.dev/): `useChat` flows, custom transports, frontend tools, attachments, quote context, multi-step agents, token usage, and history. It requires `ai@^7` and `@ai-sdk/react@^4`. For v6/v5/v4, see [ai-sdk-legacy.md](./ai-sdk-legacy.md).
 
-`@assistant-ui/react-ai-sdk` 1.4.x targets AI SDK v7 (`ai@^7`, `@ai-sdk/react@^4`). Projects still on an older AI SDK major must pin an older adapter release; see [ai-sdk-legacy.md](./ai-sdk-legacy.md).
+`@assistant-ui/react-ai-sdk` re-exports the same API for older installs; import from `@assistant-ui/ai-sdk` in new code.
+
+## Contents
+
+- [Quickstart](#quickstart) | [useChatRuntime vs useAISDKRuntime](#usechatruntime-vs-useaisdkruntime) | [Frontend tools](#frontend-tools-and-system-messages) | [Multi-step](#multi-step-tool-calls) | [Server-side approval](#server-side-tool-approval) | [Quote context](#quote-context) | [Token usage](#token-usage) | [Attachments](#attachments) | [History](#persisting-chat-history) | [Custom transport](#custom-transport) | [Runtime options](#runtime-options) | [Adapter support](#adapter-support)
+
+## Quickstart
 
 ```bash
-npm install @assistant-ui/react @assistant-ui/react-ai-sdk ai@^7 @ai-sdk/react@^4 @ai-sdk/openai zod
+npm install @assistant-ui/react @assistant-ui/ai-sdk ai@^7 @ai-sdk/react@^4 @ai-sdk/openai zod
 ```
 
-## What Changed in AI SDK v7
+```ts title="app/api/chat/route.ts"
+import { openai } from "@ai-sdk/openai";
+import {
+  streamText,
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+} from "ai";
+import type { UIMessage } from "ai";
 
-Agents trained on older AI SDK versions will use outdated patterns. These are **AI SDK** breaking changes (not assistant-ui changes):
+export const maxDuration = 30;
 
-| Concept | Old (v4/v5) | v6 | Current (v7) |
-|---------|-------------|----|--------------|
-| `ai` package | `ai@^4` / `ai@^5` | `ai@^6` | `ai@^7` |
-| `@ai-sdk/react` | `ai/react` / `@ai-sdk/react@^2` | `@ai-sdk/react@^3` | `@ai-sdk/react@^4` |
-| assistant-ui wiring | `useAISDKRuntime(chat)` | `useChatRuntime({ transport })` | `useChatRuntime()` |
-| Message conversion | Pass messages directly | `await convertToModelMessages(messages)` | `await convertToModelMessages(messages)` |
-| Stream response | `result.toDataStreamResponse()` | `result.toUIMessageStreamResponse()` | `createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) })` |
-| Tool schema key | `parameters: z.object({...})` | `inputSchema: z.object({...})` | `inputSchema: zodSchema(z.object({...}))` |
-| Multi-step tools | `maxSteps: n` | `stopWhen: stepCountIs(n)` | `stopWhen: stepCountIs(n)` |
+export async function POST(req: Request) {
+  const { messages }: { messages: UIMessage[] } = await req.json();
+  const result = streamText({
+    model: openai("gpt-5.6-luna"),
+    messages: await convertToModelMessages(messages), // async in v7
+  });
+  return createUIMessageStreamResponse({
+    stream: toUIMessageStream({ stream: result.stream }),
+  });
+}
+```
 
-`result.toUIMessageStreamResponse()` still compiles in v7 but is deprecated and scheduled for removal in the next major; write new routes with the standalone helpers.
-
-## Standard Setup
-
-**Frontend**:
-
-```tsx
+```tsx title="app/page.tsx"
 "use client";
 
+import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
-import { lastAssistantMessageIsCompleteWithToolCalls } from "ai";
-import { Thread } from "@/components/assistant-ui/thread";
+import { useChatRuntime } from "@assistant-ui/ai-sdk";
 
-export function Assistant() {
-  const runtime = useChatRuntime({
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-  });
-
+export default function Home() {
+  const runtime = useChatRuntime();
   return (
     <AssistantRuntimeProvider runtime={runtime}>
-      <div className="h-dvh">
+      <div className="h-full">
         <Thread />
       </div>
     </AssistantRuntimeProvider>
@@ -51,148 +57,76 @@ export function Assistant() {
 }
 ```
 
-`useChatRuntime()` defaults to `AssistantChatTransport` pointing at `/api/chat`, so the no-argument form is the common case.
+For React Native and React Ink, host the route in a separate backend and point the transport at its absolute URL (see [react-native](../../react-native/SKILL.md) and [ink](../../ink/SKILL.md)).
 
-**Backend** route (`app/api/chat/route.ts`):
+## useChatRuntime vs useAISDKRuntime
 
-```ts
+Both ship from `@assistant-ui/ai-sdk`.
+
+- **`useChatRuntime`** (recommended) wraps AI SDK's `useChat` and adds cloud thread support, the standard adapter slots, and `AssistantChatTransport`, which forwards system messages and frontend tools by default.
+- **`useAISDKRuntime`** takes a `useChat` instance you already control, for sharing it with non-assistant-ui code or a transport that does not extend `AssistantChatTransport`. It does not provide `cloud` or the higher-level adapter slots.
+
+```tsx
+import { useChat } from "@ai-sdk/react";
+import { useAISDKRuntime } from "@assistant-ui/ai-sdk";
+
+const chat = useChat();
+const runtime = useAISDKRuntime(chat);
+```
+
+`useAISDKRuntime` accepts `joinStrategy`, `onResume`, `messageRepository`, `unstable_onBranchChange` (see [runtime options](#runtime-options)), plus `cancelPendingToolCallsOnSend` (default `true`): when a new message is sent, pending interactive tool calls are marked failed as user-cancelled unless this is `false`.
+
+## Frontend tools and system messages
+
+`AssistantChatTransport` forwards system messages and frontend tools on every request by default. Consume them with `frontendTools`:
+
+```ts title="app/api/chat/route.ts"
 import { openai } from "@ai-sdk/openai";
-import { frontendTools } from "@assistant-ui/react-ai-sdk";
-import {
-  streamText,
-  convertToModelMessages,
-  createUIMessageStreamResponse,
-  toUIMessageStream,
-  type UIMessage,
-} from "ai";
+import { streamText, convertToModelMessages, createUIMessageStreamResponse, toUIMessageStream } from "ai";
+import type { UIMessage } from "ai";
+import { frontendTools } from "@assistant-ui/ai-sdk";
 
 export async function POST(req: Request) {
-  const {
-    messages,
-    system,
-    tools,
-  }: {
-    messages: UIMessage[];
-    system?: string;
-    tools?: Record<string, any>;
-  } = await req.json();
+  const { messages, system, tools }: { messages: UIMessage[]; system?: string; tools?: any } =
+    await req.json();
 
   const result = streamText({
-    model: openai("gpt-5.4-mini"),
+    model: openai("gpt-5.6-luna"),
     system,
     messages: await convertToModelMessages(messages),
-    tools: {
-      ...frontendTools(tools ?? {}),
-    },
+    tools: { ...frontendTools(tools) /* ...your backend tools */ },
   });
 
-  return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream }),
-  });
+  return createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) });
 }
 ```
 
-`AssistantChatTransport` (the default transport for `useChatRuntime`) automatically forwards `system` and `tools` from the frontend to the backend:
+Frontend tools are registered through the provider's `config` (see [tools](../../tools/SKILL.md)) and serialized for the backend via `frontendTools`.
 
-- **`system`**: set via `useAssistantInstructions()` on the frontend, sent as a string in the request body.
-- **`tools`**: registered via `makeAssistantTool()` or `useAssistantTool()` on the frontend, sent as JSON Schema definitions in the request body.
-- **`frontendTools()`**: converts those JSON Schema definitions into the AI SDK tool format so `streamText` can use them alongside backend-defined tools.
+## Multi-step tool calls
 
-The route must destructure and use both `system` and `tools` for frontend tool forwarding to work.
-
-## Runtime Options
-
-`useChatRuntime` supports the underlying AI SDK chat options plus assistant-ui extensions like `cloud`, `adapters`, `onThreadIdChange`, `joinStrategy`, and `onResume`.
-
-```tsx
-import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
-import { lastAssistantMessageIsCompleteWithToolCalls } from "ai";
-
-const runtime = useChatRuntime({
-  transport: new AssistantChatTransport({
-    api: "/api/chat",
-    headers: { "X-Workspace": "acme" },
-    body: { model: "gpt-5.4-mini" },
-  }),
-  messages: [
-    { id: "1", role: "assistant", parts: [{ type: "text", text: "Hello! How can I help?" }] },
-  ],
-  sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-  onError: (error) => {
-    console.error(error);
-  },
-  cloud, // optional AssistantCloud instance
-  adapters: {
-    attachments: attachmentAdapter,
-    feedback: feedbackAdapter,
-  },
-});
-```
-
-If you explicitly need non-assistant transport behavior, pass a custom transport:
-
-```tsx
-import { DefaultChatTransport } from "ai";
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
-
-const runtime = useChatRuntime({
-  transport: new DefaultChatTransport({ api: "/api/chat" }),
-});
-```
-
-## Tools (AI SDK v7 shape)
-
-Use `tool({ inputSchema })` and `stopWhen: stepCountIs(...)` for multi-step tool loops.
-
-`inputSchema` is typed `FlexibleSchema`, which accepts a raw Zod schema, a Standard Schema, or the result of `zodSchema()` / `jsonSchema()`. Passing `z.object({ ... })` directly is valid; `zodSchema(z.object({ ... }))` is the explicit form the upstream quickstart uses. Both work, so pick one and stay consistent within a project.
+Cap tool-call rounds in a single request with `stopWhen: stepCountIs(n)`; without it, `streamText` runs one inference step.
 
 ```ts
-import { openai } from "@ai-sdk/openai";
-import {
-  streamText,
-  tool,
-  zodSchema,
-  stepCountIs,
-  convertToModelMessages,
-  createUIMessageStreamResponse,
-  toUIMessageStream,
-  type UIMessage,
-} from "ai";
-import { z } from "zod";
+import { streamText, stepCountIs } from "ai";
 
-export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
-
-  const result = streamText({
-    model: openai("gpt-5.4-mini"),
-    messages: await convertToModelMessages(messages),
-    stopWhen: stepCountIs(10),
-    tools: {
-      get_weather: tool({
-        description: "Get weather by city",
-        inputSchema: zodSchema(z.object({ city: z.string() })),
-        execute: async ({ city }) => ({ city, temperature: 22, unit: "C" }),
-      }),
-    },
-  });
-
-  return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream }),
-  });
-}
-```
-
-Without a `stopWhen`, AI SDK runs a single inference step; set `stepCountIs(n)` when tools chain.
-
-## Server-Side Tool Approval
-
-AI SDK v7 gates tool execution either with `needsApproval` on the tool definition or with the call-level `toolApproval` option; both exist and can be used together. The server pauses, emits an `approval-requested` part, and resumes once the client posts a response. assistant-ui surfaces the gate as `approval` on the tool part and passes `respondToApproval` into the renderer.
-
-`toolApproval` is the per-call form, which is what the example below uses because the decision depends on the input:
-
-```ts
 const result = streamText({
-  model: openai("gpt-5.4-mini"),
+  model,
+  messages,
+  tools: {
+    /* ... */
+  },
+  stopWhen: stepCountIs(10),
+});
+```
+
+## Server-side tool approval
+
+AI SDK v7 gates execution with the call-level `toolApproval` option. The server pauses, emits an `approval-requested` part, and resumes once the client posts a response. assistant-ui surfaces the gate as `approval` on the tool part and a `respondToApproval` prop on the renderer.
+
+```ts title="app/api/chat/route.ts"
+const result = streamText({
+  model,
   messages: await convertToModelMessages(messages),
   tools: {
     deploy: tool({
@@ -202,153 +136,204 @@ const result = streamText({
     }),
   },
   toolApproval: {
-    deploy: (input) =>
-      input.target === "production" ? "user-approval" : "not-applicable",
+    deploy: (input) => (input.target === "production" ? "user-approval" : "not-applicable"),
   },
 });
 ```
 
-On the client, use `sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses` so the decision is posted back automatically. See the `/tools` skill for the renderer side.
-
-## Frontend Tool UI
-
-Use `makeAssistantToolUI` to render tool calls in the chat. Place the component inside `AssistantRuntimeProvider`.
+The client resends automatically once the user decides:
 
 ```tsx
-import { makeAssistantToolUI } from "@assistant-ui/react";
+import { useChat } from "@ai-sdk/react";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { useAISDKRuntime } from "@assistant-ui/ai-sdk";
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 
-const WeatherToolUI = makeAssistantToolUI({
-  toolName: "get_weather",
-  render: ({ args, result, status }) => {
-    if (status.type === "running") {
-      return <div>Loading weather for {args.city}...</div>;
-    }
-    return (
-      <div className="p-4 rounded bg-blue-50">
-        <strong>{result?.city}</strong>: {result?.temperature}°{result?.unit}
-      </div>
-    );
+const chat = useChat({
+  api: "/api/chat",
+  sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+});
+const runtime = useAISDKRuntime(chat);
+```
+
+Render the gate from a toolkit entry. `approval.approved` is `undefined` (pending), `true`, or `false`; `respondToApproval` is the only correct way to answer (it reads the approval id off the part):
+
+```tsx
+import { AuiConfig, defineToolkit, Tools, type ToolApprovalResponse } from "@assistant-ui/react";
+
+const toolkit = defineToolkit({
+  deploy: {
+    type: "backend",
+    render: ({ args, approval, respondToApproval, result }) => {
+      const answer = async (response: ToolApprovalResponse) => {
+        try {
+          await respondToApproval(response);
+        } catch (failure) {
+          console.error(failure);
+        }
+      };
+      if (approval?.approved === undefined) {
+        return (
+          <div>
+            <p>Approve deploy to {args.target}?</p>
+            <button onClick={() => void answer({ approved: true })}>Approve</button>
+            <button onClick={() => void answer({ approved: false, reason: "user denied" })}>Deny</button>
+          </div>
+        );
+      }
+      if (approval?.approved === false) return <p>Denied</p>;
+      if (result === undefined) return <p>Approved, deploying...</p>;
+      return <p>Deployed {result.deployed}</p>;
+    },
   },
 });
 
-<AssistantRuntimeProvider runtime={runtime}>
-  <WeatherToolUI />
-  <Thread />
-</AssistantRuntimeProvider>
+const config = AuiConfig({ tools: Tools({ toolkit }) });
+// <AssistantRuntimeProvider runtime={runtime} config={config}>
 ```
 
-## Token Usage
+See [tools](../../tools/SKILL.md) for `isAutomatic` and the full approval-gate contract.
 
-`@assistant-ui/react-ai-sdk` exposes per-thread token accounting:
+## Quote context
 
-```tsx
-import { useThreadTokenUsage } from "@assistant-ui/react-ai-sdk";
-
-const usage = useThreadTokenUsage(); // ThreadTokenUsage | undefined
-```
-
-`getThreadMessageTokenUsage(message)` reads usage off a single message outside React.
-
-## Using Different Providers
-
-Swap the model in `streamText()`; any `@ai-sdk/*` provider works:
+`injectQuoteContext` flattens a user message's quote metadata (set when the user selects text and clicks Quote) into a markdown blockquote prefix so the model sees the quoted text. It is idempotent.
 
 ```ts
-import { anthropic } from "@ai-sdk/anthropic";
-streamText({ model: anthropic("claude-sonnet-4-20250514"), ... });
+import { injectQuoteContext } from "@assistant-ui/ai-sdk";
 
-import { google } from "@ai-sdk/google";
-streamText({ model: google("gemini-2.0-flash"), ... });
-
-import { bedrock } from "@ai-sdk/amazon-bedrock";
-streamText({ model: bedrock("anthropic.claude-3-sonnet-20240229-v1:0"), ... });
+const result = streamText({
+  model,
+  messages: await convertToModelMessages(injectQuoteContext(messages)),
+});
 ```
 
-## Dynamic Model Selection
+## Token usage
 
-Pass the model name from the frontend via `body`, then select the provider on the backend:
+Attach `usage` and `modelId` via `messageMetadata`, then read it with `useThreadTokenUsage`:
 
-```tsx
-// Frontend
-const runtime = useChatRuntime({
-  transport: new AssistantChatTransport({
-    api: "/api/chat",
-    body: { model: "gpt-5.4-mini" },
+```ts title="app/api/chat/route.ts"
+return createUIMessageStreamResponse({
+  stream: toUIMessageStream({
+    stream: result.stream,
+    messageMetadata: ({ part }) => {
+      if (part.type === "finish") return { usage: part.totalUsage };
+      if (part.type === "finish-step") return { modelId: part.response.modelId };
+      return undefined;
+    },
   }),
 });
 ```
 
-```ts
-// Backend
-const { messages, model } = await req.json();
-
-const provider = model.startsWith("claude")
-  ? anthropic(model)
-  : openai(model);
-
-const result = streamText({
-  model: provider,
-  messages: await convertToModelMessages(messages),
-});
-```
-
-## With Cloud Persistence
-
-Pass a `cloud` instance to `useChatRuntime` to enable thread persistence and history. Use `ThreadList` to display saved threads.
-
 ```tsx
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { AssistantCloud } from "assistant-cloud";
-import { Thread } from "@/components/assistant-ui/thread";
-import { ThreadList } from "@/components/assistant-ui/thread-list";
-import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
+import { useThreadTokenUsage } from "@assistant-ui/ai-sdk";
 
-const cloud = new AssistantCloud({
-  baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
-  authToken: async () => getAuthToken(),
-});
-
-function ChatPage() {
-  const runtime = useChatRuntime({
-    transport: new AssistantChatTransport({ api: "/api/chat" }),
-    cloud,
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <ThreadList />
-      <Thread />
-    </AssistantRuntimeProvider>
-  );
+function TokenCounter() {
+  const usage = useThreadTokenUsage();
+  return usage ? <div>{usage.totalTokens} total tokens</div> : null;
 }
 ```
 
-See the `/cloud` skill for authentication and configuration details.
+`getThreadMessageTokenUsage(message)` reads per-message usage. Anything `messageMetadata` returns beyond `usage` lands under `metadata.custom` on the thread message, since the converter moves everything outside the fixed metadata shape there: `useAuiState((s) => s.message.metadata.custom?.["modelId"])`.
 
-## Troubleshooting
+## Attachments
 
-**"Module not found: @ai-sdk/react"**
-```bash
-npm install @ai-sdk/react@^4
+Wire the standard [attachment adapter](../../runtime/SKILL.md); your `send` should return AI-SDK-shaped `content` parts:
+
+```tsx
+const runtime = useChatRuntime({ adapters: { attachments: myAttachmentAdapter } });
 ```
 
-**"useChat is not a function"**
-Mixing AI SDK majors. Align `ai`, `@ai-sdk/react`, and the provider packages:
-```bash
-npm install ai@^7 @ai-sdk/react@^4 @ai-sdk/openai@latest
+```ts
+return {
+  ...attachment,
+  status: { type: "complete" },
+  content: [
+    { type: "file", mimeType: attachment.contentType ?? "", filename: attachment.name, data: await getFileDataURL(attachment.file) },
+  ],
+};
 ```
 
-**Streaming stops mid-response**
-Check `stopWhen` when using tools - use `stepCountIs(n)` to allow multi-step.
+Use `{ type: "image", image: <data url or remote url> }` for images.
 
-**Tool results not showing**
-Ensure you return from tool.execute(), not just mutate state.
+## Persisting chat history
 
-## Known Pitfalls
+Messages live in memory by default. Provide a `ThreadHistoryAdapter` via `adapters.history`; it **must** implement `withFormat`, since `useChatRuntime` persists through `withFormat(fmt)` so messages round-trip as AI SDK `UIMessage`s. An adapter without it throws at runtime, and the top-level `load`/`append` are unused on this path. For zero-adapter-code persistence, use [AssistantCloud](../../cloud/SKILL.md) instead.
 
-- `convertToModelMessages` is async: always `await` it.
-- Build route responses with `createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) })`. `toDataStreamResponse()` is gone; `result.toUIMessageStreamResponse()` is deprecated.
-- In v6+ tool definitions, use `inputSchema`, NOT `parameters`.
-- `stopWhen: stepCountIs(n)` replaces `maxSteps: n` for multi-step tool loops.
-- If you replace the transport, use `AssistantChatTransport` unless you intentionally want to disable assistant-tool/system forwarding.
-- `@ai-sdk/openai@^4` pairs with `ai@^7`; provider packages have their own major line.
+```tsx
+import { useChatRuntime } from "@assistant-ui/ai-sdk";
+import type { ThreadHistoryAdapter } from "@assistant-ui/react";
+
+const historyAdapter: ThreadHistoryAdapter = {
+  async load() {
+    return { headId: null, messages: [] };
+  },
+  async append() {},
+  withFormat: (fmt) => ({
+    async load() {
+      const rows = await fetch("/api/history").then((r) => r.json());
+      return { messages: rows.map(fmt.decode) };
+    },
+    async append(item) {
+      await fetch("/api/history", {
+        method: "POST",
+        body: JSON.stringify({ id: fmt.getId(item.message), parent_id: item.parentId, format: fmt.format, content: fmt.encode(item) }),
+      });
+    },
+  }),
+};
+
+const runtime = useChatRuntime({ adapters: { history: historyAdapter } });
+```
+
+Each persisted row is `{ id, parent_id, format, content }`; `fmt.encode`/`fmt.decode` hide the `UIMessage` internals from your backend.
+
+## Custom transport
+
+`AssistantChatTransport` is the default. Point it at a different endpoint:
+
+```tsx
+import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/ai-sdk";
+
+const runtime = useChatRuntime({
+  transport: new AssistantChatTransport({ api: "/my-custom-api/chat" }),
+});
+```
+
+A transport that does not extend `AssistantChatTransport` forfeits automatic system-message and frontend-tool forwarding; you then control everything explicitly as a plain AI SDK `ChatTransport`.
+
+## Runtime options
+
+`useChatRuntime` (and, except `cloud` and the adapter slots, `useAISDKRuntime`) accept:
+
+- **`onThreadIdChange(threadId)`**: fires when the runtime's settled thread id changes (for example to sync a URL query param). A fresh, uninitialized thread reports `undefined` first; a controlled `threadId` option is not echoed back.
+- **`joinStrategy`**: `"concat-content"` (default) merges consecutive assistant messages into one thread message; `"none"` keeps each as its own message, useful when a backend persists proactive or consecutive assistant turns separately.
+- **`onResume(config)`**: called by `runtime.thread.resumeRun(config)`; bridge it into a custom replay channel (an SSE reconnect endpoint keyed by turn id). Omitted, `resumeRun` throws. For reload-safe streaming with no custom channel, see [../../streaming/SKILL.md](../../streaming/SKILL.md), which wraps the same byte stream and reconnects on mount, reporting failures via `onResumeError`.
+- **`messageRepository`**: seeds a branch-aware AI SDK message tree once, only when `useChat` starts empty; live updates come only from `useChat` afterward. Threads persisted via `adapters.history` do not need this.
+- **`unstable_onBranchChange({ headId })`**: fires after an explicit branch switch (for example a BranchPicker click); unstable and may change without notice.
+
+```tsx
+const runtime = useChatRuntime({
+  onThreadIdChange: (threadId) => {
+    const url = new URL(window.location.href);
+    if (threadId) url.searchParams.set("thread", threadId);
+    else url.searchParams.delete("thread");
+    window.history.replaceState(null, "", url);
+  },
+  joinStrategy: "none",
+});
+```
+
+## Adapter support
+
+| Adapter | Supported via |
+| --- | --- |
+| Attachments | `adapters.attachments` |
+| Speech | `adapters.speech` |
+| Dictation | `adapters.dictation` |
+| Feedback | `adapters.feedback` |
+| History | `adapters.history` (must implement `withFormat`) |
+| Thread list | `cloud` (managed) or a `RemoteThreadListRuntime` (custom DB); see [runtime](../../runtime/SKILL.md) |
+
+## Example
+
+[`examples/with-ai-sdk-v7`](https://github.com/assistant-ui/assistant-ui/tree/main/examples/with-ai-sdk-v7) is a complete reference (`npx assistant-ui@latest create my-app -e with-ai-sdk-v7`).
