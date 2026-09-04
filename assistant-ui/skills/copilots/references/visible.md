@@ -1,6 +1,6 @@
 # makeAssistantVisible
 
-Higher-order component that exposes a component's rendered HTML to the assistant and optionally lets it click or edit the component.
+Higher-order component that exposes a component's rendered HTML to the assistant, and optionally lets it click or edit the component.
 
 ## Contents
 
@@ -26,16 +26,16 @@ const Button = ({ onClick, children }) => (
 const ReadableButton = makeAssistantVisible(Button);
 ```
 
-The returned component forwards all props and refs, so it is a drop-in replacement for the original.
+The returned component forwards all props and refs, so it is a drop-in replacement for the original, and it preserves the wrapped component's `displayName`.
 
 ## Config
 
-Second argument is an optional config object. Both flags default to false.
+Second argument is an optional config object. Both flags default to `false`.
 
 ```tsx
 makeAssistantVisible(Component, {
-  clickable?: boolean,  // register a `click` tool for this component
-  editable?:  boolean,  // register an `edit` tool for an input/textarea inside it
+  clickable?: boolean, // register a `click` tool for this component
+  editable?: boolean,  // register an `edit` tool for an input/textarea inside it
 });
 ```
 
@@ -47,7 +47,7 @@ const EditableInput = makeAssistantVisible(Input, { editable: true });
 
 ## Clickable
 
-`clickable: true` stamps a unique `data-click-id` on the wrapped component and registers a `click` tool. The tool resolves `[data-click-id='...']` via `querySelector` and calls `.click()` on the element.
+`clickable: true` stamps a unique `data-click-id` on the wrapped component and registers a `click` tool. The tool resolves `[data-click-id='...']` with `querySelector` and calls `.click()` on the element.
 
 ```tsx
 const SmartButton = makeAssistantVisible(
@@ -72,7 +72,7 @@ function TransactionHistory({ transactions }) {
 }
 ```
 
-Note: the click tool waits 2 seconds after clicking before resolving, so the assistant observes any resulting DOM changes on its next read.
+The click tool resolves after a short delay following the click, so the assistant can observe on its next read whatever DOM change the click caused.
 
 ## Editable
 
@@ -99,13 +99,13 @@ If the element under `data-edit-id` is not an `<input>` or `<textarea>`, the too
 
 ## Nesting
 
-Visible components can be nested. Only the outermost wrapper contributes its `outerHTML` to the system context; nested `makeAssistantVisible` wrappers suppress their own HTML to avoid duplication. Click and edit tools from nested components stay registered regardless.
+Visible components can be nested: each one is wrapped in a `ReadableContext.Provider` so nesting can be detected. Only the outermost wrapper contributes its `outerHTML` to the system context; nested `makeAssistantVisible` wrappers suppress their own HTML to avoid duplication. Click and edit tools from nested components stay registered regardless.
 
 ```tsx
 const VisibleCard = makeAssistantVisible(Card);
 const VisibleRow = makeAssistantVisible(Row, { clickable: true });
 
-// Only VisibleCard's HTML is sent; VisibleRow rows are still clickable
+// Only VisibleCard's HTML is sent; VisibleRow rows are still clickable.
 <VisibleCard>
   {rows.map((r) => (
     <VisibleRow key={r.id} onClick={() => select(r.id)} />
@@ -136,6 +136,5 @@ function Checkout() {
 
 ## Notes
 
-- Context registration runs in an effect, so HTML is captured from the mounted DOM (`componentRef.current?.outerHTML`); it reflects the current render, not stale markup.
-- The wrapped type is preserved (`displayName` is copied), so the result composes like the original component in JSX.
-- Clickable/editable rely on browser APIs (`document.querySelector`, `CSS.escape`, DOM events), so the tools only run client-side.
+- Context registration runs in an effect, so the HTML is captured from the mounted DOM (the wrapped element's `outerHTML`); it reflects the current render, not stale markup.
+- Clickable and editable rely on browser APIs (`document.querySelector`, DOM events), so the `click` and `edit` tools only run client-side.

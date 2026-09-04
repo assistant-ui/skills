@@ -1,222 +1,91 @@
 # assistant-ui Packages
 
-## Published Packages
+Check the current version with `npm view <package> version`. Every published package exposes only the `latest` dist-tag, so install from `latest`. Monorepo-only packages (`@assistant-ui/ui`, `@assistant-ui/x-*`, `@assistant-ui/vue`, `@assistant-ui/svelte`) are not on npm; `@assistant-ui/ui` is the source of the elements catalog that the CLI copies into your project.
 
-**To check latest version:** Run `npm view <package-name> version` or check the package on npmjs.com.
-
-- Most published packages only expose the `latest` dist-tag; always install from `latest`.
-- Monorepo-only (not on npm): `@assistant-ui/x-buildutils`, `@assistant-ui/ui`.
-
-### Core
+## Core
 
 | Package | Notes |
 |---------|-------|
-| `@assistant-ui/react` | Core UI library: primitives, hooks, runtimes |
-| `@assistant-ui/core` | Framework-agnostic core runtime shared by every binding |
-| `@assistant-ui/store` | Tap-based state management (`useAui`, `AuiProvider`) |
-| `@assistant-ui/tap` | Reactive state primitives inspired by React hooks |
-| `assistant-stream` | Streaming protocol and encoders/decoders |
-| `assistant-cloud` | Cloud persistence and auth client |
-| `assistant-ui` | CLI (`create`, `init`, `add`, `update`, `upgrade`, `doctor`, `mcp`, `agent`) |
-| `create-assistant-ui` | `npm create assistant-ui` scaffolding entry point |
+| `@assistant-ui/react` | Primitives, hooks, runtimes, `AssistantRuntimeProvider`, toolkit authoring; 0.15.x |
+| `@assistant-ui/core` | Framework-neutral runtime, adapters, and store entries shared by every binding |
+| `@assistant-ui/store` | `AuiConfig`, `AuiProvider`, `useAui`, `useAuiState`, `useAuiEvent`, `Derived` |
+| `@assistant-ui/tap` | Reactive resources behind the store (`withKey`, `createTapRoot`) |
+| `assistant-stream` | Streaming protocol, encoders and decoders, `assistant-stream/resumable` |
+| `assistant-cloud` | Assistant Cloud client (`AssistantCloud`, persistence helpers, run telemetry) |
+| `assistant-ui` | The CLI: `create`, `init`, `add`, `update`, `upgrade`, `codemod`, `doctor`, `info`, `mcp`, `agent` |
+| `create-assistant-ui` | `npm create assistant-ui` entry point |
 
-### Platform bindings
+## Backend adapters
 
-| Package | Notes |
-|---------|-------|
-| `@assistant-ui/react-native` | React Native / Expo bindings |
-| `@assistant-ui/react-ink` | React Ink terminal-UI bindings |
-| `@assistant-ui/react-ink-markdown` | Terminal markdown rendering for react-ink |
-| `@assistant-ui/next` | Next.js integration: `withAui()` config wrapper, `"use generative"` compiler |
-| `@assistant-ui/vite` | Vite plugin for the `"use generative"` directive compiler |
-| `@assistant-ui/metro` | Metro / Expo integration for the `"use generative"` compiler |
+| Package | Hook | Notes |
+|---------|------|-------|
+| `@assistant-ui/ai-sdk` | `useChatRuntime`, `useAISDKRuntime` | AI SDK v7 (`ai@^7`, `@ai-sdk/react@^4`); also `AISDKChat`, `AISDKThreads`, `AISDKToolkit`, `frontendTools`, `injectQuoteContext`, `useThreadTokenUsage`, resumable stream helpers |
+| `@assistant-ui/react-ai-sdk` | same | Re-exports `@assistant-ui/ai-sdk`; keep it only in existing installs |
+| `@assistant-ui/react-langgraph` | `useLangGraphRuntime` | LangGraph server streaming, interrupts, agent state, `ui_message` generative UI |
+| `@assistant-ui/react-langchain` | `useStreamRuntime` | LangChain `useStream` adapter, subgraphs and subagents; the `langchain` CLI template |
+| `@assistant-ui/react-google-adk` | `useAdkRuntime` | Google ADK sessions, tool confirmations, auth requests |
+| `@assistant-ui/react-a2a` | `useA2ARuntime` | Agent-to-Agent protocol, tasks and artifacts |
+| `@assistant-ui/react-ag-ui` | `useAgUiRuntime` | AG-UI protocol, shared state, interrupts, subagent lifecycle, A2UI actions |
+| `@assistant-ui/eve` | `useEveAgentRuntime` | Eve agents; the `eve` CLI template |
+| `@assistant-ui/react-opencode` | `useOpenCodeRuntime` | OpenCode sessions, permissions, questions |
+| `@assistant-ui/react-pi` | `usePiRuntime` | Pi coding agent sessions |
+| `@assistant-ui/react-data-stream` | `useDataStreamRuntime` | AI SDK v4 data stream protocol (legacy) |
+| `@assistant-ui/cloud-ai-sdk` | `useCloudChat`, `useThreads` | AI SDK hooks backed by Assistant Cloud without assistant-ui components |
 
-### Backend adapters
+Claude Managed Agents, Mastra, Cloudflare Agents, and AI gateways need no adapter package; see the setup skill.
 
-| Package | Notes |
-|---------|-------|
-| `@assistant-ui/react-ai-sdk` | Vercel AI SDK adapter (v7 current; v6/v5 via pinned older releases) |
-| `@assistant-ui/react-langchain` | LangChain `useStream` adapter (the `langchain` CLI template uses this) |
-| `@assistant-ui/react-langgraph` | LangGraph adapter |
-| `@assistant-ui/react-ag-ui` | AG-UI protocol adapter |
-| `@assistant-ui/react-a2a` | A2A (Agent-to-Agent) v1.0 protocol adapter |
-| `@assistant-ui/react-google-adk` | Google ADK adapter |
-| `@assistant-ui/react-opencode` | OpenCode runtime adapter |
-| `@assistant-ui/react-pi` | Pi coding-agent runtime adapter |
-| `@assistant-ui/eve` | Eve runtime adapter |
-| `@assistant-ui/react-data-stream` | AI SDK v4 data-stream adapter (legacy path) |
-| `@assistant-ui/cloud-ai-sdk` | Standalone AI SDK hooks backed by Assistant Cloud persistence |
-
-### UI and rendering
+## Platform bindings and build plugins
 
 | Package | Notes |
 |---------|-------|
-| `@assistant-ui/react-markdown` | Markdown rendering (`MarkdownTextPrimitive`) |
-| `@assistant-ui/react-streamdown` | Streamdown rendering with built-in Shiki/KaTeX/Mermaid |
-| `@assistant-ui/react-syntax-highlighter` | Code block highlighting adapters |
-| `@assistant-ui/react-lexical` | Lexical rich-text composer with @-mention support |
-| `@assistant-ui/react-generative-ui` | Declarative generative UI (UISpec, A2UI, Slack/Teams converters) |
-| `@assistant-ui/react-hook-form` | React Hook Form integration |
-| `safe-content-frame` | Sandboxed iframe rendering for untrusted content |
-| `heat-graph` | Headless activity heatmap components |
-| `tw-shimmer` | Tailwind CSS v4 shimmer plugin |
-| `tw-glass` | Tailwind CSS v4 glass refraction plugin |
+| `@assistant-ui/react-native` | Expo and React Native primitives, hooks, and runtimes |
+| `@assistant-ui/react-ink` | Terminal (Ink) primitives, hooks, and runtimes |
+| `@assistant-ui/react-ink-markdown` | Markdown rendering for the terminal |
+| `@assistant-ui/next` | `withAui()` Next.js config wrapper for `"use generative"` |
+| `@assistant-ui/vite` | `aui()` Vite plugin for `"use generative"` |
+| `@assistant-ui/metro` | `withAui()` Metro config wrapper for `"use generative"` |
 
-### Tooling and integrations
+## Rendering
 
 | Package | Notes |
 |---------|-------|
-| `@assistant-ui/react-mcp` | User-managed MCP server connection/config primitives |
+| `@assistant-ui/react-markdown` | `MarkdownTextPrimitive`, math delimiter helpers, `unstable_memoizeMarkdownComponents` |
+| `@assistant-ui/react-streamdown` | `StreamdownTextPrimitive` with built-in Shiki, KaTeX, Mermaid, block streaming |
+| `@assistant-ui/react-syntax-highlighter` | Prism-based highlighter adapters |
+| `@assistant-ui/react-generative-ui` | `JSONGenerativeUI`, the default component vocabulary, Slack and Teams renderers, A2UI |
+| `@assistant-ui/react-lexical` | Lexical composer input with directive chips (mentions, slash commands) |
+| `@assistant-ui/react-hook-form` | `useAssistantForm` for React Hook Form |
+| `safe-content-frame` | Sandboxed iframe for untrusted HTML (used by MCP Apps and artifacts) |
+| `heat-graph` | Headless activity heatmap |
+| `tw-shimmer` | Tailwind v4 shimmer plugin used by the elements |
+| `tw-glass` | Tailwind v4 glass refraction plugin |
+
+## Tooling and integrations
+
+| Package | Notes |
+|---------|-------|
+| `@assistant-ui/react-mcp` | User-managed MCP servers: connectors, OAuth, elicitation, `McpManagerResource` |
 | `@assistant-ui/react-devtools` | DevTools panel and modal |
-| `@assistant-ui/react-o11y` | Span/trace rendering primitives |
-| `@assistant-ui/mcp-docs-server` | MCP server exposing assistant-ui docs to an IDE |
-| `@assistant-ui/agent-launcher` | Spawns the Claude Code CLI with a chosen plugin, skill, and prompt |
-| `@assistant-ui/x-generative-compiler` | Internal `"use generative"` compiler shared by next/vite/metro |
+| `@assistant-ui/react-o11y` | Headless span and trace primitives |
+| `@assistant-ui/mcp-docs-server` | Local stdio proxy to the hosted docs MCP server at `https://www.assistant-ui.com/mcp` |
+| `@assistant-ui/agent-launcher` | Launches Claude Code with the assistant-ui skills (`assistant-ui agent`) |
 
-## Core Packages
-
-### @assistant-ui/react
-
-Main UI library with primitives and hooks. Requires React 18 or 19.
-
-```bash
-npm install @assistant-ui/react
-```
-
-**Exports:**
-- Primitives: `ThreadPrimitive`, `MessagePrimitive`, `ComposerPrimitive`, `ActionBarPrimitive`, `ActionBarMorePrimitive`, `BranchPickerPrimitive`, `AttachmentPrimitive`, `ThreadListPrimitive`, `ThreadListItemPrimitive`, `ThreadListItemMorePrimitive`, `MessagePartPrimitive`, `ChainOfThoughtPrimitive`, `SelectionToolbarPrimitive`, `SuggestionPrimitive`, `QueueItemPrimitive`, `ErrorPrimitive`, `AssistantModalPrimitive`
-- Pre-built components come from the registry (`npx assistant-ui@latest add thread`), landing in `@/components/assistant-ui/*`
-- Hooks: `useAui`, `useAuiState`, `useAuiEvent`, `useAuiToolOverrides`
-- Conditionals: `AuiIf`, `AuiProvider`
-- Runtimes: `useLocalRuntime`, `useExternalStoreRuntime`, `useRemoteThreadListRuntime`, `useAssistantTransportRuntime`
-- Tools: `tool`, `defineToolkit`, `Tools`, `makeAssistantTool`, `makeAssistantToolUI`, `useAssistantTool`, `useAssistantToolUI`, `hitl`, `humanTool`, `providerTool`, `externalTool`, `stubTool`
-- Copilots: `useAssistantInstructions`, `useAssistantContext`, `makeAssistantVisible`, `Interactables`
-- Provider: `AssistantRuntimeProvider`
-
-### assistant-stream
-
-Streaming protocol for AI responses.
-
-```bash
-npm install assistant-stream
-```
-
-**Exports:**
-- `AssistantStream`, `createAssistantStream`, `createAssistantStreamResponse` - Core streaming abstraction
-- `DataStreamEncoder` / `DataStreamDecoder` - AI SDK format
-- `AssistantTransportEncoder` / `AssistantTransportDecoder` - Native format
-- `PlainTextEncoder` / `PlainTextDecoder` - Simple text streaming
-- `UIMessageStreamDecoder`, `SSEEventDecoder` - AI SDK UI-message stream and raw SSE decoding
-- `createObjectStream`, `fromObjectStreamResponse`, `parsePartialJsonObject` - Object/state streaming
-- `toToolsJSONSchema` - Serialize a tool map to JSON Schema
-
-Subpaths: `assistant-stream/utils` (JSON helpers) and `assistant-stream/resumable` (plus `/resumable/redis` and `/resumable/ioredis` stores).
-
-### assistant-cloud
-
-Cloud persistence and auth.
-
-```bash
-npm install assistant-cloud
-```
-
-**Exports:**
-- `AssistantCloud` - Main client class
-- `cloud.threads` (list, get, create, update, delete, `messages(threadId)`), `cloud.projects`, `cloud.runs`, `cloud.files`, `cloud.auth`, `cloud.telemetry`
-
-## Integration Packages
-
-### @assistant-ui/react-ai-sdk
-
-Vercel AI SDK adapter. 1.4.x targets AI SDK v7.
-
-```bash
-npm install @assistant-ui/react-ai-sdk ai@^7 @ai-sdk/react@^4
-```
-
-**Exports:**
-- `useChatRuntime` - Main hook (recommended); defaults to `AssistantChatTransport`
-- `useAISDKRuntime` - Wraps a `useChat` instance you own
-- `AssistantChatTransport` - Transport that forwards system messages and frontend tools
-- `frontendTools` - Materializes forwarded frontend tools in the backend route
-- `AISDKToolkit`, `generativeTools` - Toolkit and generative-UI tool bridges
-- `useThreadTokenUsage`, `getThreadMessageTokenUsage` - Token accounting
-- `useAISDKChat`, `useAISDKError` - Runtime extras accessors
-- `createResumableSessionStorage`, `RESUMABLE_STREAM_ID_HEADER` - Resumable streams
-- `injectQuoteContext` - Composer quote plumbing
-
-### @assistant-ui/react-langgraph
-
-LangGraph agent integration.
-
-```bash
-npm install @assistant-ui/react-langgraph
-```
-
-**Exports:**
-- `useLangGraphRuntime` - Main hook
-- `useLangGraphSend`, `useLangGraphSendCommand` - Manual send control
-- `useLangGraphInterruptState` - Interrupt state access
-- `useLangGraphMessages` - Message state management
-- `useLangGraphState`, `useLangGraphSetState` - Shared agent state
-- `useLangGraphUIMessages`, `useLangGraphMessageMetadata`, `useLangGraphStreamingTiming`
-- `convertLangChainMessages`, `appendLangChainChunk` - Message converters
-- `LangGraphMessageAccumulator` - Message accumulator
-
-### @assistant-ui/react-ag-ui
-
-AG-UI protocol adapter.
-
-```bash
-npm install @assistant-ui/react-ag-ui
-```
-
-**Exports:**
-- `useAgUiRuntime` - Main hook
-- `useAgUiState`, `useAgUiSetState` - Shared agent state
-- `useAgUiInterrupts`, `useAgUiSubmitInterruptResponses`, `useAgUiSteerAway` - Interrupt handling
-- `useAgUiSendA2uiAction` - A2UI surface actions
-- `fromAgUiMessages` - Message converter
-
-## UI Enhancement Packages
-
-### @assistant-ui/react-markdown
-
-Markdown rendering with syntax highlighting support.
-
-```bash
-npm install @assistant-ui/react-markdown
-```
-
-**Exports:**
-- `MarkdownTextPrimitive` - Renders markdown content
-- `useIsMarkdownCodeBlock` - Check if code block is inside markdown
-- `unstable_memoizeMarkdownComponents` - Memoize markdown components for performance
-- `normalizeMathDelimiters`, `rewriteLatexBracketDelimiters`, `escapeCurrencyDollars` - Math preprocessing helpers
-
-### @assistant-ui/react-syntax-highlighter
-
-Code block syntax highlighting.
-
-```bash
-npm install @assistant-ui/react-syntax-highlighter
-```
-
-## Package Selection Guide
+## Package selection
 
 | Scenario | Packages |
 |----------|----------|
-| Next.js + AI SDK | `@assistant-ui/react`, `@assistant-ui/react-ai-sdk`, `ai@^7`, `@ai-sdk/react@^4` |
-| LangGraph | `@assistant-ui/react`, `@assistant-ui/react-langchain` (or `@assistant-ui/react-langgraph`) |
+| Next.js + AI SDK | `@assistant-ui/react`, `@assistant-ui/ai-sdk`, `ai@^7`, `@ai-sdk/react@^4`, a provider such as `@ai-sdk/openai` |
+| LangGraph | `@assistant-ui/react`, `@assistant-ui/react-langgraph` (or `@assistant-ui/react-langchain` for `useStream`) |
 | Custom backend | `@assistant-ui/react`, `assistant-stream` |
-| With markdown | Add `@assistant-ui/react-markdown` or `@assistant-ui/react-streamdown` |
-| Expo / React Native | `@assistant-ui/react-native`, `@assistant-ui/metro` |
-| Terminal UI | `@assistant-ui/react-ink`, `@assistant-ui/react-ink-markdown` |
-| Production persistence | Add `assistant-cloud` |
+| Markdown | `@assistant-ui/react-markdown` (or `@assistant-ui/react-streamdown`) plus the `markdown-text` element |
+| Toolkits with `"use generative"` | `@assistant-ui/next`, `@assistant-ui/vite`, or `@assistant-ui/metro` |
+| Expo / React Native | `@assistant-ui/react-native`, `@assistant-ui/ai-sdk`, `@assistant-ui/metro` |
+| Terminal | `@assistant-ui/react-ink`, `@assistant-ui/react-ink-markdown`, `@assistant-ui/ai-sdk` |
+| Persistence | `assistant-cloud` |
 
-## Version Compatibility
+## Version compatibility
 
-- `@assistant-ui/react` requires React 18 or 19 (`react@^18 || ^19`)
-- `@assistant-ui/react-ai-sdk` 1.4.x depends on AI SDK v7 (`ai@^7`, `@ai-sdk/react@^4`). Older AI SDK majors need a pinned adapter release: `1.3.40` for `ai@^6`, `1.1.21` for `ai@^5`, and `@assistant-ui/react-data-stream` for `ai@^4`.
-- AI SDK requires `zod@^3.25.76 || ^4.1.8`; both Zod 3.25+ and Zod 4 work
-- Node.js >=24 is only required to build the assistant-ui monorepo itself; consuming apps follow their framework's Node requirement
+- `@assistant-ui/react` requires React 18 or 19.
+- `@assistant-ui/ai-sdk` targets AI SDK v7 (`ai@^7`, `@ai-sdk/react@^4`). Older AI SDK majors use pinned `@assistant-ui/react-ai-sdk` releases (`1.3.x` for `ai@^6`, `1.1.x` for `ai@^5`) or `@assistant-ui/react-data-stream` for `ai@^4`; see the update skill.
+- AI SDK accepts Zod 3.25+ and Zod 4.
+- Node.js 24 is required only to build the monorepo; apps follow their framework's requirement.

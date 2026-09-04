@@ -1,31 +1,26 @@
 # LangSmith
 
-Trace AI SDK route handlers into LangSmith with `wrapAISDK`. Use this when your route talks to AI SDK directly; with `@assistant-ui/react-langgraph`, tracing flows through LangGraph Cloud automatically.
+LangSmith traces AI SDK calls through `wrapAISDK(ai)`. Use this backend path when the route talks to AI SDK directly and LangSmith traces, datasets, prompt versioning, and evaluations belong with LangChain or LangGraph tooling. A LangGraph Cloud backend already has its own tracing path.
 
-## How it works
+## Environment
 
-LangSmith wraps the `ai` namespace. Call `wrapAISDK(ai)`, get back the same exports (`generateText`, `streamText`, `generateObject`, `streamObject`), and use those in place of the originals. Every call is then traced: your route calls the wrapped `streamText`, which routes through the LangSmith client to LangSmith.
-
-## Setup
-
-Get an API key from [smith.langchain.com](https://smith.langchain.com/), then set environment variables. `LANGSMITH_PROJECT` controls which project receives traces; the default project applies if you omit it.
-
-```bash
-# .env.local
+```sh
 LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=lsv2_pt_...
 LANGSMITH_PROJECT=assistant-ui
 ```
 
-Install the LangSmith SDK.
+`LANGSMITH_PROJECT` selects the receiving project. LangSmith uses its default project when the variable is omitted.
 
-```bash
+## Install
+
+```sh
 npm install langsmith
 ```
 
-## Wrap the AI SDK
+## Wrap the AI SDK namespace
 
-Destructure the wrapped exports from `wrapAISDK(ai)` and use them in your route.
+`wrapAISDK(ai)` returns traced `generateText`, `streamText`, `generateObject`, and `streamObject`. Destructure the function the route calls. `convertToModelMessages` remains on the unwrapped `ai` namespace.
 
 ```ts
 import * as ai from "ai";
@@ -37,27 +32,25 @@ const { streamText } = wrapAISDK(ai);
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
+
   const result = streamText({
-    model: openai("gpt-5.4-nano"),
+    model: openai("gpt-5.6-luna"),
     messages: await ai.convertToModelMessages(messages),
   });
-  return ai.createUIMessageStreamResponse({
-    stream: ai.toUIMessageStream({ stream: result.stream }),
-  });
+
+  return result.toUIMessageStreamResponse();
 }
 ```
 
-Note: `convertToModelMessages`, `toUIMessageStream`, and `createUIMessageStreamResponse` are not part of the wrapper; call them off the `ai` namespace directly.
+## Add trace metadata
 
-## Metadata for grouping (optional)
-
-Pass a `langsmith` provider option to tag traces with user, session, or run identifiers. Build the value with `createLangSmithProviderOptions`.
+`createLangSmithProviderOptions` creates the `langsmith` provider option. `name` becomes the run name and `metadata` provides filter fields. Resolve `userId` and `threadId` from application state instead of sending placeholders.
 
 ```ts
 import { createLangSmithProviderOptions } from "langsmith/experimental/vercel";
 
 const result = streamText({
-  model: openai("gpt-5.4-nano"),
+  model: openai("gpt-5.6-luna"),
   messages: await ai.convertToModelMessages(messages),
   providerOptions: {
     langsmith: createLangSmithProviderOptions({
@@ -68,11 +61,9 @@ const result = streamText({
 });
 ```
 
-`name` becomes the run name in LangSmith. Traces filter by the metadata fields you pass; resolve `userId` and `threadId` from your auth and thread state, don't ship literal strings.
+## Flush before a serverless exit
 
-## Serverless flush
-
-Serverless functions exit before LangSmith flushes batched traces. Before returning, force the flush with the `Client` from `langsmith`; without it you lose traces on Vercel, AWS Lambda, and similar platforms.
+Serverless functions can exit before LangSmith sends pending trace batches. Flush the client before the runtime exits.
 
 ```ts
 import { Client } from "langsmith";
@@ -83,10 +74,6 @@ await client.awaitPendingTraceBatches();
 
 ## Verify
 
-Send a message; the trace should appear in your LangSmith project within seconds. Confirm a new run named according to `name` (or the default `streamText`), that inputs, outputs, token usage, and latency are populated, and that metadata fields show up as filters.
+Send a message and inspect the selected LangSmith project after a few seconds. Confirm a run named `chat-completion` or the default `streamText` name, populated inputs and outputs, token usage and latency, and metadata fields that can be used as filters.
 
-## Notes
-
-- `experimental_telemetry` vs `wrapAISDK`: the AI SDK's generic `experimental_telemetry` flag emits OpenTelemetry spans (the path Langfuse uses). `wrapAISDK` is LangSmith's own path; you do not need to set `experimental_telemetry` when using it.
-- LangGraph users: if your backend is LangGraph Cloud, prefer the LangGraph runtime; tracing is built in. Use `wrapAISDK` only when calling AI SDK directly.
-- Version requirements: LangSmith documents AI SDK v5 as the minimum and `langsmith >= 0.3.63`. The wrapper continues to work against v6 in practice; if you hit an incompatibility, check LangSmith's release notes.
+Do not add AI SDK `experimental_telemetry` just for LangSmith. That flag emits OpenTelemetry spans for the Langfuse path. `wrapAISDK` is LangSmith's tracing path, and the route must call the wrapped function.

@@ -1,10 +1,10 @@
 # useAssistantInstructions
 
-Register system instructions that guide assistant behavior from any component inside the runtime.
+Register system instructions that steer assistant behavior, from any component inside the runtime.
 
 ## Basic usage
 
-`useAssistantInstructions` accepts a plain string. Instructions register into the model context on mount, update when the string changes, and unregister on unmount.
+Pass a plain string. It registers into the model context on mount, updates when the string changes, and unregisters on unmount.
 
 ```tsx
 import { useAssistantInstructions } from "@assistant-ui/react";
@@ -17,18 +17,7 @@ function SupportChat() {
 
 ## Config object
 
-Pass an object to control registration. `disabled: true` skips registering without conditionally calling the hook.
-
-```tsx
-useAssistantInstructions({
-  instruction: "You are a helpful form assistant.",
-  disabled: false,
-});
-```
-
-## Conditional instructions
-
-Toggle instructions with `disabled` instead of wrapping the hook in a condition (hooks must run unconditionally).
+Pass an object instead of a string to gate registration with `disabled`. The hook itself still runs unconditionally, which React's rules require; only the instruction turns on and off.
 
 ```tsx
 function ModeAwareChat({ adminMode }: { adminMode: boolean }) {
@@ -40,36 +29,39 @@ function ModeAwareChat({ adminMode }: { adminMode: boolean }) {
 }
 ```
 
-## Multiline instructions
+## Multiline and interpolated instructions
 
-Use a template literal for structured guidance.
+A template literal covers structured guidance and values pulled from component state; changing the resulting string re-registers automatically.
 
 ```tsx
-function SmartForm() {
-  useAssistantInstructions({
-    instruction: `You are a form assistant that:
-- Validates user input
-- Provides helpful suggestions
-- Never submits without confirmation`,
-  });
+function SmartForm({ userName }: { userName: string }) {
+  useAssistantInstructions(`You are a form assistant helping ${userName}. You:
+- Validate user input
+- Provide helpful suggestions
+- Never submit without confirmation`);
   return <form></form>;
 }
 ```
 
-## React state in instructions
+## Composition
 
-The string can interpolate component state; changing it re-registers automatically.
+Instructions are additive. When several components register instructions, the system strings concatenate, so guidance can live next to the feature it describes instead of one central prompt.
 
 ```tsx
-function Assistant({ userName }: { userName: string }) {
-  useAssistantInstructions(`Address the user as ${userName}.`);
-  return <Thread />;
+function App() {
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <GlobalInstructions />   {/* "You are a helpful assistant." */}
+      <CheckoutInstructions /> {/* "When checking out, confirm the address." */}
+      <Thread />
+    </AssistantRuntimeProvider>
+  );
 }
 ```
 
-## Dynamic context at send-time
+## When the value needs to stay fresh without re-registering
 
-`useAssistantInstructions` re-registers whenever its value changes. For values that should be read fresh on every run without re-registration, use `useAssistantContext`, whose `getContext` callback is evaluated each time the model context is read and returns the system string directly.
+`useAssistantInstructions` re-registers every time its string changes, which is wasteful for app state that changes often, such as a cart total or a selection. Reach for [`useAssistantContext`](./model-context.md#useassistantcontext) instead: its `getContext` callback is evaluated fresh each time the model context is read, so it returns the current value without ever re-registering.
 
 ```tsx
 import { useAssistantContext } from "@assistant-ui/react";
@@ -82,65 +74,23 @@ function CartContext({ cart }: { cart: Cart }) {
 }
 ```
 
-## Composition
+## Pairing with visible components and tools
 
-Instructions are additive. When several components register instructions, the system strings are concatenated and any registered tool sets are merged, so you can colocate guidance with the feature it describes.
-
-```tsx
-function App() {
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <GlobalInstructions />  {/* "You are a helpful assistant." */}
-      <CheckoutInstructions /> {/* "When checking out, confirm the address." */}
-      <Thread />
-    </AssistantRuntimeProvider>
-  );
-}
-```
-
-## With tools and visible components
-
-Instructions pair with `makeAssistantTool` (browser tools) and `makeAssistantVisible` (component context) to describe how the assistant should use them.
+Instructions describe how the assistant should act on what it can already see or do. Pair them with [`makeAssistantVisible`](./visible.md) for DOM the assistant can read or click, and with a toolkit (see the tools skill) for anything it should call.
 
 ```tsx
-import { makeAssistantTool, useAssistantInstructions, tool } from "@assistant-ui/react";
-import { z } from "zod";
+import { makeAssistantVisible, useAssistantInstructions } from "@assistant-ui/react";
 
-const SubmitFormTool = makeAssistantTool({
-  ...tool({
-    parameters: z.object({ email: z.string() }),
-    execute: async ({ email }) => submitForm(email),
-  }),
-  toolName: "submitForm",
-});
+const VisibleForm = makeAssistantVisible(CheckoutForm, { editable: true });
 
-function FormCopilot() {
-  useAssistantInstructions("Help the user fill the form, then call submitForm.");
-  return (
-    <>
-      <SubmitFormTool />
-      <Thread />
-    </>
+function Checkout() {
+  useAssistantInstructions(
+    "Help the user fill out the checkout form. Read the form HTML, then use the edit tool to set field values.",
   );
+  return <VisibleForm />;
 }
 ```
 
 ## Low-level registration
 
-`useAssistantInstructions` is a thin wrapper over the model context API. Register `system` directly via `useAui` when you need to combine instructions, tools, and cleanup yourself.
-
-```tsx
-import { useAui } from "@assistant-ui/react";
-
-function Provider() {
-  const aui = useAui();
-  useEffect(() => {
-    return aui.modelContext.register({
-      getModelContext: () => ({ system: "You are a search assistant." }),
-    });
-  }, [aui]);
-  return null;
-}
-```
-
-Note: the value returned from `register` is the cleanup function; call it (or return it from `useEffect`) to unregister.
+`useAssistantInstructions` is a thin wrapper over `aui.modelContext.register`. Register directly when instructions and tools need to ship from the same provider, or when the value must be computed at send-time rather than tracked as React state; see [model-context.md](./model-context.md#imperative-register) for the full pattern.

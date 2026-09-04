@@ -1,6 +1,6 @@
 ---
 name: observability
-description: "Adds tracing, telemetry, and observability to an assistant-ui backend. Use when wiring an AI SDK route handler (streamText/generateText, toUIMessageStream, createUIMessageStreamResponse) to a tracing backend: Langfuse via OpenTelemetry (LangfuseSpanProcessor and NodeSDK in instrumentation.ts, experimental_telemetry isEnabled, propagateAttributes with traceName/userId/sessionId, langfuseSpanProcessor.forceFlush on serverless), LangSmith via wrapAISDK(ai) from langsmith/experimental/vercel (createLangSmithProviderOptions, awaitPendingTraceBatches), or Helicone via createOpenAI baseURL https://oai.helicone.ai/v1 with the Helicone-Auth header. Also covers rendering collected spans with @assistant-ui/react-o11y headless primitives (SpanResource, SpanPrimitive Root/Indent/CollapseToggle/StatusIndicator/TypeBadge/Name/Children, SpanByIndexProvider, SpanData/SpanState) mounted via useAui/AuiProvider from @assistant-ui/store. Use for missing or empty traces, edge vs nodejs runtime telemetry, serverless flush issues, or trace waterfalls."
+description: "Instruments assistant-ui AI SDK backend routes with Langfuse, LangSmith, or Helicone, and renders independent trace data with the experimental @assistant-ui/react-o11y SpanResource and SpanPrimitive APIs. Use it when traces are missing, serverless spans are dropped, an AI SDK call needs provider metadata, Helicone is not proxying a provider, or a trace tree or timeline needs rendering. For streaming transport use streaming, for initial application wiring use setup, for Assistant Cloud persistence use cloud, and for copied styled trace UI use elements."
 license: MIT
 ---
 
@@ -8,195 +8,86 @@ license: MIT
 
 **Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
-Tracing and telemetry for an assistant-ui backend. Most of this is generic AI SDK telemetry; the assistant-ui specific part is the route handler and the `@assistant-ui/react-o11y` client primitives for rendering spans.
-
-## Contents
-
-- [References](#references)
-- [Where it plugs in](#where-it-plugs-in)
-- [Provider routing](#provider-routing)
-- [AI SDK telemetry (shared)](#ai-sdk-telemetry-shared)
-- [Helicone (proxy, no OTel)](#helicone-proxy-no-otel)
-- [Visualizing spans with react-o11y](#visualizing-spans-with-react-o11y)
-- [Common Gotchas](#common-gotchas)
-- [Related Skills](#related-skills)
+Observability has two separate layers. Langfuse, LangSmith, and Helicone instrument backend model calls. `@assistant-ui/react-o11y` renders span data already collected by your application. It does not send traces to a provider or derive spans from the assistant runtime.
 
 ## References
 
-- [./references/langfuse.md](./references/langfuse.md) -- Langfuse tracing
-- [./references/langsmith.md](./references/langsmith.md) -- LangSmith tracing
-- [./references/helicone.md](./references/helicone.md) -- Helicone proxy
-- [./references/react-o11y.md](./references/react-o11y.md) -- @assistant-ui/react-o11y client primitives
+- [./references/langfuse.md](./references/langfuse.md) -- OpenTelemetry setup, trace attributes, and serverless flushing for Langfuse.
+- [./references/langsmith.md](./references/langsmith.md) -- `wrapAISDK`, metadata, and serverless flushing for LangSmith.
+- [./references/helicone.md](./references/helicone.md) -- Helicone proxy setup for AI SDK and OpenAI SDK routes.
+- [./references/react-o11y.md](./references/react-o11y.md) -- `SpanResource`, every exported span primitive part, span contracts, timeline attributes, and the styled TraceWaterfall option.
 
-## Where it plugs in
+## Choose the backend integration
 
-Telemetry attaches to the **server route** that calls `streamText`/`generateText`, not to the React runtime. The frontend (`useChatRuntime`, `Thread`) is unchanged. `react-o11y` is a separate, optional client layer for drawing the trace waterfall in your own UI.
+Use one provider based on the data model you need.
 
-```
-Thread (frontend) ──> /api/chat (streamText) ──> tracing backend
-                                              └─> react-o11y (optional UI)
-```
+- **Langfuse** receives the OpenTelemetry spans AI SDK emits when `experimental_telemetry` is enabled. Use it for a hierarchical trace across an agent turn, tool calls, and model calls.
+- **LangSmith** wraps AI SDK functions through `wrapAISDK(ai)`. Use it when traces, evaluations, and prompt management belong with LangChain or LangGraph tooling.
+- **Helicone** proxies the provider request. Use it for request logs, costs, latency, and prompt diffs without changing the AI SDK call shape.
 
-## Provider routing
+Langfuse and Helicone can run together because one consumes OpenTelemetry spans while the other proxies provider traffic. LangSmith is its own wrapper path, so use its wrapped AI SDK functions instead of the originals.
 
-```
-Langfuse   → OTel span processor + experimental_telemetry, propagateAttributes
-LangSmith  → wrapAISDK(ai) wrapper, no OTel setup
-Helicone   → proxy baseURL on the provider, no telemetry flag
-react-o11y → client primitives to render spans you collected
-```
+## Implementation order
 
-## AI SDK telemetry (shared)
+1. Select the provider integration that owns the telemetry destination.
+2. Add its server environment variables and startup instrumentation or provider configuration.
+3. Instrument one route and verify a real request reaches the provider dashboard.
+4. Add serverless flushing before treating traces as reliable in production.
+5. Render a separate `SpanData[]` feed with react-o11y only when the product needs an in app trace view.
 
-Langfuse and any OTel backend reuse the AI SDK `experimental_telemetry` flag. Enable it per call:
+## Route handler boundary
 
-```ts
-import { openai } from "@ai-sdk/openai";
-import {
-  streamText,
-  convertToModelMessages,
-  createUIMessageStreamResponse,
-  toUIMessageStream,
-} from "ai";
-import type { UIMessage } from "ai";
+Keep provider credentials and instrumentation on the server. Every example uses `openai("gpt-5.6-luna")`, awaits `convertToModelMessages(messages)`, and returns the AI SDK UI message response. The integration pages do not use an assistant-ui route helper. If a route needs one, import it from `@assistant-ui/ai-sdk`; `@assistant-ui/react-ai-sdk` re-exports the same API for older installs.
 
-export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
-  const result = streamText({
-    model: openai("gpt-5.4-nano"),
-    messages: await convertToModelMessages(messages),
-    experimental_telemetry: { isEnabled: true },
-  });
-  return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream }),
-  });
-}
-```
+Resolve trace attributes from real auth and thread state. Do not put a provider key, Langfuse user ID, LangSmith metadata, or Helicone header in a client component.
 
-For Langfuse, register an OTel span processor in `instrumentation.ts` and wrap the call so traces carry `userId`/`sessionId`:
+## Render collected spans
 
-```ts
-import { NodeSDK } from "@opentelemetry/sdk-node";
-import { LangfuseSpanProcessor } from "@langfuse/otel";
-
-export const langfuseSpanProcessor = new LangfuseSpanProcessor();
-
-export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const sdk = new NodeSDK({ spanProcessors: [langfuseSpanProcessor] });
-  sdk.start();
-}
-```
-
-```ts
-import { propagateAttributes } from "@langfuse/tracing";
-
-const result = await propagateAttributes(
-  { traceName: "chat-completion", userId, sessionId },
-  async () =>
-    streamText({
-      model: openai("gpt-5.4-nano"),
-      messages: await convertToModelMessages(messages),
-      experimental_telemetry: { isEnabled: true },
-    }),
-);
-```
-
-LangSmith skips OTel entirely; wrap the `ai` module instead. `convertToModelMessages` and the stream-response helpers are not wrapped, so call them off the `ai` namespace directly:
-
-```ts
-import * as ai from "ai";
-import { wrapAISDK } from "langsmith/experimental/vercel";
-import { openai } from "@ai-sdk/openai";
-
-const { streamText } = wrapAISDK(ai);
-
-const result = streamText({
-  model: openai("gpt-5.4-nano"),
-  messages: await ai.convertToModelMessages(messages),
-});
-return ai.createUIMessageStreamResponse({
-  stream: ai.toUIMessageStream({ stream: result.stream }),
-});
-```
-
-See the per provider reference files for env vars, metadata tagging, and serverless flushing.
-
-## Helicone (proxy, no OTel)
-
-Helicone needs no telemetry flag. Point the provider at the proxy `baseURL` and pass the auth header:
-
-```ts
-import { createOpenAI } from "@ai-sdk/openai";
-
-const openai = createOpenAI({
-  baseURL: "https://oai.helicone.ai/v1",
-  headers: { "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}` },
-});
-```
-
-Use this `openai` instance with `streamText` as usual; streaming, tools, and attachments are unchanged.
-
-## Visualizing spans with react-o11y
-
-`@assistant-ui/react-o11y` gives headless primitives to render collected spans as a trace waterfall. Feed it `SpanData[]` (id, parentSpanId, name, type, status, startedAt, endedAt, latencyMs) via `SpanResource`, mount with `useAui`, and render `SpanPrimitive` parts.
-
-```bash
-npm install @assistant-ui/react-o11y
-```
+`SpanResource({ spans })` accepts the complete raw `SpanData[]` list, normalizes parent relationships, sorts visible spans by start time, and owns collapse state. Mount it at an isolated provider root:
 
 ```tsx
-import {
-  SpanResource,
-  SpanPrimitive,
-  type SpanData,
-} from "@assistant-ui/react-o11y";
-import { AuiProvider, useAui } from "@assistant-ui/store";
+const config = AuiConfig({ span: SpanResource({ spans }) });
 
-function SpanRow() {
-  return (
-    <SpanPrimitive.Root>
-      <SpanPrimitive.Indent />
-      <SpanPrimitive.CollapseToggle />
-      <SpanPrimitive.StatusIndicator />
-      <SpanPrimitive.TypeBadge />
-      <SpanPrimitive.Name />
-    </SpanPrimitive.Root>
-  );
-}
-
-export function TraceView({ spans }: { spans: SpanData[] }) {
-  const aui = useAui({ span: SpanResource({ spans }) });
-  return (
-    <AuiProvider value={aui}>
-      <SpanPrimitive.Children components={{ Span: SpanRow }} />
-    </AuiProvider>
-  );
-}
+<AuiProvider extends={null} config={config}>
+  <SpanPrimitive.Children components={{ Span: SpanRow }} />
+</AuiProvider>;
 ```
 
-`SpanPrimitive.Children` flattens the tree to a visible list and wraps each item in `SpanByIndexProvider`. `Root` exposes `data-span-status`, `data-span-type`, `data-span-depth`, and `data-collapsed` for styling. See [react-o11y.md](./references/react-o11y.md) for the full part list and `SpanState` shape.
+The `SpanRow` component is automatically scoped to one visible span. Use `SpanPrimitive.Timeline` and `SpanPrimitive.TimelineBar` when rows must share a time axis. Use the copied `TraceWaterfall` element when a styled flat message and tool waterfall better fits the data you have.
 
 ## Common Gotchas
 
-**No traces on Vercel/Lambda**
-- The function exits before OTel flushes its buffer. Langfuse: `await langfuseSpanProcessor.forceFlush()` before responding. LangSmith: `await new Client().awaitPendingTraceBatches()`.
+**Traces disappear on Vercel, Lambda, or another serverless runtime**
 
-**Langfuse traces empty**
-- `experimental_telemetry: { isEnabled: true }` must be set on each `streamText`/`generateText` call.
-- The span processor only registers when `process.env.NEXT_RUNTIME === "nodejs"`; OTel does not run on the edge runtime.
+- Langfuse needs `await langfuseSpanProcessor.forceFlush()` before the function exits, or a deployment specific `waitUntil` path.
+- LangSmith needs `await client.awaitPendingTraceBatches()` before the function exits.
 
-**LangSmith not tracing**
-- Use the destructured methods from `wrapAISDK(ai)`, not the originals from `ai`. `LANGSMITH_TRACING=true` must be set.
+**Langfuse has no spans**
 
-**Helicone requests still hit OpenAI directly**
-- Confirm requests go to `oai.helicone.ai`, not `api.openai.com`, and carry both `Helicone-Auth` and `Authorization` headers.
+- Set `experimental_telemetry: { isEnabled: true }` on each traced `streamText` or `generateText` call.
+- Register `LangfuseSpanProcessor` only in the Node runtime. OpenTelemetry does not run in the edge runtime.
 
-**react-o11y renders nothing**
-- Primitives must render inside `AuiProvider`; the resource mounts through `useAui({ span: SpanResource({ spans }) })`.
+**LangSmith does not trace the route**
+
+- Call the destructured functions from `wrapAISDK(ai)`, not the originals from `ai`.
+- Set `LANGSMITH_TRACING=true` in the runtime environment.
+
+**Helicone traffic still goes directly to OpenAI**
+
+- The provider `baseURL` must be `https://oai.helicone.ai/v1` and the request must carry `Helicone-Auth` as well as the provider authorization header.
+
+**A react-o11y view renders no rows**
+
+- Mount `SpanResource` with `AuiConfig({ span: SpanResource({ spans }) })` and render beneath `<AuiProvider extends={null} config={config}>`.
+- Pass a complete `SpanData[]` list. `SpanPrimitive.Children` reads the current span scope and does not fetch traces.
+
+**A documented span component is missing**
+
+- `SpanPrimitive.ChildByIndex` is not re-exported by the current source. Use the exported `SpanByIndexProvider` with a row component when explicit index scoping is necessary.
 
 ## Related Skills
 
-- `/streaming` - The route handler and stream response telemetry attaches to
-- `/setup` - Backend wiring (`ai-sdk`, `custom-backend`) where the route lives
-- `/cloud` - Persistence; pair `userId`/`sessionId`/`threadId` with trace attributes
+- [streaming](../streaming/SKILL.md) -- AI SDK stream transport and route response handling.
+- [setup](../setup/SKILL.md) -- Project creation, CLI setup, and runtime installation.
+- [cloud](../cloud/SKILL.md) -- Assistant Cloud persistence and run reporting configuration.
+- [elements](../elements/SKILL.md) -- Copied styled elements, including TraceWaterfall.

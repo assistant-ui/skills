@@ -1,33 +1,48 @@
 # assistant-ui Architecture
 
-## Layered System
+## Layers
 
-assistant-ui follows a 4-layer architecture where each layer depends only on layers below it.
+Each layer depends only on the layers below it.
 
-### Layer 1: RuntimeCore (Internal)
+### UI: elements and primitives
 
-Internal implementations that manage state:
+Primitives from `@assistant-ui/react` are unstyled, Radix-style parts (`ThreadPrimitive.Root`, `ComposerPrimitive.Input`, `MessagePrimitive.Parts`, ...) that read and write through the aui client, never against the backend directly. Elements are styled compositions of those primitives that the CLI copies into `components/assistant-ui/elements/`; runtime-connected ones carry the `.aui.tsx` suffix and standalone ones take props.
 
-- `LocalRuntimeCore` - In-browser state
-- `ExternalStoreRuntimeCore` - External state sync
-- `ThreadListRuntimeCore` - Thread management
+### The aui client
 
-```typescript
-// Internal - not directly used
-interface ThreadRuntimeCore {
-  readonly messages: readonly ThreadMessage[];
-  readonly isRunning: boolean;
-  append(message: AppendMessage): void;
-  cancelRun(): void;
-  subscribe(callback: () => void): Unsubscribe;
-}
+`useAui()` returns an `AssistantClient`: one property accessor per registered scope plus `subscribe` and `on`. Application code uses it instead of the runtime object.
+
+```tsx
+import { useAui, useAuiState, useAuiEvent } from "@assistant-ui/react";
+
+const aui = useAui();
+aui.thread.append({ role: "user", content: [{ type: "text", text: "Hi" }] });
+aui.thread.message({ index: 0 }).reload();
+aui.thread.composer().send();
+aui.threads.switchToNewThread();
+
+const messages = useAuiState((s) => s.thread.messages);
+useAuiEvent("threads.selectionChanged", ({ threadId, previousThreadId }) => {});
 ```
 
-### Layer 2: Runtime (Public API)
+Scopes: `threads`, `threadListItem`, `thread`, `message`, `part`, `composer`, `attachment`, `modelContext`, `suggestions`, `suggestion`, `chainOfThought`, `queueItem`, `tools`, `dataRenderers`, `unstable_interactables`, plus package scopes such as `mcp` and `span`.
 
-The object you hand to `AssistantRuntimeProvider`. `thread` and `threads` are properties:
+An unavailable scope never throws at selection: `aui.thread` is always truthy, its `source` is `null`, and any other read throws. Guard with `aui.thread.source != null` or select through `s.optional.thread`.
 
-```typescript
+Scopes are declared with `AuiConfig` and mounted by a provider. `AssistantRuntimeProvider` installs an `AuiProvider` for the runtime's `threads` scope and merges anything you pass as `config`; nested subtrees add scopes with `<AuiProvider extends={aui} config={config}>`; `extends={null}` starts an isolated root. Configs are plain data and identity-insensitive.
+
+```tsx
+import { AssistantRuntimeProvider, AuiConfig, Tools } from "@assistant-ui/react";
+
+const config = AuiConfig({ tools: Tools({ toolkit }) });
+<AssistantRuntimeProvider runtime={runtime} config={config}>{children}</AssistantRuntimeProvider>;
+```
+
+### Runtime
+
+The object a runtime hook returns and the provider mounts. `thread` and `threads` are properties.
+
+```ts
 type AssistantRuntime = {
   readonly thread: ThreadRuntime;
   readonly threads: ThreadListRuntime;
@@ -35,7 +50,6 @@ type AssistantRuntime = {
 };
 
 type ThreadRuntime = {
-  readonly path: ThreadRuntimePath;
   readonly composer: ThreadComposerRuntime;
   getState(): ThreadState;
   append(message: CreateAppendMessage): void;
@@ -48,74 +62,26 @@ type ThreadRuntime = {
 };
 ```
 
-### Layer 3: The aui client and hooks
+`LocalRuntime` keeps conversation state inside assistant-ui and drives a `ChatModelAdapter`; every framework adapter (AI SDK, LangGraph, ADK, A2A, ...) builds on it. `ExternalStoreRuntime` delegates state to your store and calls your callbacks (`onNew`, `onEdit`, `onReload`, `onCancel`, `onRespondToToolApproval`). The runtime is framework neutral (`@assistant-ui/core`), which is why React Native and Ink share it.
 
-`useAui()` returns an `AssistantClient`: one property accessor per registered scope, plus `subscribe` and `on`. It is the API application code should use; `AssistantRuntime` is the object that backs it.
+### Adapters, protocols, persistence
 
-```tsx
-import { useAui, useAuiState, useAuiEvent } from "@assistant-ui/react";
+Runtime adapters translate a backend's wire shape (AI SDK UI message stream, LangGraph events, ADK sessions, AG-UI events, A2A tasks) into thread state. Two generic protocols avoid a bespoke adapter: the AI SDK data stream and Assistant Transport (`assistant-stream`). Persistence is a separate seam: Assistant Cloud or your own `ThreadHistoryAdapter` and `RemoteThreadListAdapter`.
 
-const aui = useAui();
-
-// Scope accessors are properties (0.15+); methods on a scope keep their parens
-aui.thread.append({ role: "user", content: [{ type: "text", text: "Hi" }] });
-aui.thread.message({ index: 0 }).reload();
-aui.thread.composer().send();
-aui.threads.switchToNewThread();
-
-const messages = useAuiState((s) => s.thread.messages);
-
-useAuiEvent("thread.modelContextUpdate", (e) => console.log(e));
-```
-
-Scopes: `threads`, `threadListItem`, `thread`, `message`, `part`, `composer`, `attachment`, `modelContext`, `suggestions`, `suggestion`, `chainOfThought`, `queueItem`, `tools`, `dataRenderers`, `interactables`.
-
-An unavailable scope does not throw at selection time: `aui.thread` is always truthy, `source` is `null`, and any other read throws. Guard with `aui.thread.source != null`, or select through `s.optional.thread` in `useAuiState`.
-
-### Layer 4: Primitives (UI)
-
-Composable UI components:
-
-```tsx
-import {
-  ThreadPrimitive,
-  ComposerPrimitive,
-  MessagePrimitive,
-  ActionBarPrimitive,
-} from "@assistant-ui/react";
-```
-
-## Data Flow
+## Data flow
 
 ```
-User Action (send message)
-    │
-    ▼
-Primitive captures event
-    │
-    ▼
-Calls runtime API (thread.append)
-    │
-    ▼
-RuntimeCore processes action
-    │
-    ▼
-State updates
-    │
-    ▼
-Subscribers notified
-    │
-    ▼
-Primitives re-render with new state
+User action (send)
+  → primitive calls aui.thread.composer().send()
+  → runtime appends the message and starts a run
+  → adapter streams parts from the backend into thread state
+  → subscribers notified, primitives and elements re-render
 ```
 
-## Message Model
+## Message model
 
-```typescript
-type ThreadMessage =
-  | ThreadUserMessage
-  | ThreadAssistantMessage
-  | ThreadSystemMessage;
+```ts
+type ThreadMessage = ThreadUserMessage | ThreadAssistantMessage | ThreadSystemMessage;
 
 type ThreadUserMessage = {
   id: string;
@@ -130,14 +96,12 @@ type ThreadAssistantMessage = {
   id: string;
   role: "assistant";
   content: readonly ThreadAssistantMessagePart[];
-  // status is an object, not a string. Branch on status.type.
   status: MessageStatus;
   metadata: {
     steps: readonly ThreadStep[];
     submittedFeedback?: { type: "positive" | "negative" };
     timing?: MessageTiming;
     custom: Record<string, unknown>;
-    // unstable_state / unstable_annotations / unstable_data
   };
   createdAt: Date;
 };
@@ -146,47 +110,34 @@ type MessageStatus =
   | { type: "running" }
   | { type: "requires-action"; reason: "interrupt" | "tool-calls" }
   | { type: "complete"; reason: "stop" | "unknown" }
-  | {
-      type: "incomplete";
-      reason: "cancelled" | "content-filter" | "error" | "length" | "other" | "tool-calls";
-      error?: ReadonlyJSONValue;
-    };
+  | { type: "incomplete"; reason: "cancelled" | "content-filter" | "error" | "length" | "other" | "tool-calls"; error?: ReadonlyJSONValue };
 ```
 
-The two roles carry different part unions:
+`status` is an object; branch on `status.type`. The two roles carry different part unions:
 
-```typescript
-type ThreadUserMessagePart =
-  | TextMessagePart
-  | ImageMessagePart
-  | FileMessagePart
-  | DataMessagePart
-  | Unstable_AudioMessagePart;
+```ts
+type ThreadUserMessagePart = TextMessagePart | ImageMessagePart | FileMessagePart | DataMessagePart | Unstable_AudioMessagePart;
 
 type ThreadAssistantMessagePart =
-  | TextMessagePart          // { type: "text"; text: string }
-  | ReasoningMessagePart     // { type: "reasoning"; text: string }
-  | ToolCallMessagePart      // { type: "tool-call"; toolCallId; toolName; args; argsText; result?; isError?; artifact? }
+  | TextMessagePart          // { type: "text"; text }
+  | ReasoningMessagePart     // { type: "reasoning"; text }
+  | ToolCallMessagePart      // { type: "tool-call"; toolCallId; toolName; args; argsText; result?; isError?; artifact?; approval?; messages? }
   | SourceMessagePart        // { type: "source"; sourceType: "url"; id; url; title? }
-  | FileMessagePart          // { type: "file"; data; mimeType; filename?; sourceType?: "id" | "url" }
-  | ImageMessagePart         // { type: "image"; image: string; filename? }
-  | DataMessagePart          // { type: "data"; name: string; data: T }
-  | GenerativeUIMessagePart; // { type: "generative-ui"; spec: GenerativeUISpec }
+  | FileMessagePart          // { type: "file"; data; mimeType; filename? }
+  | ImageMessagePart         // { type: "image"; image; filename? }
+  | DataMessagePart          // { type: "data"; name; data }
+  | GenerativeUIMessagePart; // { type: "generative-ui"; spec }
 ```
 
-In UI code you usually read `MessageState`, which is `ThreadMessage` plus `parentId`, `index`, `isLast`, `branchNumber`, `branchCount`, `parts` (`PartState[]`, part data plus per-part status), `composer` (the edit composer), `isCopied`, and `isHovering`.
+In UI code you read `MessageState`: the message plus `parentId`, `index`, `isLast`, `branchNumber`, `branchCount`, `parts` (part data with per-part status), `composer` (the edit composer), `isCopied`, and `isHovering`. Metadata a backend attaches outside the fixed shape lands under `metadata.custom`.
 
-## Branching Model
+## Branching
 
-Messages form a tree structure supporting edits:
+Messages form a tree. Editing or reloading creates a sibling branch; `BranchPickerPrimitive` and `aui.message.switchToBranch({ position })` move between them.
 
 ```
 User: "Hello"
-    └─ Assistant: "Hi there!"
-       └─ User: "Tell me a joke"          ← Current branch
-          └─ Assistant: "Why did..."
-       └─ User: "Tell me a fact" (edit)   ← Alternative branch
-          └─ Assistant: "The sun..."
+  └─ Assistant: "Hi there!"
+       ├─ User: "Tell me a joke"  → Assistant: "Why did..."   (current)
+       └─ User: "Tell me a fact"  → Assistant: "The sun..."   (edit)
 ```
-
-Navigate branches with `BranchPickerPrimitive` or runtime API.

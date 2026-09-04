@@ -1,43 +1,28 @@
 # Langfuse
 
-Trace AI SDK calls into Langfuse via OpenTelemetry for tracing, evals, and prompt management.
+Langfuse consumes OpenTelemetry spans that AI SDK emits. It adds no proxy and does not wrap `streamText`. Use it when an agent turn needs one hierarchical trace containing model and tool activity.
 
-## Contents
+## Environment
 
-- [How it works](#how-it-works)
-- [Environment variables](#environment-variables)
-- [Packages](#packages)
-- [instrumentation.ts](#instrumentationts)
-- [Next.js 14 config](#nextjs-14-config)
-- [Route handler](#route-handler)
-- [Trace metadata](#trace-metadata)
-- [Serverless: forceFlush](#serverless-forceflush)
-
-## How it works
-
-There is no proxy and no client wrapping. `streamText` (or `generateText`) emits OpenTelemetry spans when `experimental_telemetry` is enabled. A `LangfuseSpanProcessor` registered on the OTel `NodeSDK` ships those spans to Langfuse, which renders them as traces.
-
-`@langfuse/tracing` provides the helpers that label traces (user, session, trace name). `@langfuse/otel` provides the span processor.
-
-## Environment variables
-
-```bash
+```sh
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_BASE_URL=https://cloud.langfuse.com
 ```
 
-`LANGFUSE_BASE_URL` selects the region: EU is `https://cloud.langfuse.com`, US is `https://us.cloud.langfuse.com`, or point it at a self-hosted instance.
+`LANGFUSE_BASE_URL` is `https://cloud.langfuse.com` for EU, `https://us.cloud.langfuse.com` for US, or the URL of a self hosted instance.
 
-## Packages
+## Install
 
-```bash
+```sh
 npm install @langfuse/tracing @langfuse/otel @opentelemetry/sdk-node
 ```
 
-## instrumentation.ts
+`@langfuse/tracing` provides `propagateAttributes`. `@langfuse/otel` provides `LangfuseSpanProcessor`, and `@opentelemetry/sdk-node` starts the OpenTelemetry SDK.
 
-Create `instrumentation.ts` at the project root. Export the processor so route handlers can flush it later (see [Serverless: forceFlush](#serverless-forceflush)).
+## Initialize OpenTelemetry once
+
+Create `instrumentation.ts` at the application root. Export the processor so a serverless route can flush it later.
 
 ```ts
 import { NodeSDK } from "@opentelemetry/sdk-node";
@@ -55,68 +40,29 @@ export async function register() {
 }
 ```
 
-Note: the `NEXT_RUNTIME` guard skips the edge runtime, where OTel does not run.
-
-## Next.js 14 config
-
-Next.js 15 calls `register()` automatically. On Next.js 14 and earlier, opt in via `next.config.mjs`:
+The Node runtime guard excludes the edge runtime, where OpenTelemetry does not run. On Next.js 14 and earlier, opt in to the instrumentation hook:
 
 ```js
 const nextConfig = {
-  experimental: {
-    instrumentationHook: true,
-  },
+  experimental: { instrumentationHook: true },
 };
 
 export default nextConfig;
 ```
 
-## Route handler
+## Trace an AI SDK route
 
-Enable telemetry by setting `experimental_telemetry` directly on `streamText`. The same flag works on `generateText`.
-
-```ts
-import { openai } from "@ai-sdk/openai";
-import {
-  streamText,
-  convertToModelMessages,
-  createUIMessageStreamResponse,
-  toUIMessageStream,
-} from "ai";
-import type { UIMessage } from "ai";
-
-export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
-
-  const result = streamText({
-    model: openai("gpt-4o"),
-    messages: await convertToModelMessages(messages),
-    experimental_telemetry: { isEnabled: true },
-  });
-
-  return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream }),
-  });
-}
-```
-
-## Trace metadata
-
-Wrap the call in `propagateAttributes` from `@langfuse/tracing` to attach a trace name, user, and session so Langfuse can group and filter runs.
+Enable `experimental_telemetry` on the call and wrap it in `propagateAttributes`. `traceName` labels the trace. `userId` and `sessionId` are the canonical filter dimensions, so resolve them from the authenticated user and selected thread.
 
 ```ts
 import { openai } from "@ai-sdk/openai";
-import {
-  streamText,
-  convertToModelMessages,
-  createUIMessageStreamResponse,
-  toUIMessageStream,
-} from "ai";
+import { streamText, convertToModelMessages } from "ai";
 import type { UIMessage } from "ai";
 import { propagateAttributes } from "@langfuse/tracing";
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
+
   const userId = "<resolve from your session>";
   const sessionId = "<resolve from your thread state>";
 
@@ -124,21 +70,19 @@ export async function POST(req: Request) {
     { traceName: "chat-completion", userId, sessionId },
     async () =>
       streamText({
-        model: openai("gpt-4o"),
+        model: openai("gpt-5.6-luna"),
         messages: await convertToModelMessages(messages),
         experimental_telemetry: { isEnabled: true },
       }),
   );
 
-  return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream }),
-  });
+  return result.toUIMessageStreamResponse();
 }
 ```
 
-## Serverless: forceFlush
+## Flush before a serverless exit
 
-On serverless platforms the function can exit before OTel flushes its buffer, dropping traces. Import the processor exported from `instrumentation.ts` and flush it before responding, or hand the flush to the runtime's `waitUntil`.
+On a serverless platform, a function can exit before the OpenTelemetry buffer is sent. Import the processor from `instrumentation.ts` and flush it before the runtime exits, or hand the flush to that platform's `waitUntil` API.
 
 ```ts
 import { langfuseSpanProcessor } from "@/instrumentation";
@@ -146,4 +90,6 @@ import { langfuseSpanProcessor } from "@/instrumentation";
 await langfuseSpanProcessor.forceFlush();
 ```
 
-Langfuse's own docs cover the deployment-specific flush patterns (for example `waitUntil`) and OTel sampling configuration on `NodeSDK`.
+## Verify
+
+Send a message and inspect the Langfuse project after a few seconds. The trace should use `traceName`, contain a child span for each model and tool call, include prompt, completion, and token usage, and expose user and session metadata as filters. If it is absent, confirm the Langfuse keys are present in the runtime handling the request and inspect server logs for OpenTelemetry errors.
