@@ -1,169 +1,102 @@
 # LaTeX and Mermaid
 
-Render math and diagrams inside the markdown message part by extending the generated `markdown-text.tsx`.
+Add KaTeX and Mermaid to the installed `markdown-text` renderer only when messages actually contain those formats. Math is a parser configuration. Mermaid is a per-language fenced-code renderer that must wait for its source to finish streaming.
 
-## Contents
+## Configure KaTeX
 
-- [Starting point](#starting-point)
-- [LaTeX with KaTeX](#latex-with-katex)
-- [Custom math delimiters](#custom-math-delimiters)
-- [Mermaid diagrams](#mermaid-diagrams)
-- [Wiring Mermaid in](#wiring-mermaid-in)
-- [Notes](#notes)
-
-## Starting point
-
-Both features build on the registry `markdown-text` component; add it first if the project does not already have it:
+Install the parser plugins and KaTeX stylesheet.
 
 ```bash
-npx assistant-ui@latest add markdown-text
+npm install katex rehype-katex remark-math
 ```
 
-See [./markdown-text.md](./markdown-text.md) for the base `MarkdownText` setup. The sections below extend that generated `markdown-text.tsx`.
-
-## LaTeX with KaTeX
-
-Add a remark plugin to parse math and a rehype plugin to render it with KaTeX.
-
-```bash
-npm install remark-math rehype-katex katex
-```
-
-Import the KaTeX stylesheet once, at the app root (`app/layout.tsx`):
-
-```ts
+```tsx
 import "katex/dist/katex.min.css";
 ```
 
-Pass `remarkMath` alongside `remarkGfm`, and `rehypeKatex` via `rehypePlugins`:
+Edit the copied `markdown-text` component so `remark-math` identifies math and `rehype-katex` produces KaTeX markup.
 
 ```tsx
-import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
+import {
+  MarkdownTextPrimitive,
+  escapeCurrencyDollars,
+  normalizeMathDelimiters,
+} from "@assistant-ui/react-markdown";
+import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import rehypeKatex from "rehype-katex";
 
-const MarkdownTextImpl = () => {
+const preprocess = (text: string) =>
+  escapeCurrencyDollars(normalizeMathDelimiters(text));
+
+export function MarkdownText() {
   return (
     <MarkdownTextPrimitive
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
-      className="aui-md"
-      components={defaultComponents}
+      preprocess={preprocess}
     />
   );
-};
-```
-
-This renders `$...$` inline math, `$$...$$` display math, and fenced code blocks tagged with the `math` language identifier.
-
-## Custom math delimiters
-
-Models sometimes emit non-standard delimiters such as `\(...\)`, `\[...\]`, or `[math]...[/math]`. The `preprocess` prop normalizes the raw string before parsing, and it runs before `useSmooth`, so partial delimiters accumulate in the buffer instead of being parsed mid-stream.
-
-```tsx
-<MarkdownTextPrimitive
-  remarkPlugins={[remarkGfm, remarkMath]}
-  rehypePlugins={[rehypeKatex]}
-  preprocess={normalizeCustomMathTags}
-  className="aui-md"
-  components={defaultComponents}
-/>;
-
-function normalizeCustomMathTags(input: string): string {
-  return input
-    .replace(/\[math\]([\s\S]*?)\[\/math\]/g, (_, c) => `$$${c.trim()}$$`)
-    .replace(/\\{1,2}\(([\s\S]*?)\\{1,2}\)/g, (_, c) => `$${c.trim()}$`)
-    .replace(/\\{1,2}\[([\s\S]*?)\\{1,2}\]/g, (_, c) => `$$${c.trim()}$$`);
 }
 ```
 
-## Mermaid diagrams
+`$...$` is inline math, `$$...$$` is display math, and a fenced `math` block is also supported by `remark-math`. Import the KaTeX CSS once at the application entry. The parser configuration alone produces unstyled KaTeX markup.
 
-Mermaid is wired through `componentsByLanguage`, which overrides the `SyntaxHighlighter` for a single fenced language (here `mermaid`).
+## Normalize model delimiters
+
+`normalizeMathDelimiters` composes `rewriteCustomMathTags` and `rewriteLatexBracketDelimiters`. Use either individual helper when the app should accept only one model convention. The helpers convert `\\(...\\)` to `$...$`, `\\[...\\]` to `$$...$$`, `[/inline]...[/inline]` to `$...$`, and `[/math]...[/math]` to `$$...$$`.
+
+For display bodies that span multiple lines, the helpers emit a fenced `$$` form with the opening and closing delimiters on their own lines. That is the form `remark-math` parses as a display block, including inside block quotes and list items.
+
+```md
+\\[
+E = mc^2
+\\]
+
+[/math]
+\int_0^1 x^2 dx
+[/math]
+```
+
+`escapeCurrencyDollars` protects currency such as `$5`, `$19.99`, and `$1,299` when single-dollar math is enabled. Compose it after delimiter normalization, as in the setup above, so display math remains unmodified.
+
+All four helpers rewrite only normal markdown text. Inline code spans, backtick fences, and tilde fences are copied verbatim, so a documentation example such as `` `\\(x\\)` `` stays code rather than turning into an equation. An unclosed streamed fence stays inert through the current end of the message.
+
+`preprocess` receives the full accumulated message before the markdown parser sees it. With `MarkdownTextPrimitive`, preprocessing happens before smooth streaming, so a partially received delimiter continues through the smooth buffer rather than reaching `remark-math` as a malformed expression.
+
+## Render Mermaid after completion
+
+Install the runtime-connected Mermaid renderer.
 
 ```bash
-npm install mermaid
+npx assistant-ui@latest add mermaid-diagram
 ```
 
-Create `components/assistant-ui/mermaid-diagram.tsx`. The component receives `SyntaxHighlighterProps` (carrying `code`, `node`, `components`, and `language`) and uses `useAuiState` to detect when the code fence has finished streaming before rendering, so Mermaid never parses a partial diagram.
+Register it only for the `mermaid` fenced language.
 
 ```tsx
-"use client";
-import { useAuiState } from "@assistant-ui/react";
-import type { SyntaxHighlighterProps } from "@assistant-ui/react-markdown";
-import mermaid from "mermaid";
-import { type FC, useEffect, useRef } from "react";
-import { cn } from "@/lib/utils";
+import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
+import { MermaidDiagram } from "@/components/assistant-ui/elements/mermaid-diagram.aui";
 
-export type MermaidDiagramProps = SyntaxHighlighterProps & {
-  className?: string;
-};
-
-mermaid.initialize({ theme: "default", startOnLoad: false });
-
-export const MermaidDiagram: FC<MermaidDiagramProps> = ({
-  code,
-  className,
-  node: _node,
-  components: _components,
-  language: _language,
-}) => {
-  const ref = useRef<HTMLPreElement>(null);
-
-  const isComplete = useAuiState((s) => {
-    if (s.part.type !== "text") return false;
-    const codeIndex = s.part.text.indexOf(code);
-    if (codeIndex === -1) return false;
-    const afterCode = s.part.text.substring(codeIndex + code.length);
-    return /^```|^\n```/.test(afterCode);
-  });
-
-  useEffect(() => {
-    if (!isComplete) return;
-    (async () => {
-      try {
-        const id = `mermaid-${Math.random().toString(36).slice(2)}`;
-        const result = await mermaid.render(id, code);
-        if (ref.current) {
-          ref.current.innerHTML = result.svg;
-          result.bindFunctions?.(ref.current);
-        }
-      } catch (e) {
-        console.warn("Failed to render Mermaid diagram:", e);
-      }
-    })();
-  }, [isComplete, code]);
-
+export function MarkdownText() {
   return (
-    <pre ref={ref} className={cn("aui-mermaid-diagram", className)}>
-      Drawing diagram...
-    </pre>
+    <MarkdownTextPrimitive
+      componentsByLanguage={{
+        mermaid: { SyntaxHighlighter: MermaidDiagram },
+      }}
+    />
   );
-};
-
-MermaidDiagram.displayName = "MermaidDiagram";
+}
 ```
 
-## Wiring Mermaid in
+`MermaidDiagram` accepts the code-block wrapper props for compatibility, then derives `streaming` from `s.optional.part?.status.type === "running"`. While the part runs it shows a skeleton. After completion it parses the full source and either displays the SVG with zoom controls or shows the raw-source fallback when parsing fails. This prevents incomplete diagrams from flashing on each streamed update.
 
-Map the `mermaid` language key to the component through `componentsByLanguage`. Every other language falls back to the default highlighter.
+For application-owned code, import `MermaidDiagram` without `.aui` and pass `code` plus `streaming` directly.
 
 ```tsx
-import { MermaidDiagram } from "@/components/assistant-ui/mermaid-diagram";
+import { MermaidDiagram } from "@/components/assistant-ui/elements/mermaid-diagram";
 
-<MarkdownTextPrimitive
-  remarkPlugins={[remarkGfm]}
-  className="aui-md"
-  components={defaultComponents}
-  componentsByLanguage={{
-    mermaid: { SyntaxHighlighter: MermaidDiagram },
-  }}
-/>;
+<MermaidDiagram code={diagram} streaming={isStreaming} />;
 ```
 
-## Notes
-
-- `useAuiState` reads the current message part; the selector assumes the diagram lives in a `text` part, which is the markdown case.
-- `componentsByLanguage` composes with `remarkPlugins` and `rehypePlugins`, so a single `MarkdownTextPrimitive` can run KaTeX and Mermaid together.
-- `mermaid.initialize(...)` at module scope runs once per bundle; `startOnLoad: false` keeps Mermaid from scanning the DOM on its own.
+Do not pass a manually calculated stream flag to the `.aui` variant. Its value comes from the active message part, which keeps it aligned with the code fence that supplied the diagram.

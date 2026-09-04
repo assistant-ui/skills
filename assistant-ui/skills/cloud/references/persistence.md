@@ -1,278 +1,152 @@
 # Cloud Persistence
 
-Thread and message persistence with assistant-cloud.
+The full `assistant-cloud` client API for threads, messages, files, and runs, verified against `src/cloud/**`. For the constructor and auth modes, see [authorization.md](./authorization.md). For a custom `ThreadHistoryAdapter` that uses Cloud only for message storage, see [custom-persistence.md](./custom-persistence.md).
 
-## Overview
+## Contents
 
-Cloud persistence saves threads and messages to the assistant-ui cloud backend, enabling:
-- Chat history across sessions
-- Multi-device sync
-- Thread management (archive, delete)
-- Auto-generated titles
-
-## Basic Setup
-
-```tsx
-import { AssistantCloud } from "assistant-cloud";
-import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
-import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Thread } from "@/components/assistant-ui/thread";
-import { ThreadList } from "@/components/assistant-ui/thread-list";
-
-const cloud = new AssistantCloud({
-  baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL,
-  authToken: async () => getAuthToken(),
-});
-
-function Chat() {
-  const runtime = useChatRuntime({
-    transport: new AssistantChatTransport({
-      api: "/api/chat",
-    }),
-    cloud,  // Enable persistence
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <ThreadList />
-      <Thread />
-    </AssistantRuntimeProvider>
-  );
-}
-```
+- [Thread API](#thread-api)
+- [Message API](#message-api)
+- [Message format](#message-format)
+- [Auto-save behavior](#auto-save-behavior)
+- [File uploads](#file-uploads)
+- [Project-wide listing](#project-wide-listing)
+- [Auth tokens](#auth-tokens)
+- [Run telemetry](#run-telemetry)
+- [Error handling](#error-handling)
 
 ## Thread API
 
-### List Threads
+Paging is cursor based: `after` is the `id` of the last thread from the previous page, not an offset.
 
-Paging is cursor based (`after`), not offset based.
-
-```tsx
+```ts
 const { threads } = await cloud.threads.list({
-  is_archived: false,
+  is_archived: false, // omit for both archived and regular
   limit: 50,
-  after: cursor,        // id of the last thread from the previous page
+  after: cursor,
 });
 
-// threads: Array<{
-//   id: string;
-//   title: string;
-//   created_at: Date;
-//   updated_at: Date;
-//   last_message_at: Date;
-//   is_archived: boolean;
-//   external_id: string | null;
-//   metadata: unknown;
-//   project_id: string;
-//   workspace_id: string;
-// }>
-```
-
-### Get Thread
-
-```tsx
 const thread = await cloud.threads.get(threadId);
-```
 
-### Create Thread
-
-`last_message_at` is required; everything else is optional.
-
-```tsx
 const { thread_id } = await cloud.threads.create({
-  last_message_at: new Date(),   // Required
-  title: "My New Chat",
-  external_id: "custom-id-123",  // Optional external reference
-  metadata: {                     // Optional custom data
-    source: "web",
-    category: "support",
-  },
+  last_message_at: new Date(), // required
+  title: "New chat", // optional
+  external_id: "custom-id-123", // optional, for mapping to your own system
+  metadata: { source: "web" }, // optional, arbitrary JSON
 });
-```
 
-### Update Thread
-
-```tsx
 await cloud.threads.update(threadId, {
-  title: "Updated Title",
+  title: "Updated title",
   is_archived: true,
   metadata: { priority: "high" },
 });
-```
 
-### Delete Thread
-
-```tsx
 await cloud.threads.delete(threadId);
 ```
 
+`CloudThread` fields: `id`, `title` (empty string when unset, never `null`), `last_message_at`, `created_at`, `updated_at`, `is_archived`, `external_id` (`string | null`), `metadata` (`unknown`, whatever you stored), `project_id`, `workspace_id`. `title`, `last_message_at`, `metadata`, and `is_archived` are all optional on `update`; nothing is required.
+
 ## Message API
 
-### List Messages
+`messages` is a property on `cloud.threads`; every method takes `threadId` as its first argument.
 
-`messages` is a property on `cloud.threads`, and each method takes `threadId` as its first argument.
-
-```tsx
+```ts
 const { messages } = await cloud.threads.messages.list(threadId, {
-  format: "aui/v0",
+  format: "ai-sdk/v6", // optional filter; omit to get every format
 });
 
-// messages: Array<{
-//   id: string;
-//   parent_id: string | null;
-//   format: "aui/v0" | string;
-//   content: ReadonlyJSONObject;
-//   height: number;
-//   created_at: Date;
-//   updated_at: Date;
-// }>
+const { message_id } = await cloud.threads.messages.create(threadId, {
+  parent_id: null, // or the parent message's id, for branching; required (pass null explicitly)
+  format: "ai-sdk/v6", // required
+  content: { role: "user", parts: [{ type: "text", text: "Hello" }] }, // required
+});
+
+await cloud.threads.messages.update(threadId, messageId, {
+  content: { role: "user", parts: [{ type: "text", text: "Edited" }] }, // the only field update accepts
+});
+
+const { feedback_id, type } = await cloud.threads.messages.feedback(threadId, messageId, {
+  type: "positive", // or "negative"
+});
 ```
 
-`list` accepts only `{ format? }`; there is no paging on the message endpoint.
+`list` accepts only `{ format? }`; there is no `limit`/`after` paging on the per-thread message endpoint (see [Project-wide listing](#project-wide-listing) for the paginated variant). `CloudMessage` fields: `id`, `parent_id` (`string | null`), `height`, `format`, `content`, `created_at`, `updated_at`.
 
-### Create Message
+## Message format
 
-```tsx
-await cloud.threads.messages.create(threadId, {
-  parent_id: null,  // Or parent message ID for branching
-  format: "aui/v0",
-  content: {
-    role: "user",
-    content: [{ type: "text", text: "Hello" }],
+`format` and `content` are opaque to the client; the server stores whatever JSON you send and returns it unchanged. The type signature is `format: "aui/v0" | string`, but in current code the well-known value is `"ai-sdk/v6"`: `useChatRuntime`, `AISDKThreads`, and the standalone `useCloudChat` all write `format: "ai-sdk/v6"` with `content` shaped as an AI SDK `UIMessage` (`{ role, parts }`). That format string names the stored message shape, not the installed AI SDK package major version; it does not change on an AI SDK upgrade. Only a runtime that recognizes a given `format` can decode its `content` back into a message, so pick your own format string (and keep decoding it consistently) if you call `messages.create` directly instead of going through a runtime.
+
+## Auto-save behavior
+
+With `cloud` passed to a runtime:
+
+1. The first user message creates the cloud thread (there is no thread row until then).
+2. Every new message is persisted as it completes; `update` is used to finalize a message that streamed in parts or was held for tool-approval.
+3. A title is generated from the conversation after the assistant's first response and written back with `cloud.threads.update`.
+4. Message branching (edits and regenerations) is preserved through the `parent_id` chain.
+
+## File uploads
+
+```ts
+const { signedUrl, publicUrl, expiresAt } = await cloud.files.generatePresignedUploadUrl({
+  filename: "document.pdf",
+});
+await fetch(signedUrl, { method: "PUT", body: file });
+// publicUrl is what you store on the message content; expiresAt bounds signedUrl's validity
+
+const { urls, message } = await cloud.files.pdfToImages({
+  file_url: publicUrl, // or file_blob: base64 string
+});
+```
+
+`@assistant-ui/react` exports `CloudFileAttachmentAdapter`, a built-in `AttachmentAdapter` that wraps this presign-and-PUT flow so large files do not need to be inlined as data URLs; pass it through `adapters.attachments` on `useChatRuntime`. For attachment adapters backed by your own object storage instead of Cloud, see the [custom attachment uploads guide](https://www.assistant-ui.com/docs/integrations/attachments/custom-adapter), which the same presign-then-PUT shape follows against S3, R2, or GCS.
+
+## Project-wide listing
+
+`cloud.projects.threads` lists across the whole project rather than one workspace; typically used server-side with API key auth for admin views. Unlike `cloud.threads.messages.list`, its message list supports cursor paging.
+
+```ts
+const { threads } = await cloud.projects.threads.list({ is_archived: false, limit: 50, after: cursor });
+const { messages } = await cloud.projects.threads.messages.list(threadId, { format: "ai-sdk/v6", limit: 50, after: cursor });
+```
+
+## Auth tokens
+
+`cloud.auth.tokens.create()` mints a short-lived JWT from an API-key-mode client; call it server-side and return the token from an endpoint your frontend's `authToken` callback fetches. See [authorization.md](./authorization.md#api-key-and-backend-server-mode) for the full pairing pattern.
+
+```ts
+const { token } = await cloud.auth.tokens.create();
+```
+
+## Run telemetry
+
+The runtime reports run metadata to `cloud.runs.report` automatically after each assistant message (status, step count, tool calls, token usage; never message content). Disable it with `telemetry: false` on the constructor, or enrich and filter reports with `beforeReport`:
+
+```ts
+const cloud = new AssistantCloud({
+  baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL!,
+  anonymous: true,
+  telemetry: {
+    beforeReport: (report) => ({ ...report, metadata: { environment: "production" } }),
   },
 });
 ```
 
-## Message Format
+Return `null` from `beforeReport` to skip a specific run. Model id and token usage require a `messageMetadata` callback on the AI SDK route (`usage: part.totalUsage` on `"finish"`, `modelId: part.response.modelId` on `"finish-step"`); without it those fields are omitted. For a multi-agent setup where a tool call delegates to another model, `assistant-cloud` also exports `wrapSamplingHandler` and `createSamplingCollector` to capture nested MCP sampling calls for that tool's `sampling_calls`. Separately, it exports the lower-level report-building helpers `createRunTelemetryToolCall` (assembles one `tool_calls` entry, summarizing an MCP result's inline base64 payloads), `normalizeRunTelemetryUsage` (resolves token counts across AI SDK v6 and v7 usage shapes), and `truncateRunTelemetryText` (the 50,000-character clamp applied to any report text field). `AssistantCloudRunReport`'s fields: `thread_id`, `status` (`"completed" | "incomplete" | "error"`), `total_steps`, `tool_calls`, `steps` (per-step timing and usage), `input_tokens`, `output_tokens`, `reasoning_tokens`, `cached_input_tokens`, `model_id`, `provider_type`, `duration_ms`, `output_text`, `metadata`. Full guide with the route-side `messageMetadata` wiring and sub-agent tracking: [assistant-ui.com/docs/cloud/ai-sdk](https://www.assistant-ui.com/docs/cloud/ai-sdk#telemetry).
 
-assistant-ui uses `"aui/v0"` format:
+## Error handling
 
-```typescript
-interface AUIv0Message {
-  role: "user" | "assistant" | "system";
-  content: MessagePart[];
-  status?: "running" | "complete" | "incomplete" | "requires-action";
-  attachments?: Attachment[];
-}
+```ts
+import { CloudAPIError } from "assistant-cloud";
 
-type MessagePart =
-  | { type: "text"; text: string }
-  | { type: "image"; image: string }
-  | {
-      type: "tool-call";
-      toolCallId: string;
-      toolName: string;
-      args: unknown;
-      argsText: string;
-      result?: unknown;
-      isError?: boolean;
-      artifact?: unknown;
-    }
-  | { type: "reasoning"; text: string }
-  | {
-      type: "source";
-      sourceType: "url";
-      id: string;
-      url: string;
-      title?: string;
-    };
-```
-
-## Custom Persistence Adapters
-
-The simplest persistence is passing `cloud` to the runtime (see Basic Setup above). For full control over storage, assistant-ui exposes adapter interfaces (from `@assistant-ui/react`):
-
-- `ThreadHistoryAdapter` owns the messages of a single thread.
-- `RemoteThreadListAdapter` owns the list of threads (create, rename, archive, delete).
-
-To back those adapters with assistant-cloud rather than your own database, use `CloudMessagePersistence` or `createFormattedPersistence` from `assistant-cloud`:
-
-```tsx
-import { CloudMessagePersistence, createFormattedPersistence } from "assistant-cloud";
-```
-
-For a database-backed example, see the custom thread persistence guide at
-[assistant-ui.com/docs/integrations/persistence/custom-adapter](https://www.assistant-ui.com/docs/integrations/persistence/custom-adapter).
-
-## Auto-Save Behavior
-
-When `cloud` is passed to runtime:
-
-1. **New messages** are automatically saved
-2. **Thread creation** happens on first message
-3. **Thread metadata** (title, timestamps) updated automatically
-4. **Message branching** (edits) preserved
-
-## Thread Title Generation
-
-Titles are auto-generated from conversation:
-
-```tsx
-// Manual trigger
-const item = api.threads.item({ id: threadId });
-item.generateTitle();
-```
-
-The cloud backend uses the conversation to generate a concise title.
-
-## External ID Mapping
-
-Link threads to your system:
-
-```tsx
-await cloud.threads.create({
-  last_message_at: new Date(),
-  external_id: "your-system-id-123",
-});
-
-const { threads } = await cloud.threads.list();
-const thread = threads.find(t => t.external_id === "your-system-id-123");
-```
-
-## Metadata
-
-Store custom data with threads:
-
-```tsx
-await cloud.threads.create({
-  last_message_at: new Date(),
-  metadata: {
-    userId: user.id,
-    category: "sales",
-    priority: 1,
-    tags: ["important", "follow-up"],
-  },
-});
-
-await cloud.threads.update(threadId, {
-  metadata: { resolved: true },
-});
-```
-
-## Caching and Sync
-
-Messages are loaded on thread switch:
-
-```tsx
-// Thread list is cached in memory
-// Messages loaded when switching threads
-api.threads.switchToThread(threadId);
-```
-
-For real-time sync across devices, implement webhook handlers on your backend.
-
-## Error Handling
-
-```tsx
 try {
-  const threads = await cloud.threads.list();
+  const { threads } = await cloud.threads.list();
 } catch (error) {
-  if (error.status === 401) {
-    // Auth expired - refresh token
-    await refreshAuth();
-  } else if (error.status === 429) {
-    // Rate limited
-    await delay(1000);
+  if (error instanceof CloudAPIError && error.status === 401) {
+    // auth expired or authToken returned an invalid token; refresh and retry
+  } else if (error instanceof CloudAPIError && error.status === 429) {
+    // rate limited
   }
 }
 ```
+
+`CloudAPIError` (with a `.status` number) covers non-2xx responses; `CloudResponseError` covers a 2xx response whose body does not match the expected shape (both from `assistant-cloud`). A third case is a plain `Error("Authorization failed")`, thrown before any request goes out when `authToken` resolves to a falsy value; it is not a `CloudAPIError`, so a bare `error.status` check on it is `undefined`.

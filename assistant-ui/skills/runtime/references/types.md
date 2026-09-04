@@ -1,27 +1,24 @@
 # Runtime Types
 
-Type definitions for assistant-ui runtime system.
+Core type definitions for the assistant-ui runtime system, exported from `@assistant-ui/react` (most are re-exported from `@assistant-ui/core`, where the runtime-agnostic definitions live).
 
-## Message Types
+## Message types
 
 ```typescript
-type ThreadMessage =
-  | ThreadUserMessage
-  | ThreadAssistantMessage
-  | ThreadSystemMessage;
+type ThreadMessage = ThreadUserMessage | ThreadAssistantMessage | ThreadSystemMessage;
 
 interface ThreadUserMessage {
   id: string;
   role: "user";
-  content: MessagePart[];
-  attachments?: Attachment[];
+  content: readonly MessagePart[];
+  attachments?: readonly Attachment[];
   createdAt: Date;
 }
 
 interface ThreadAssistantMessage {
   id: string;
   role: "assistant";
-  content: MessagePart[];
+  content: readonly MessagePart[];
   status: MessageStatus;
   createdAt: Date;
 }
@@ -29,37 +26,35 @@ interface ThreadAssistantMessage {
 interface ThreadSystemMessage {
   id: string;
   role: "system";
-  content: MessagePart[];
+  content: readonly MessagePart[];
   createdAt: Date;
 }
 ```
 
-## Message Status
+A history adapter, `ThreadMessageLike`, or an `ExternalStoreRuntime` deals in a looser shape (`content` can be a plain string, `id` and `createdAt` are optional); see [local-runtime.md](./local-runtime.md) and [external-store.md](./external-store.md).
 
-`status` is an object with a `type` discriminator (not a bare string):
+## Message status
+
+`status` is an object with a `type` discriminator, never a bare string.
 
 ```typescript
 type MessageStatus =
-  | { type: "running" }                                    // Generation in progress
+  | { type: "running" }
   | { type: "requires-action"; reason: "tool-calls" | "interrupt" }
-  | { type: "complete"; reason: "stop" | "unknown" }       // Finished
+  | { type: "complete"; reason: "stop" | "unknown" }
   | {
-      type: "incomplete";                                  // Stopped early
+      type: "incomplete";
       reason: "cancelled" | "tool-calls" | "length" | "content-filter" | "other" | "error";
       error?: unknown;
     };
 ```
 
-## Message Parts
+A text or reasoning part reports `status.type === "running"` only while it is the last part of the message; every earlier part is already complete. Tool-call parts are exempt, their status comes from whether they have a result.
+
+## Message parts
 
 ```typescript
-type MessagePart =
-  | TextPart
-  | ImagePart
-  | ToolCallPart
-  | ReasoningPart
-  | SourcePart
-  | FilePart;
+type MessagePart = TextPart | ImagePart | ToolCallPart | ReasoningPart | SourcePart | FilePart | DataMessagePart;
 
 interface TextPart {
   type: "text";
@@ -80,6 +75,7 @@ interface ToolCallPart {
   result?: unknown;
   isError?: boolean;
   artifact?: unknown;
+  approval?: { id: string; approved?: boolean; reason?: string }; // server-side approval gate
 }
 
 interface ReasoningPart {
@@ -101,121 +97,95 @@ interface FilePart {
   data: string;
   mimeType: string;
 }
+
+// A ThreadMessageLike content entry with a "data-" prefixed type converts to this automatically
+interface DataMessagePart {
+  type: `data-${string}`;
+  data: unknown;
+}
 ```
 
-## Attachment Types
+An `approval` with no `approved` field is pending (the run is paused, waiting for the user); `approved: true` means allow, `approved: false` means deny. See the tool-calling sections of [local-runtime.md](./local-runtime.md) and [external-store.md](./external-store.md).
+
+## Attachment types
 
 ```typescript
 interface Attachment {
   id: string;
-  type: "image" | "document" | "file";
+  type: "image" | "document" | "file" | (string & {}); // custom strings beyond the three are accepted
   name: string;
   contentType?: string;
   file?: File;
-  content?: AttachmentContent[];
-  // Pending attachments are "requires-action"; completed ones are "complete"
-  status: { type: "running" | "requires-action" | "complete" | "incomplete"; reason?: string };
+  content?: readonly AttachmentContent[];
+  status: { type: "running" | "requires-action" | "complete"; reason?: string; progress?: number };
 }
 
-type AttachmentContent =
-  | { type: "text"; text: string }
-  | { type: "image"; image: string };
+type PendingAttachment = Attachment & { status: { type: "running" | "requires-action"; reason?: string; progress?: number } };
+type CompleteAttachment = Attachment & { status: { type: "complete" }; content: readonly AttachmentContent[] };
+
+type AttachmentContent = { type: "text"; text: string } | { type: "image"; image: string } | { type: "file"; data: string; mimeType: string; filename?: string };
 ```
 
-## Runtime State Types
+`add()` in an `AttachmentAdapter` returns a `PendingAttachment` (`status.type` is `"requires-action"`, or `"running"` with an optional `progress` while an async generator streams upload progress); `send()` returns a `CompleteAttachment` carrying the final `content`. See [adapters.md](./adapters.md).
+
+## RuntimeCapabilities
 
 ```typescript
-interface ThreadState {
-  threadId: string;
-  messages: ThreadMessage[];
-  isRunning: boolean;
-  capabilities: ThreadCapabilities;
-}
-
-interface ThreadCapabilities {
-  cancel: boolean;      // Can cancel generation
-  edit: boolean;        // Can edit messages
-  reload: boolean;      // Can regenerate
-  copy: boolean;        // Can copy messages
-  speak: boolean;       // TTS support
-  attachments: boolean; // File uploads
+// from "@assistant-ui/core"
+interface RuntimeCapabilities {
+  switchToBranch: boolean;
+  switchBranchDuringRun: boolean;
+  edit: boolean;
+  reload: boolean;
+  delete: boolean;
+  cancel: boolean;
+  refetchThread: boolean;
+  unstable_copy: boolean;
+  speech: boolean;
+  dictation: boolean;
+  voice: boolean;
+  attachments: boolean;
+  feedback: boolean;
+  queue: boolean;
 }
 ```
 
-## Thread List Types
+Read the resolved set with `useAuiState((s) => s.thread.capabilities)`. Field names are `unstable_copy` and `speech`, not `copy` and `speak`. Runtimes derive nearly every field from what you supply (a callback on `ExternalStoreRuntime`, an adapter); `unstable_copy` is the one flag `ExternalStoreRuntime` lets you force off via `unstable_capabilities: { copy: false }`, and `switchBranchDuringRun` is always `false`. `refetchThread` reports whether `aui.threads.reloadMainThread()` refreshes the open thread in place; see [runtime-concepts.md](./runtime-concepts.md).
+
+## Thread list item state
 
 ```typescript
-interface ThreadListState {
-  threadIds: readonly string[];         // Active thread IDs
-  archivedThreadIds: readonly string[]; // Archived thread IDs
-  newThreadId: string | null; // Pending new thread ID
-  mainThreadId: string;      // Current active thread
-  isLoading: boolean;
-  threadItems: readonly ThreadListItemState[];
-}
-
 interface ThreadListItemState {
   id: string;
-  remoteId?: string;
-  externalId?: string;
   title?: string;
   status: "archived" | "regular" | "new" | "deleted";
+  remoteId?: string;
+  externalId?: string;
+  custom?: Record<string, unknown>; // arbitrary per-thread metadata set by remote runtimes
 }
 ```
 
-## Composer State
+## ChatModelRunResult and ChatModelRunOptions
 
-```typescript
-interface ComposerState {
-  text: string;
-  role: MessageRole;            // role of the message being composed
-  attachments: Attachment[];
-  attachmentAccept: string;
-  isEmpty: boolean;
-  isEditing: boolean;           // editing an existing message
-  canCancel: boolean;
-  dictation?: DictationState;   // present while dictation is active
-}
-```
-
-## Tool Call Types
-
-```typescript
-type ToolCallMessagePartStatus =
-  | { type: "running" }        // Tool executing
-  | { type: "complete" }       // Finished
-  | { type: "incomplete"; reason: "cancelled" | "length" | "content-filter" | "other" | "error" }
-  | { type: "requires-action"; reason: "interrupt" };  // Needs input
-
-// Props passed to a makeAssistantToolUI render component
-interface ToolCallMessagePartProps<TArgs = unknown, TResult = unknown> {
-  toolCallId: string;
-  toolName: string;
-  args: TArgs;
-  argsText: string;
-  result?: TResult;
-  isError?: boolean;
-  artifact?: unknown;
-  status: ToolCallMessagePartStatus;
-
-  addResult: (result: unknown) => void;   // renderer-supplied result
-  resume: (payload: unknown) => void;      // resume a context.human(...) tool
-  respondToApproval: (response: { approved: boolean; reason?: string }) => void;
-}
-```
-
-## ChatModelRunResult
-
-Used by `useLocalRuntime` for streaming:
+Used by a `LocalRuntime` `ChatModelAdapter.run`, returned once or yielded repeatedly while streaming. All fields are optional; yield the full cumulative content each time, not a delta.
 
 ```typescript
 interface ChatModelRunResult {
-  content: MessagePart[];
+  content?: readonly MessagePart[];
+  status?: MessageStatus;
+  metadata?: Record<string, unknown>;
 }
 
-// Yield content parts progressively:
-async function* run({ messages }) {
+async function* run({ messages }: ChatModelRunOptions) {
   yield { content: [{ type: "text", text: "Hello " }] };
-  yield { content: [{ type: "text", text: "world!" }] };
+  yield { content: [{ type: "text", text: "Hello world!" }] };
 }
 ```
+
+See [local-runtime.md](./local-runtime.md) for the full `ChatModelAdapter` and `ChatModelRunOptions` reference.
+
+## Related
+
+- [state-hooks.md](./state-hooks.md) -- the live reactive `s.thread`, `s.message`, and `s.composer` shapes these types compose into
+- [adapters.md](./adapters.md) -- `AttachmentAdapter`, `SpeechSynthesisAdapter`, `DictationAdapter`, `FeedbackAdapter` contracts
+- [../../tools/SKILL.md](../../tools/SKILL.md) -- `ToolCallMessagePartProps` and the tool rendering type surface

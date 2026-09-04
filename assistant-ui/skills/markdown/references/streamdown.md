@@ -1,49 +1,22 @@
-# StreamdownTextPrimitive
+# Streamdown
 
-`@assistant-ui/react-streamdown` is a feature-rich alternative to `MarkdownTextPrimitive` with built-in Shiki syntax highlighting, KaTeX math, and Mermaid diagrams, plus block-based streaming. Powered by Vercel Streamdown.
+`StreamdownTextPrimitive` is the alternative to `MarkdownTextPrimitive` for a text part that benefits from block-aware streaming, incomplete-markdown repair, optional Shiki highlighting, KaTeX math, Mermaid diagrams, or CJK handling. It reads the active message part from context, so it replaces the renderer in the same `MessagePrimitive.Parts` text branch.
 
-## Contents
+## Install the renderer and plugins
 
-- [Install](#install)
-- [Basic usage](#basic-usage)
-- [Plugins (Shiki, KaTeX, Mermaid, CJK)](#plugins-shiki-katex-mermaid-cjk)
-- [Props](#props)
-- [Streaming mode and caret](#streaming-mode-and-caret)
-- [Mermaid options](#mermaid-options)
-- [Incomplete markdown (remend)](#incomplete-markdown-remend)
-- [Security and link safety](#security-and-link-safety)
-- [Custom code components](#custom-code-components)
-- [Migrating from react-markdown](#migrating-from-react-markdown)
-- [CSS setup](#css-setup)
-- [Exports](#exports)
-
-## Install
+Install the base renderer first. Add only the plugins the messages need.
 
 ```bash
 npm install @assistant-ui/react-streamdown streamdown
+npm install @streamdown/code @streamdown/math @streamdown/mermaid
 ```
 
-Plugins ship as separate optional packages: `@streamdown/code`, `@streamdown/math`, `@streamdown/mermaid`, `@streamdown/cjk`.
-
-## Basic usage
-
-`StreamdownTextPrimitive` replaces the text part renderer. Define a wrapper and render it from `MessagePrimitive.Parts`.
+The package does not auto-detect plugins. Import and pass each one explicitly so the application controls its feature set and bundle size.
 
 ```tsx
-import { StreamdownTextPrimitive } from "@assistant-ui/react-streamdown";
+"use client";
 
-const StreamdownText = () => <StreamdownTextPrimitive />;
-
-<MessagePrimitive.Parts>
-  {({ part }) => (part.type === "text" ? <StreamdownText {...part} /> : null)}
-</MessagePrimitive.Parts>;
-```
-
-## Plugins (Shiki, KaTeX, Mermaid, CJK)
-
-Pass plugins through the `plugins` prop. Each is imported from its own package; math also needs the KaTeX stylesheet.
-
-```tsx
+import { MessagePrimitive } from "@assistant-ui/react";
 import { StreamdownTextPrimitive } from "@assistant-ui/react-streamdown";
 import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
@@ -56,123 +29,52 @@ const StreamdownText = () => (
     shikiTheme={["github-light", "github-dark"]}
   />
 );
+
+export function AssistantMessageText() {
+  return (
+    <MessagePrimitive.Parts>
+      {({ part }) => (part.type === "text" ? <StreamdownText /> : null)}
+    </MessagePrimitive.Parts>
+  );
+}
 ```
 
-`@streamdown/cjk` adds CJK rendering optimizations via `import { cjk } from "@streamdown/cjk"` and `plugins={{ cjk }}`. `shikiTheme` is a `[light, dark]` tuple and defaults to `["github-light", "github-dark"]`.
+`code` enables Shiki, `math` enables KaTeX, and `mermaid` enables Mermaid. Add `cjk` from `@streamdown/cjk` only for messages where CJK text optimization is needed. The math plugin still requires the KaTeX stylesheet.
 
-## Props
+## Include Streamdown Tailwind sources
 
-| Prop | Type | Default | Notes |
-|------|------|---------|-------|
-| `mode` | `"streaming" \| "static"` | `"streaming"` | Block-based streaming vs static render |
-| `plugins` | `PluginConfig` | | `code`, `math`, `mermaid`, `cjk` |
-| `shikiTheme` | `[string, string]` | `["github-light", "github-dark"]` | Light/dark themes |
-| `components` | `object` | | Override `SyntaxHighlighter`, `CodeHeader` |
-| `componentsByLanguage` | `object` | | Per-language component overrides |
-| `preprocess` | `(text: string) => string` | | Text preprocessor |
-| `controls` | `boolean \| ControlsConfig` | `true` | Copy/download/fullscreen UI |
-| `caret` | `"block" \| "circle"` | | Streaming caret style |
-| `mermaid` | `MermaidOptions` | | Mermaid config and error handling |
-| `linkSafety` | `LinkSafetyConfig` | | External link confirmation |
-| `remend` | `RemendConfig` | | Incomplete markdown handling |
-| `allowedTags` | `Record<string, string[]>` | | HTML tag whitelist |
-| `security` | `SecurityConfig` | | URL/image restrictions |
-| `containerProps` | `object` | | Props for the container div |
-| `containerClassName` | `string` | | Container class name |
-| `remarkRehypeOptions` | `object` | | remark-rehype options |
-| `BlockComponent` | `ComponentType<BlockProps>` | | Custom block renderer |
-| `parseMarkdownIntoBlocksFn` | `(md: string) => string[]` | | Custom block parser |
-| `parseIncompleteMarkdown` | `boolean` | `false` | Toggle remend processing |
+Streamdown controls, Mermaid fullscreen UI, and the caret use Tailwind classes from package files. Tailwind v4 does not scan those files by default. Add a source directive for the renderer and every installed plugin to the global stylesheet that imports Tailwind.
 
-## Streaming mode and caret
+```css
+@import "tailwindcss";
 
-`mode="streaming"` (the default) parses markdown into blocks so completed blocks stay stable while the last block grows. The `caret` prop renders a typing indicator at the stream tail.
-
-```tsx
-<StreamdownTextPrimitive caret="block" />   // ▋
-<StreamdownTextPrimitive caret="circle" />  // ●
+@source "../node_modules/streamdown/dist/*.js";
+@source "../node_modules/@streamdown/code/dist/*.js";
+@source "../node_modules/@streamdown/math/dist/*.js";
+@source "../node_modules/@streamdown/mermaid/dist/*.js";
 ```
 
-## Mermaid options
+Adjust the relative path for a monorepo or hoisted dependency layout. Omit the plugin lines for packages that are not installed. Import `streamdown/styles.css` only when using the native `animated` prop or `createAnimatePlugin`; a `caret` alone does not need it.
 
-Configure the underlying Mermaid instance and supply a custom error renderer.
+## Streaming behavior
+
+`mode="streaming"` is the default. Streamdown splits markdown into blocks so completed blocks remain stable while the current block grows. In streaming mode it repairs incomplete syntax only in the trailing block unless `parseIncompleteMarkdown={false}` or a custom `parseMarkdownIntoBlocksFn` is supplied.
+
+`defer` defaults to `false`. Set it when parsing a growing message should yield priority to typing and scrolling. It uses React deferred values, so intermediate states can be skipped under load but the final message still renders. Keep the value constant for the component lifetime because changing it remounts the renderer path.
+
+`smooth` also defaults to `false`. It adds assistant-ui's typewriter reveal and can accept smooth options. Prefer Streamdown's native `animated` prop for word-level entrance animation. A caret remains active until smooth output catches up with the received text.
 
 ```tsx
-<StreamdownTextPrimitive
-  plugins={{ mermaid }}
-  mermaid={{
-    config: { theme: "dark" },
-    errorComponent: ({ error, chart, retry }) => (
-      <div>
-        <p>Failed to render diagram: {error}</p>
-        <button onClick={retry}>Retry</button>
-      </div>
-    ),
-  }}
-/>
+<StreamdownTextPrimitive defer smooth={false} caret="block" />
 ```
 
-## Incomplete markdown (remend)
+## Customize and migrate
 
-During streaming, markdown is often syntactically incomplete (an unclosed `**`, a half-typed link). The `remend` config controls which constructs get auto-completed for display.
-
-```tsx
-<StreamdownTextPrimitive
-  remend={{
-    links: true,
-    images: true,
-    linkMode: "protocol",
-    bold: true,
-    italic: true,
-    boldItalic: true,
-    inlineCode: true,
-    strikethrough: true,
-    katex: true,
-    setextHeadings: true,
-    handlers: [],
-  }}
-/>
-```
-
-## Security and link safety
-
-`security` restricts which URLs and images are allowed to render; `linkSafety` adds a confirmation step before navigating external links.
+The primitive accepts a `components` map with regular markdown components plus assistant-ui compatible `SyntaxHighlighter` and `CodeHeader` entries. `componentsByLanguage` has priority for one fenced language, so a custom Mermaid renderer can coexist with an ordinary highlighter.
 
 ```tsx
-<StreamdownTextPrimitive
-  security={{
-    allowedLinkPrefixes: ["https://example.com", "https://docs.example.com"],
-    allowedImagePrefixes: ["https://cdn.example.com"],
-    allowedProtocols: ["https", "mailto"],
-    allowDataImages: false,
-    defaultOrigin: "https://example.com",
-    blockedLinkClass: "blocked-link",
-    blockedImageClass: "blocked-image",
-  }}
-  linkSafety={{
-    enabled: true,
-    onLinkCheck: (url) => url.startsWith("https://trusted.com"),
-  }}
-/>
-```
+import { StreamdownTextPrimitive } from "@assistant-ui/react-streamdown";
 
-`allowedTags` whitelists raw HTML tags and their attributes:
-
-```tsx
-<StreamdownTextPrimitive
-  allowedTags={{
-    div: ["class", "id"],
-    span: ["class", "style"],
-    iframe: ["src", "width", "height"],
-  }}
-/>
-```
-
-## Custom code components
-
-Override the highlighter and code header per language, or build a custom code component using the provided hooks.
-
-```tsx
 <StreamdownTextPrimitive
   components={{
     SyntaxHighlighter: MySyntaxHighlighter,
@@ -181,101 +83,33 @@ Override the highlighter and code header per language, or build a custom code co
   componentsByLanguage={{
     mermaid: { SyntaxHighlighter: MermaidRenderer },
   }}
-/>
+/>;
 ```
 
-`useIsStreamdownCodeBlock` distinguishes block code from inline code; `useStreamdownPreProps` exposes the `<pre>` props for the current block.
+This is the migration seam for an existing `MarkdownTextPrimitive` code header or highlighter. For custom code tags, use `useIsStreamdownCodeBlock()` to distinguish a fence from inline code, or `useStreamdownPreProps()` to read the containing pre props.
 
-```tsx
-import {
-  useIsStreamdownCodeBlock,
-  useStreamdownPreProps,
-} from "@assistant-ui/react-streamdown";
+`preprocess` is available for the same math helpers exported by this package: `normalizeMathDelimiters`, `rewriteCustomMathTags`, `rewriteLatexBracketDelimiters`, and `escapeCurrencyDollars`. The helpers run on the accumulated text before Streamdown parses it. See [latex-mermaid.md](./latex-mermaid.md) for delimiter behavior and code-span protection.
 
-function MyCodeComponent({ children, ...props }) {
-  const isCodeBlock = useIsStreamdownCodeBlock();
-  const preProps = useStreamdownPreProps();
-  if (!isCodeBlock) {
-    return (
-      <code className="inline-code" {...props}>
-        {children}
-      </code>
-    );
-  }
-  return (
-    <pre className={preProps?.className}>
-      <code {...props}>{children}</code>
-    </pre>
-  );
-}
-```
+## Safety and controls
 
-## Migrating from react-markdown
+`security` restricts allowed link and image prefixes, protocols, data images, and relative URL origin. It overrides Streamdown's permissive defaults. `linkSafety` can require confirmation before navigating an external link. Use one or both when rendering untrusted assistant output in a context where links or images need application policy.
 
-Existing custom renderers map onto the `components` and `componentsByLanguage` props, so a `react-markdown` based `MarkdownText` can be ported without rewriting the highlighter or header.
+`controls` enables code, table, and Mermaid controls. Set `controls={false}` to remove them, or use an object to configure individual areas. `containerProps` and `containerClassName` apply to the primitive's outer div, whose `data-status` mirrors the smooth stream status.
 
-```tsx
-const StreamdownText = () => (
-  <StreamdownTextPrimitive
-    components={{
-      SyntaxHighlighter: MySyntaxHighlighter,
-      CodeHeader: MyCodeHeader,
-    }}
-    componentsByLanguage={{
-      mermaid: { SyntaxHighlighter: MermaidRenderer },
-    }}
-  />
-);
-```
+## Common failures
 
-## CSS setup
+**The renderer displays no text**
 
-Streamdown assumes shadcn/ui design tokens (`--background`, `--muted-foreground`, `--border`, etc.). With Tailwind v4, add an `@source` directive for each installed package so its classes are not purged.
+- It must be mounted in a `MessagePrimitive.Parts` text branch. It reads the current message part and has no markdown string prop.
 
-```css
-@import "tailwindcss";
-@source "../node_modules/streamdown/dist/*.js";
-@source "../node_modules/@streamdown/code/dist/*.js";
-@source "../node_modules/@streamdown/math/dist/*.js";
-@source "../node_modules/@streamdown/mermaid/dist/*.js";
-@source "../node_modules/@streamdown/cjk/dist/*.js";
-```
+**Plugin features are absent**
 
-For the word-level fade-in animation, also import the stylesheet at the app entry:
+- Installing a plugin package is not enough. Import its plugin value and include it in `plugins`.
 
-```ts
-import "streamdown/styles.css";
-```
+**The caret or controls look broken**
 
-Note: without these directives the copy/download/fullscreen controls render with no padding or cursor styling and the `caret` indicator stays invisible.
+- Add `@source` directives for `streamdown` and every installed plugin to the Tailwind entry stylesheet.
 
-## Exports
+**A partial response changes completed content**
 
-```ts
-import {
-  StreamdownTextPrimitive,
-  StreamdownContext,
-  parseMarkdownIntoBlocks,
-  useIsStreamdownCodeBlock,
-  useStreamdownPreProps,
-  memoCompareNodes,
-  DEFAULT_SHIKI_THEME,
-} from "@assistant-ui/react-streamdown";
-
-import type {
-  StreamdownTextPrimitiveProps,
-  SyntaxHighlighterProps,
-  CodeHeaderProps,
-  ComponentsByLanguage,
-  StreamdownTextComponents,
-  PluginConfig,
-  CaretStyle,
-  ControlsConfig,
-  MermaidOptions,
-  MermaidErrorComponentProps,
-  LinkSafetyConfig,
-  RemendConfig,
-  SecurityConfig,
-  BlockProps,
-} from "@assistant-ui/react-streamdown";
-```
+- Keep `mode="streaming"` and avoid a custom block parser unless the application has a concrete parsing requirement.

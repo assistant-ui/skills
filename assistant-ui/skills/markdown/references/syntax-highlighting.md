@@ -1,234 +1,101 @@
-# Syntax Highlighting
+# Syntax highlighting
 
-Code block highlighting for the markdown renderer. Two options: `react-shiki` (recommended) and `@assistant-ui/react-syntax-highlighter` (legacy, may be removed). Both plug in as a `SyntaxHighlighter` component, either globally via `defaultComponents` or per language via `componentsByLanguage`.
+`markdown-text` renders fenced code with a language label and a copy control, but its default `SyntaxHighlighter` renders plain code. Choose one installed renderer and register it in the markdown element's component map.
 
-## Contents
+## Choose a renderer
 
-- [How it plugs in](#how-it-plugs-in)
-- [react-shiki (recommended)](#react-shiki-recommended)
-- [Dual / multi theme](#dual--multi-theme)
-- [Bundle optimization (shiki)](#bundle-optimization-shiki)
-- [react-syntax-highlighter (legacy)](#react-syntax-highlighter-legacy)
-- [Full language bundle](#full-language-bundle)
-- [Per-language overrides (componentsByLanguage)](#per-language-overrides-componentsbylanguage)
-- [SyntaxHighlighterProps](#syntaxhighlighterprops)
+Use `shiki-highlighter` for the runtime-aware default. Its `.aui` wrapper reads the active message part status, leaves code plain while the part is running, then tokenizes after the code settles. This avoids paying for Shiki tokenization repeatedly while a fence grows.
 
-## How it plugs in
+Use `syntax-highlighter` when the app already uses `react-syntax-highlighter`. It is Prism based, renders light and dark Coldark variants together, and switches themes with CSS instead of re-tokenizing. It does not defer tokenization based on message status.
 
-`MarkdownTextPrimitive` renders code blocks with the `SyntaxHighlighter` you register. A global one goes in `defaultComponents` (built with `memoizeMarkdownComponents`); language specific ones go in `componentsByLanguage`.
+## Install Shiki
+
+```bash
+npx assistant-ui@latest add shiki-highlighter
+```
+
+The runtime-aware file uses the `.aui` suffix. Add it to the installed `markdown-text` component's default map.
+
+```tsx
+import { SyntaxHighlighter } from "@/components/assistant-ui/elements/shiki-highlighter.aui";
+
+const defaultComponents = memoizeMarkdownComponents({
+  SyntaxHighlighter,
+});
+```
+
+While the message part runs, Shiki renders trimmed plain code in the same frame. Once the part is complete, it tokenizes with its default light and dark themes. The element's `delay` defaults to `150` milliseconds, which lets a smooth text reveal drain before the highlighter starts. Pass `delay={0}` only when immediate post-stream highlighting matters more than avoiding the final extra pass.
+
+The standalone form accepts `code`, `language`, and `streaming`; it is for code that comes from application state instead of a message part.
+
+```tsx
+import { SyntaxHighlighter } from "@/components/assistant-ui/elements/shiki-highlighter";
+
+<SyntaxHighlighter language="tsx" code={code} streaming={isStreaming} />;
+```
+
+## Install Prism
+
+```bash
+npx assistant-ui@latest add syntax-highlighter
+```
+
+The Prism renderer has no `.aui` suffix.
+
+```tsx
+import { SyntaxHighlighter } from "@/components/assistant-ui/elements/syntax-highlighter";
+
+const defaultComponents = memoizeMarkdownComponents({
+  SyntaxHighlighter,
+});
+```
+
+Inside `MarkdownText`, the code-block pipeline supplies `language`, `code`, and `components` automatically. In a standalone render, `components.Pre` and `components.Code` are required because they are the tags Prism mounts into.
+
+```tsx
+import { SyntaxHighlighter } from "@/components/assistant-ui/elements/syntax-highlighter";
+
+<SyntaxHighlighter
+  language="tsx"
+  code="const count = 1;"
+  components={{
+    Pre: (props) => <pre {...props} />,
+    Code: (props) => <code {...props} />,
+  }}
+/>;
+```
+
+The installed Prism element registers `js`, `jsx`, `ts`, `tsx`, and `python` by default. An unregistered language still renders as code, without token colors. Add only the grammars the application needs to its copied component source.
+
+## Override one language
+
+`componentsByLanguage` has priority over the fallback `SyntaxHighlighter` and `CodeHeader`. Keep the ordinary highlighter in the default map, then replace one known language with a specialized renderer.
 
 ```tsx
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
+import { MermaidDiagram } from "@/components/assistant-ui/elements/mermaid-diagram.aui";
+import { SyntaxHighlighter } from "@/components/assistant-ui/elements/shiki-highlighter.aui";
 
 <MarkdownTextPrimitive
-  remarkPlugins={[remarkGfm]}
-  className="aui-md"
-  components={defaultComponents}
+  components={{ SyntaxHighlighter }}
   componentsByLanguage={{
     mermaid: { SyntaxHighlighter: MermaidDiagram },
   }}
 />;
 ```
 
-Note: the package exports the memoization helper as `unstable_memoizeMarkdownComponents`; the generated `markdown-text.tsx` aliases it to `memoizeMarkdownComponents`.
+Use a `CodeHeader` override when a fenced block needs an additional action. Its props are `language`, `code`, and `node`; it renders before the highlighter. Do not use a highlighter for inline code. Inline code follows the normal `code` renderer and can be detected with `useIsMarkdownCodeBlock()`.
 
-## react-shiki (recommended)
+## Common failures
 
-Install via the registry (`https://r.assistant-ui.com/shiki-highlighter.json`), which adds the `react-shiki` package and `/components/assistant-ui/shiki-highlighter.tsx`.
+**The installed renderer does not resolve**
 
-```tsx
-"use client";
-import type { FC } from "react";
-import ShikiHighlighter, { type ShikiHighlighterProps } from "react-shiki";
-import type { SyntaxHighlighterProps as AUIProps } from "@assistant-ui/react-markdown";
-import { cn } from "@/lib/utils";
+- `shiki-highlighter` is runtime connected and imports from `shiki-highlighter.aui`. `syntax-highlighter` is a renderer and imports without `.aui`.
 
-export type HighlighterProps = Omit<ShikiHighlighterProps, "children" | "theme"> & {
-  theme?: ShikiHighlighterProps["theme"];
-} & Pick<AUIProps, "language" | "code"> &
-  Partial<Pick<AUIProps, "node" | "components">>;
+**The code fence ignores the specialized renderer**
 
-export const SyntaxHighlighter: FC<HighlighterProps> = ({
-  code,
-  language,
-  theme = { dark: "kanagawa-wave", light: "kanagawa-lotus" },
-  className,
-  addDefaultStyles = false,
-  showLanguage = false,
-  node: _node,
-  components: _components,
-  ...props
-}) => {
-  return (
-    <ShikiHighlighter
-      {...props}
-      language={language}
-      theme={theme}
-      addDefaultStyles={addDefaultStyles}
-      showLanguage={showLanguage}
-      defaultColor="light-dark()"
-      className={cn(
-        "aui-shiki-base [&_pre]:bg-muted/75! [&_pre]:overflow-x-auto [&_pre]:rounded-b-lg [&_pre]:p-4",
-        className,
-      )}
-    >
-      {code.trim()}
-    </ShikiHighlighter>
-  );
-};
-SyntaxHighlighter.displayName = "SyntaxHighlighter";
-```
+- The map key is the exact fenced language, such as `mermaid` or `tsx`. A missing or different fence label uses the default `SyntaxHighlighter`.
 
-Register it in `defaultComponents` (file `markdown-text.tsx`):
+**Shiki keeps showing plain code**
 
-```tsx
-import { SyntaxHighlighter } from "./shiki-highlighter";
-
-export const defaultComponents = memoizeMarkdownComponents({
-  SyntaxHighlighter: SyntaxHighlighter,
-  h1: /* ... */,
-  // ...other elements...
-});
-```
-
-`ShikiHighlighter` props worth knowing: `theme` (a single theme or a multi-theme object), `language` (default `"text"`), `defaultColor` (`string | false`), `delay` (highlight throttle for streaming, default `0`), `customLanguages`, and `codeToHastOptions`.
-
-## Dual / multi theme
-
-Pass a `{ light, dark }` object plus `defaultColor="light-dark()"`.
-
-```tsx
-<ShikiHighlighter
-  theme={{ light: "github-light", dark: "github-dark" }}
-  defaultColor="light-dark()"
->
-  {code.trim()}
-</ShikiHighlighter>
-```
-
-Wire up `color-scheme` in `globals.css`. System based:
-
-```css
-:root { color-scheme: light dark; }
-```
-
-Class based:
-
-```css
-:root { color-scheme: light; }
-:root.dark { color-scheme: dark; }
-```
-
-## Bundle optimization (shiki)
-
-Use the web bundle (smaller, web-focused languages):
-
-```tsx
-import ShikiHighlighter, { type ShikiHighlighterProps } from "react-shiki/web";
-```
-
-Or build a custom core highlighter with only the themes and languages you need, then pass it via the `highlighter` prop:
-
-```tsx
-import { createHighlighterCore, createOnigurumaEngine } from "react-shiki/core";
-
-const customHighlighter = await createHighlighterCore({
-  themes: [import("@shikijs/themes/nord")],
-  langs: [
-    import("@shikijs/langs/javascript"),
-    import("@shikijs/langs/typescript"),
-  ],
-  engine: createOnigurumaEngine(import("shiki/wasm")),
-});
-
-<SyntaxHighlighter {...props} language={language} theme={theme} highlighter={customHighlighter} />;
-```
-
-## react-syntax-highlighter (legacy)
-
-Install via the registry (`https://r.assistant-ui.com/syntax-highlighter.json`), which adds `@assistant-ui/react-syntax-highlighter`, `react-syntax-highlighter`, `@types/react-syntax-highlighter`, and `/components/assistant-ui/syntax-highlighter.tsx`. The light build only ships the languages you register.
-
-```tsx
-import { PrismAsyncLight } from "react-syntax-highlighter";
-import { makePrismAsyncLightSyntaxHighlighter } from "@assistant-ui/react-syntax-highlighter";
-import tsx from "react-syntax-highlighter/dist/esm/languages/prism/tsx";
-import python from "react-syntax-highlighter/dist/esm/languages/prism/python";
-import { coldarkDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
-
-PrismAsyncLight.registerLanguage("js", tsx);
-PrismAsyncLight.registerLanguage("jsx", tsx);
-PrismAsyncLight.registerLanguage("ts", tsx);
-PrismAsyncLight.registerLanguage("tsx", tsx);
-PrismAsyncLight.registerLanguage("python", python);
-
-export const SyntaxHighlighter = makePrismAsyncLightSyntaxHighlighter({
-  style: coldarkDark,
-  customStyle: {
-    margin: 0,
-    width: "100%",
-    background: "black",
-    padding: "1.5rem 1rem",
-  },
-});
-```
-
-Register it the same way:
-
-```tsx
-import { SyntaxHighlighter } from "./syntax-highlighter";
-
-export const defaultComponents = memoizeMarkdownComponents({
-  SyntaxHighlighter: SyntaxHighlighter,
-  h1: /* ... */,
-  // ...other elements...
-});
-```
-
-## Full language bundle
-
-For all languages without registering each one, use the `/full` subpath and `makePrismAsyncSyntaxHighlighter` instead of the light builder.
-
-```tsx
-import { makePrismAsyncSyntaxHighlighter } from "@assistant-ui/react-syntax-highlighter/full";
-```
-
-## Per-language overrides (componentsByLanguage)
-
-`componentsByLanguage` maps a language id to its own `SyntaxHighlighter` (and optional `CodeHeader`). It takes precedence over the global `SyntaxHighlighter` in `components` for that language; other languages fall back to the global one. This is how Mermaid and diff renderers are wired.
-
-```tsx
-const MarkdownTextImpl = () => {
-  return (
-    <MarkdownTextPrimitive
-      remarkPlugins={[remarkGfm]}
-      className="aui-md"
-      components={defaultComponents}
-      componentsByLanguage={{
-        mermaid: {
-          SyntaxHighlighter: MermaidDiagram,
-        },
-      }}
-    />
-  );
-};
-
-export const MarkdownText = memo(MarkdownTextImpl);
-```
-
-## SyntaxHighlighterProps
-
-Every `SyntaxHighlighter` (global or per language) receives this from `@assistant-ui/react-markdown`:
-
-```ts
-export type SyntaxHighlighterProps = {
-  node?: Element | undefined;
-  components: {
-    Pre: PreComponent;
-    Code: CodeComponent;
-  };
-  language: string;
-  code: string;
-};
-```
-
-`language` falls back to `"unknown"` when the fence has no language; `code` is the raw block text. The shiki and prism components destructure `node` and `components` out and forward the rest, since `react-shiki` and `react-syntax-highlighter` render their own `pre`/`code`.
+- The `.aui` renderer intentionally leaves a running message part unhighlighted. Wait for completion, or use its standalone form and pass `streaming={false}` after your own source settles.

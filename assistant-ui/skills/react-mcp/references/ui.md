@@ -1,184 +1,151 @@
-# MCP config UI
+# MCP configuration UI
 
-Headless primitives for letting end users add and authenticate MCP servers from the browser, plus the `McpConfigDialog` shadcn registry component built on them.
-
-The primitives ship from `@assistant-ui/react-mcp`. Per-server card and form state is read with `useAuiState` from `@assistant-ui/store`. Install the prebuilt dialog with the CLI (`https://r.assistant-ui.com/mcp-config.json`) to get a ready styled version under `@/components/assistant-ui/mcp-config` that you can edit.
+Use the copied `McpConfigDialog` for the standard configuration flow. Use `McpManagerPrimitive`, `McpServerPrimitive`, and `McpAddFormPrimitive` when the product needs a different layout. All primitives read the mounted `mcp` scope and are unstyled.
 
 ## Contents
 
-- [Imports](#imports)
-- [McpManagerPrimitive](#mcpmanagerprimitive)
-- [McpServerPrimitive](#mcpserverprimitive)
-- [McpAddFormPrimitive](#mcpaddformprimitive)
-- [MCPConnectionState](#mcpconnectionstate)
-- [Reading server state](#reading-server-state)
-- [McpConfigDialog](#mcpconfigdialog)
+- [Drop in dialog](#drop-in-dialog)
+- [Manager and server primitives](#manager-and-server-primitives)
+- [Add custom server form](#add-custom-server-form)
+- [State and hooks](#state-and-hooks)
 
-## Imports
+## Drop in dialog
+
+Install the runtime connected element and keep the copied source under `components/assistant-ui/elements/`.
+
+```bash
+npx assistant-ui@latest add mcp-config
+```
 
 ```tsx
-import { useAuiState } from "@assistant-ui/store";
-import {
-  McpAddFormPrimitive,
-  McpManagerPrimitive,
-  McpServerPrimitive,
-  type MCPConnectionState,
-} from "@assistant-ui/react-mcp";
-```
+import { McpConfigDialog } from "@/components/assistant-ui/elements/mcp-config.aui";
 
-## McpManagerPrimitive
-
-Wraps the manager state and iterates over the two server collections. The iteration parts take a render-prop child `() => <ServerCard />`; each rendered card reads its own server from context.
-
-| Part | Props | Description |
-|------|-------|-------------|
-| `.Root` | | Manager context provider; wrap the whole UI |
-| `.Connectors` | | App-defined connectors; child is `() => ReactNode` |
-| `.CustomServers` | | User-added servers; child is `() => ReactNode` |
-| `.AddCustomTrigger` | `asChild` | Reveals the add form |
-
-```tsx
-<McpManagerPrimitive.Root>
-  <section>
-    <h3>Connectors</h3>
-    <McpManagerPrimitive.Connectors>
-      {() => <ServerCard />}
-    </McpManagerPrimitive.Connectors>
-  </section>
-
-  <section>
-    <h3>Custom servers</h3>
-    <McpManagerPrimitive.CustomServers>
-      {() => <ServerCard />}
-    </McpManagerPrimitive.CustomServers>
-
-    <McpManagerPrimitive.AddCustomTrigger asChild>
-      <Button>Add server</Button>
-    </McpManagerPrimitive.AddCustomTrigger>
-  </section>
-</McpManagerPrimitive.Root>
-```
-
-## McpServerPrimitive
-
-Renders a single server (the one provided by the surrounding `.Connectors` / `.CustomServers` iteration). The connect, authorize, and disconnect actions render conditionally based on the server's connection state, so include all three and let the primitive decide which is active.
-
-| Part | Props | Description |
-|------|-------|-------------|
-| `.Root` | `className` | Card container; exposes `data-connection-state` (e.g. `data-[connection-state=error]`) |
-| `.Name` | | Renders the server name |
-| `.ConnectButton` | `asChild` | Connects a server that uses no OAuth |
-| `.OAuthLink` | `className` | Starts the OAuth flow (renders as a link) |
-| `.DisconnectButton` | `asChild` | Disconnects a connected server |
-| `.RemoveButton` | `asChild` | Removes the server from the manager |
-
-```tsx
-const ServerCard: FC = () => (
-  <McpServerPrimitive.Root
-    className={cn(
-      "rounded-lg border p-3",
-      "data-[connection-state=error]:border-destructive/40",
-    )}
-  >
-    <McpServerPrimitive.Name />
-    <McpServerPrimitive.ConnectButton asChild>
-      <Button size="sm">Connect</Button>
-    </McpServerPrimitive.ConnectButton>
-    <McpServerPrimitive.OAuthLink className={cn(buttonVariants({ size: "sm" }))}>
-      Authorize
-    </McpServerPrimitive.OAuthLink>
-    <McpServerPrimitive.DisconnectButton asChild>
-      <Button size="sm" variant="outline">Disconnect</Button>
-    </McpServerPrimitive.DisconnectButton>
-    <McpServerPrimitive.RemoveButton asChild>
-      <Button variant="ghost" size="icon"><Trash2Icon className="size-4" /></Button>
-    </McpServerPrimitive.RemoveButton>
-  </McpServerPrimitive.Root>
-);
-```
-
-## McpAddFormPrimitive
-
-The form for adding a custom server. `.Root` owns the form state and fires `onSubmitted` after a successful add and `onCancel` when dismissed; both are handy for closing the form. `.AuthSelect` chooses the auth scheme and `.AuthFields` renders whatever inputs that scheme needs (for example a bearer token field).
-
-| Part | Props | Description |
-|------|-------|-------------|
-| `.Root` | `onSubmitted`, `onCancel` | Form provider and submit handler |
-| `.NameField` | `asChild` | Server name input |
-| `.UrlField` | `asChild` | Server URL input |
-| `.AuthSelect` | `className` | Auth scheme `<select>` |
-| `.AuthFields` | | Inputs required by the selected scheme |
-| `.Error` | `className` | Validation / submit error text |
-| `.Submit` | `asChild` | Submits the form |
-| `.Cancel` | `asChild` | Cancels and fires `onCancel` |
-
-```tsx
-const AddServerForm: FC<{ onClose: () => void }> = ({ onClose }) => (
-  <McpAddFormPrimitive.Root onSubmitted={onClose} onCancel={onClose}>
-    <McpAddFormPrimitive.NameField asChild>
-      <Input placeholder="My MCP server" />
-    </McpAddFormPrimitive.NameField>
-    <McpAddFormPrimitive.UrlField asChild>
-      <Input placeholder="https://example.com/mcp" />
-    </McpAddFormPrimitive.UrlField>
-    <McpAddFormPrimitive.AuthSelect className="h-9 w-full rounded-md border px-2 text-sm" />
-    <McpAddFormPrimitive.AuthFields />
-    <McpAddFormPrimitive.Error className="text-destructive text-xs" />
-    <McpAddFormPrimitive.Cancel asChild>
-      <Button type="button" variant="ghost" size="sm">Cancel</Button>
-    </McpAddFormPrimitive.Cancel>
-    <McpAddFormPrimitive.Submit asChild>
-      <Button type="submit" size="sm">Add server</Button>
-    </McpAddFormPrimitive.Submit>
-  </McpAddFormPrimitive.Root>
-);
-```
-
-## MCPConnectionState
-
-Union of the six states a server can be in; useful for mapping status to a label or badge variant.
-
-```ts
-type MCPConnectionState =
-  | "connected"
-  | "connecting"
-  | "authRequired"
-  | "authPending"
-  | "error"
-  | "disconnected";
-```
-
-## Reading server state
-
-Inside a `McpServerPrimitive.Root` (or any `.Connectors` / `.CustomServers` child) read the current server from the store via `s.mcpServer`.
-
-```tsx
-const icon = useAuiState((s) => s.mcpServer.icon ?? null);
-const name = useAuiState((s) => s.mcpServer.name);
-const status = useAuiState((s) => s.mcpServer.connectionState);
-const message = useAuiState((s) => s.mcpServer.lastError?.message ?? null);
-```
-
-## McpConfigDialog
-
-The registry component is a shadcn dialog that lists connectors and custom servers with inline auth controls and an add form, composing every primitive above. Its only prop is `children`, which overrides the default trigger button.
-
-```ts
-export namespace McpConfigDialog {
-  export type Props = { children?: ReactNode };
+export function ServerSettings() {
+  return (
+    <McpConfigDialog>
+      <button type="button">MCP servers</button>
+    </McpConfigDialog>
+  );
 }
 ```
 
+Without `children`, `McpConfigDialog` supplies its own trigger. It lists connectors and custom servers, renders connection and auth actions, reports errors, and contains a custom server form. It needs a live manager in an ancestor and does not have a standalone props mode.
+
+## Manager and server primitives
+
+`McpManagerPrimitive.Root` provides manager UI context and sets `data-mcp-hydrated` after persisted custom servers load. Its `Connectors` and `CustomServers` children must be render functions. Each call receives `{ server }` and supplies the matching `mcpServer` scope to nested server primitives.
+
 ```tsx
-import { McpConfigDialog } from "@/components/assistant-ui/mcp-config";
+import {
+  McpManagerPrimitive,
+  McpServerPrimitive,
+} from "@assistant-ui/react-mcp";
 
-// default trigger ("MCP servers" button)
-<McpConfigDialog />
+function ServerCard() {
+  return (
+    <McpServerPrimitive.Root>
+      <McpServerPrimitive.Icon />
+      <McpServerPrimitive.Name />
+      <McpServerPrimitive.Status />
+      <McpServerPrimitive.ConnectButton>Connect</McpServerPrimitive.ConnectButton>
+      <McpServerPrimitive.OAuthLink>Authorize</McpServerPrimitive.OAuthLink>
+      <McpServerPrimitive.DisconnectButton>Disconnect</McpServerPrimitive.DisconnectButton>
+      <McpServerPrimitive.RemoveButton>Remove</McpServerPrimitive.RemoveButton>
+      <McpServerPrimitive.Error />
+      <McpServerPrimitive.Tools>
+        {() => <McpServerPrimitive.ToolName />}
+      </McpServerPrimitive.Tools>
+    </McpServerPrimitive.Root>
+  );
+}
 
-// custom trigger
-<McpConfigDialog>
-  <Button variant="ghost">Servers</Button>
-</McpConfigDialog>
+export function ServerList() {
+  return (
+    <McpManagerPrimitive.Root>
+      <McpManagerPrimitive.Connectors>
+        {({ server }) => <ServerCard key={server.id} />}
+      </McpManagerPrimitive.Connectors>
+      <McpManagerPrimitive.CustomServers>
+        {({ server }) => <ServerCard key={server.id} />}
+      </McpManagerPrimitive.CustomServers>
+      <McpManagerPrimitive.AddCustomTrigger>Add server</McpManagerPrimitive.AddCustomTrigger>
+    </McpManagerPrimitive.Root>
+  );
+}
 ```
 
-The dialog reads connectors and custom servers from the MCP manager resource on the runtime, so render it inside the same provider tree as your `AuiProvider`. See [setup.md](./setup.md) for mounting `McpManagerResource`.
+`AddCustomTrigger` is only a button primitive. Pair it with local state to show an add form or use the copied dialog, which owns that composition. The server parts are:
+
+| Part | Behavior |
+|---|---|
+| `Root` | Sets `data-server-id`, `data-kind`, `data-connection-state`, and `data-has-error`. |
+| `Name` | Renders the current server name unless it has children. |
+| `Icon` | Renders an image from `icon`, or an overridden `src`, and nothing when neither exists. |
+| `Status` | Renders the connection state and sets `data-state`. |
+| `Error` | Renders the latest error message and nothing when there is no error. |
+| `ConnectButton` | Calls `connect()` and renders only for `disconnected`, `error`, or `authRequired`. |
+| `OAuthLink` | Opens `authorizationUrl`, or its `href` override, in a new tab and renders nothing without one. |
+| `DisconnectButton` | Calls `disconnect()` and renders only for `connected`, `connecting`, or `authPending`. |
+| `RemoveButton` | Calls `remove()` and renders only for a custom server. |
+| `Tools` | Calls its render function once per tool and renders nothing for an empty list. |
+| `ToolName` | Renders the current `Tools` item name and requires the `Tools` scope. |
+
+`McpServerPrimitive.useMcpServerTool()` returns the current `MCPToolInfo` inside `Tools`. For a fixed server outside an iteration primitive, wrap it in `McpServerByIdProvider id="..."` before rendering a `McpServerPrimitive.Root`.
+
+## Add custom server form
+
+`McpAddFormPrimitive.Root` owns a form draft. It validates a nonempty name, an HTTP or HTTPS URL, and a bearer token when bearer auth is selected. On success it calls `aui.mcp.addCustomServer(...)`, resets its state, and calls `onSubmitted(id)`.
+
+```tsx
+import { McpAddFormPrimitive } from "@assistant-ui/react-mcp";
+
+export function AddServerForm({ onClose }: { onClose: () => void }) {
+  return (
+    <McpAddFormPrimitive.Root onSubmitted={onClose} onCancel={onClose}>
+      <McpAddFormPrimitive.NameField />
+      <McpAddFormPrimitive.UrlField />
+      <McpAddFormPrimitive.AuthSelect />
+      <McpAddFormPrimitive.AuthFields />
+      <McpAddFormPrimitive.Error />
+      <McpAddFormPrimitive.Cancel>Cancel</McpAddFormPrimitive.Cancel>
+      <McpAddFormPrimitive.Submit>Add server</McpAddFormPrimitive.Submit>
+    </McpAddFormPrimitive.Root>
+  );
+}
+```
+
+| Part | Behavior |
+|---|---|
+| `Root` | Renders the form and accepts `onSubmitted(id)` and `onCancel`. |
+| `NameField` | Controlled text input for the display name. |
+| `UrlField` | Controlled URL input. |
+| `AuthSelect` | Controlled select for `oauth`, `bearer`, or `none`, defaulting to `oauth`. |
+| `AuthFields` | Default bearer token or OAuth scopes input. Its render function receives `{ authType }`. |
+| `Error` | Renders form validation or submit failure text. |
+| `Submit` | Submits the form and is disabled while it is submitting. |
+| `Cancel` | Resets the draft and calls `onCancel`. |
+
+The default OAuth scopes input splits spaces and commas into the `scopes` array. To replace the default inputs, pass an `AuthFields` render function that receives the current `authType`.
+
+## State and hooks
+
+Use `useAuiState` for reactive state. `s.mcpServer` is only available inside a server provider or manager iteration. `McpElicitationPrimitive.Items`, `McpElicitationPrimitive.useMcpElicitation()`, and `McpElicitationPrimitive.useMcpElicitationField()` also require this same server scope.
+
+```tsx
+import { useAuiState } from "@assistant-ui/store";
+import { McpServerPrimitive } from "@assistant-ui/react-mcp";
+
+export function ServerSummary() {
+  const hydrated = useAuiState((state) => state.mcp.isHydrated);
+  const connectionState = useAuiState((state) => state.mcpServer.connectionState);
+  const error = useAuiState((state) => state.mcpServer.lastError?.message ?? null);
+  return <p>{error ?? `${hydrated}: ${connectionState}`}</p>;
+}
+
+export function ToolRow() {
+  const tool = McpServerPrimitive.useMcpServerTool();
+  return <span>{tool.name}</span>;
+}
+```
+
+Connection states are `disconnected`, `authRequired`, `authPending`, `connecting`, `connected`, and `error`. `McpServerPrimitive.Root` exposes the same value as `data-connection-state` for styling.

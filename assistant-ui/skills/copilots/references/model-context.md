@@ -6,7 +6,7 @@ Provide instructions, tools, and lazy app state to the assistant. Multiple provi
 
 - [useAssistantContext](#useassistantcontext) (lazy send-time string state)
 - [useAssistantInstructions](#useassistantinstructions) (static instructions)
-- [Imperative register](#imperative-register) (useAui().modelContext.register)
+- [Imperative register](#imperative-register) (aui.modelContext.register)
 - [Provider shape](#provider-shape) (getModelContext return)
 - [ModelContextRegistry](#modelcontextregistry) (standalone addTool / addInstruction / addProvider)
 - [Handles](#handles) (update() and remove())
@@ -14,7 +14,7 @@ Provide instructions, tools, and lazy app state to the assistant. Multiple provi
 
 ## useAssistantContext
 
-`getContext` is a callback evaluated fresh each time the model context is read (at send-time), so frequently-changing app state never triggers a re-registration.
+`getContext` is a callback evaluated fresh each time the model context is read, at send-time, so frequently changing app state never triggers a re-registration.
 
 ```tsx
 import { useAssistantContext } from "@assistant-ui/react";
@@ -27,7 +27,7 @@ function PageContext() {
 }
 ```
 
-Config shape:
+Config shape (`AssistantContextConfig`):
 
 ```ts
 interface AssistantContextConfig {
@@ -38,7 +38,7 @@ interface AssistantContextConfig {
 
 ## useAssistantInstructions
 
-Takes a static string (or config). Re-registers when the value changes, so prefer it for stable, explicit instructions.
+Takes a static string, or the same `{ instruction, disabled }` shape. Re-registers when the value changes; see [instructions.md](./instructions.md) for the full reference.
 
 ```tsx
 import { useAssistantInstructions } from "@assistant-ui/react";
@@ -58,7 +58,7 @@ import { useAui, tool } from "@assistant-ui/react";
 import { useEffect } from "react";
 import { z } from "zod";
 
-// Define tool outside the component (no runtime dependencies)
+// Defined outside the component; this tool has no dependency on component state.
 const myTool = tool({
   parameters: z.object({ query: z.string() }),
   execute: async ({ query }) => {
@@ -82,7 +82,7 @@ function MyComponent() {
 }
 ```
 
-Because `getModelContext` runs at send-time, you can close over changing props or state. Re-register only when the closed-over identity must change.
+Because `getModelContext` runs at send-time, its closure can read changing props or state directly. Change the effect's dependency array only when the registered provider's *identity* needs to be swapped, not on every value change:
 
 ```tsx
 function SmartHistory({ userProfile }) {
@@ -115,37 +115,21 @@ Minimal provider that injects model config:
 
 ```tsx
 useEffect(() => {
-  const config = { config: { modelName } };
+  const modelConfig = { config: { modelName } };
   return aui.modelContext.register({
-    getModelContext: () => config,
+    getModelContext: () => modelConfig,
   });
 }, [aui, modelName]);
 ```
 
 ## ModelContextRegistry
 
-A standalone registry instance (not tied to React) that manages tools, instructions, and nested providers. Useful outside a component tree (for example, building context in an iframe to expose to a parent assistant).
+A standalone registry, not tied to React, that manages tools, instructions, and nested providers. Useful outside a component tree, such as building context inside an iframe to expose to a parent window's assistant with [`AssistantFrameProvider`](./assistant-frame.md).
 
 ```ts
 import { ModelContextRegistry } from "@assistant-ui/react";
 
 const registry = new ModelContextRegistry();
-```
-
-Registry interface (all members optional on the type):
-
-```ts
-interface ModelContextRegistry {
-  getModelContext?: () => ModelContext;
-  subscribe?: (callback: () => void) => Unsubscribe;
-  addTool?: (tool: AssistantToolProps) => ModelContextRegistryToolHandle;
-  addInstruction?: (
-    config: string | AssistantInstructionsConfig,
-  ) => ModelContextRegistryInstructionHandle;
-  addProvider?: (
-    provider: ModelContextProvider,
-  ) => ModelContextRegistryProviderHandle;
-}
 ```
 
 ### addTool
@@ -175,7 +159,7 @@ const instruction = registry.addInstruction("You are a helpful assistant.");
 
 ### addProvider
 
-Compose another provider (or registry's `getModelContext`/`subscribe`) into this one.
+Compose another provider, or another registry, into this one.
 
 ```ts
 const providerHandle = registry.addProvider({
@@ -185,7 +169,7 @@ const providerHandle = registry.addProvider({
 
 ## Handles
 
-`addTool` / `addInstruction` / `addProvider` each return a handle with `update(...)` and `remove()`. Use them to mutate or tear down a single contribution.
+`addTool`, `addInstruction`, and `addProvider` each return a handle with `update(...)` and `remove()`.
 
 ```ts
 const toolHandle = registry.addTool({
@@ -219,14 +203,14 @@ instruction.update("You have access to a product catalog search tool.");
 instruction.remove();
 ```
 
-Note: the React hooks (`useAssistantContext`, `useAssistantInstructions`) and `register()` clean up automatically. Call `handle.remove()` only when managing a `ModelContextRegistry` yourself.
+The React hooks (`useAssistantContext`, `useAssistantInstructions`) and `register()` clean up automatically. Call `handle.remove()` only when managing a `ModelContextRegistry` directly.
 
 ## Composition
 
 Registered providers compose rather than override:
 
-- System instructions are concatenated.
-- Tool sets are merged.
-- Nested readable components only contribute their context at the outermost level.
+- System instructions concatenate.
+- Tool sets merge.
+- Nested visible components (`makeAssistantVisible`) contribute their HTML only at the outermost level.
 
-Keep each provider focused on one component's purpose and register inside `useEffect` so removal happens on unmount.
+Keep each provider focused on one component's purpose, and register inside `useEffect` so removal happens on unmount.

@@ -1,35 +1,21 @@
 # MCP manager setup
 
-Mount user-managed MCP servers on the `aui` instance with `@assistant-ui/react-mcp`. Connectors are presets, storage persists servers and tokens, and `aui.mcp` drives the manager imperatively.
+Mount `McpManagerResource` in an `AuiConfig` to give an assistant-ui subtree an `mcp` scope. The manager owns application declared connectors, persisted user added servers, auth state, connections, and the frontend tool registration surface.
 
 ## Contents
 
-- [Imports](#imports)
-- [defineConnector](#defineconnector)
-- [McpManagerResource](#mcpmanagerresource)
-- [Mount on the provider](#mount-on-the-provider)
-- [Storage](#storage)
-- [McpCustomStorage](#mcpcustomstorage)
-- [Imperative API](#imperative-api)
+- [Connectors](#connectors)
+- [Manager configuration](#manager-configuration)
+- [Storage and scope identity](#storage-and-scope-identity)
+- [State, methods, and resources](#state-methods-and-resources)
 
-## Imports
+## Connectors
 
-```ts
-import { AuiProvider, useAui } from "@assistant-ui/react";
-import {
-  McpManagerResource,
-  defineConnector,
-  McpLocalStorage,
-  McpMemoryStorage,
-  McpCustomStorage,
-} from "@assistant-ui/react-mcp";
-```
-
-## defineConnector
-
-A connector is an app-declared preset the end user can connect to. `id`, `name`, `url`, and `auth` are required; `icon` is optional. Auth is one of `{ type: "none" }`, `{ type: "bearer", token? }`, or `{ type: "oauth", scopes?, ... }` (see [oauth.md](./oauth.md) for the full shapes).
+`defineConnector` validates an application preset. `id`, `name`, `url`, and `auth` are required. IDs must be unique because they drive server lookup, OAuth routing, persisted auth state, and namespaced tool names.
 
 ```ts
+import { defineConnector } from "@assistant-ui/react-mcp";
+
 const connectors = [
   defineConnector({
     id: "linear",
@@ -37,119 +23,163 @@ const connectors = [
     url: "https://mcp.linear.app",
     auth: { type: "oauth", scopes: ["read"] },
     icon: "/icons/linear.svg",
+    connectionTimeout: 10_000,
+    cache: { defaultTtlMs: 30_000 },
   }),
   defineConnector({
     id: "weather",
     name: "Weather",
     url: "https://mcp.example.com/weather",
     auth: { type: "none" },
+    elicitation: false,
   }),
 ];
 ```
 
-## McpManagerResource
+`icon` is optional. `connectionTimeout` overrides the manager timeout for this server. `cache.defaultTtlMs` configures response caching. `elicitation: false` stops the client from advertising form elicitation to this server. The same `connectionTimeout`, `cache`, and `elicitation` options are accepted by `aui.mcp.addCustomServer`.
 
-`McpManagerResource(options)` builds the `mcp` scope you pass to `useAui`. Options and their defaults:
+## Manager configuration
 
-- `connectors`: the array from `defineConnector(...)`.
-- `storage`: `McpLocalStorage()` by default; persists under the `aui-mcp:` prefix in `window.localStorage`.
-- `oauthRedirectUri`: `"${window.location.origin}/mcp/callback"` by default.
-- `autoConnect`: `true` by default; connects on mount when usable auth is already persisted.
-
-```ts
-McpManagerResource({
-  connectors,
-  storage: McpLocalStorage(),
-  oauthRedirectUri: `${window.location.origin}/auth/mcp`,
-  autoConnect: true,
-});
-```
-
-## Mount on the provider
-
-Pass the resource to `useAui({ mcp })` and wrap the app in `AuiProvider`. Connected servers' tools merge into the chat runtime automatically, namespaced `serverId__toolName`.
+The manager defaults to `McpLocalStorage()`, `${window.location.origin}/mcp/callback`, and `autoConnect: true`. Auto connect reconnects a server at mount when usable auth state is persisted. `connectionTimeout` is opt in and bounds the full connection readiness path, including `listTools()`.
 
 ```tsx
 "use client";
-import { AuiProvider, useAui } from "@assistant-ui/react";
-import { McpManagerResource, defineConnector } from "@assistant-ui/react-mcp";
 
-const connectors = [
-  defineConnector({
-    id: "linear",
-    name: "Linear",
-    url: "https://mcp.linear.app",
-    auth: { type: "oauth", scopes: ["read"] },
-  }),
-];
+import type { ReactNode } from "react";
+import { AuiConfig, AuiProvider, useAui } from "@assistant-ui/react";
+import { McpManagerResource } from "@assistant-ui/react-mcp";
 
-export function Providers({ children }: { children: React.ReactNode }) {
-  const aui = useAui({ mcp: McpManagerResource({ connectors }) });
-  return <AuiProvider value={aui}>{children}</AuiProvider>;
+export function McpProviders({ children }: { children: ReactNode }) {
+  const aui = useAui();
+  const config = AuiConfig({
+    mcp: McpManagerResource({
+      connectors,
+      oauthRedirectUri: `${window.location.origin}/auth/mcp`,
+      autoConnect: true,
+      connectionTimeout: 15_000,
+    }),
+  });
+
+  return (
+    <AuiProvider extends={aui} config={config}>
+      {children}
+    </AuiProvider>
+  );
 }
 ```
 
-## Storage
+When a chat runtime already supplies `modelContext`, connected MCP tools register into it. Otherwise the manager provides a minimal `modelContext`, so direct calls remain available.
 
-Three built-in storage backends control where custom servers and OAuth tokens persist:
+## Storage and scope identity
 
-- `McpLocalStorage()`: default; `window.localStorage` under the `aui-mcp:` prefix. Browser only.
-- `McpMemoryStorage()`: in-process Map; use for SSR or tests where `localStorage` is absent.
-- `McpCustomStorage({...})`: bring your own load/save handlers (for example a backend endpoint).
+All persisted data uses one `MCPStorage`: custom server records, OAuth tokens, callback state, PKCE verifiers, and DCR client data. The built in choices are `McpLocalStorage()`, `McpMemoryStorage()`, and `McpCustomStorage(...)`.
 
-`McpLocalStorage` keeps tokens in plain text and is XSS-exposed; for anything past local prototyping, back `McpCustomStorage` with an HTTP-only-cookie endpoint.
+| Storage | Use | Scope identity |
+|---|---|---|
+| `McpLocalStorage()` | Browser default using the `aui-mcp:` key prefix | Derives a scope for the shared `window.localStorage` backing store |
+| `McpMemoryStorage()` | SSR or tests without `localStorage` | Every instance has a distinct scope |
+| `McpCustomStorage(...)` | Application owned persistence | Set `scopeId` to the stable identity of the backing data |
 
-```ts
-McpManagerResource({ connectors, storage: McpMemoryStorage() });
-```
+`McpLocalStorage({ keyPrefix, storage, scopeId })` customizes the key namespace, backing Web Storage object, and identity. Supply `scopeId` whenever you replace the backing `storage`. A custom storage implements the complete async contract:
 
-## McpCustomStorage
+```tsx
+import { AuiConfig } from "@assistant-ui/react";
+import { McpCustomStorage, McpManagerResource } from "@assistant-ui/react-mcp";
 
-Supply async handlers for custom-server records and per-server auth state. `loadAuthState` returns the stored state or `null`; `saveAuthState` and `clearAuthState` are keyed by server id.
-
-```ts
-const aui = useAui({
+const config = AuiConfig({
   mcp: McpManagerResource({
     connectors,
     storage: McpCustomStorage({
-      loadCustomServers: async () =>
-        fetch("/api/mcp/servers").then((r) => r.json()),
-      saveCustomServers: async (records) =>
-        fetch("/api/mcp/servers", {
+      scopeId: "api:/api/mcp",
+      loadCustomServers: async () => fetch("/api/mcp/servers").then((response) => response.json()),
+      saveCustomServers: async (records) => {
+        await fetch("/api/mcp/servers", {
           method: "PUT",
           body: JSON.stringify(records),
-        }),
-      loadAuthState: async (id) =>
-        fetch(`/api/mcp/auth/${id}`).then((r) => (r.ok ? r.json() : null)),
-      saveAuthState: async (id, state) =>
-        fetch(`/api/mcp/auth/${id}`, {
+        });
+      },
+      loadAuthState: async (id) => {
+        const response = await fetch(`/api/mcp/auth/${id}`);
+        return response.ok ? response.json() : null;
+      },
+      saveAuthState: async (id, state) => {
+        await fetch(`/api/mcp/auth/${id}`, {
           method: "PUT",
           body: JSON.stringify(state),
-        }),
-      clearAuthState: async (id) =>
-        fetch(`/api/mcp/auth/${id}`, { method: "DELETE" }),
+        });
+      },
+      clearAuthState: async (id) => {
+        await fetch(`/api/mcp/auth/${id}`, { method: "DELETE" });
+      },
     }),
   }),
 });
 ```
 
-## Imperative API
+Two storages with the same `scopeId` must read and write the same data. Bearer and OAuth connections key on that identity, so moving to a different scope reconnects and rebinds the OAuth provider. Without `scopeId`, a storage replacement never reconnects, and a rebuilt object can clear auth state without waiting for prior queued writes.
 
-Drive the manager through `useAui().mcp` from inside event handlers, never during render. `addCustomServer` registers a user server with its own auth; `server({ id })` scopes to one server for `connect` and `callTool`.
+Treat storage as fixed for the manager lifetime. Custom servers load once at mount and are not reloaded after a storage change, so swapping storage retains records from the old store and writes them into the new one. When the backing identity changes, such as a user change, remount the manager. `McpLocalStorage` stores tokens as plain text, so production apps should use a server endpoint backed by HTTP only cookies through `McpCustomStorage`.
 
-```ts
-const aui = useAui();
-// inside an event handler:
-await aui.mcp.addCustomServer({ name, url, auth: { type: "bearer", token } });
-await aui.mcp.server({ id }).connect();
-const result = await aui.mcp.server({ id }).callTool("echo", { text: "hi" });
-```
+## State, methods, and resources
 
-Read reactive state with `useAuiState` from `@assistant-ui/store`, scoped under `s.mcp` (manager) and `s.mcpServer` (current item inside a `McpServerPrimitive` subtree).
+Read reactive manager state from `s.mcp`. `s.mcpServer` requires an `McpServerByIdProvider` or one of the manager iteration primitives. Keep selectors primitive or referentially stable.
 
-```ts
+```tsx
+import { useAui } from "@assistant-ui/react";
 import { useAuiState } from "@assistant-ui/store";
 
-const isHydrated = useAuiState((s) => s.mcp.isHydrated);
-const connectionState = useAuiState((s) => s.mcpServer.connectionState);
+export function ServerActions() {
+  const isHydrated = useAuiState((state) => state.mcp.isHydrated);
+  const connectionState = useAuiState((state) => state.mcpServer.connectionState);
+  const tools = useAuiState((state) => state.mcpServer.tools);
+  const aui = useAui();
+
+  async function addAndConnect() {
+    const id = await aui.mcp.addCustomServer({
+      name: "My server",
+      url: "https://mcp.example.com",
+      auth: { type: "bearer", token: "token" },
+      connectionTimeout: 10_000,
+    });
+    await aui.mcp.server({ id }).connect();
+  }
+
+  return <button onClick={() => void addAndConnect()}>{isHydrated && connectionState === "connected" ? tools.length : "Connect"}</button>;
+}
+```
+
+`aui.mcp.getState()` returns the manager state. Resolve a server with `server({ id })`, `server({ kind, index })`, `connector({ index })`, or `customServer({ index })`. A server exposes `connect`, `disconnect`, `remove`, `callTool`, `listResources`, `readResource`, `completeAuth`, and `answerElicitation`. Call these from an event handler, never while rendering.
+
+`listResources` returns the raw MCP response and is paginated. Preserve the returned cursor until it is absent before selecting a resource to read.
+
+```tsx
+import { useAui } from "@assistant-ui/react";
+
+type ResourcePage = {
+  resources: Array<{ uri: string; name?: string }>;
+  nextCursor?: string;
+};
+
+export function ResourcePreview({ id }: { id: string }) {
+  const aui = useAui();
+
+  async function loadResources() {
+    const server = aui.mcp.server({ id });
+    const resources: ResourcePage["resources"] = [];
+    let nextCursor: string | undefined;
+
+    do {
+      const page = (await (nextCursor === undefined
+        ? server.listResources()
+        : server.listResources({ cursor: nextCursor }))) as ResourcePage;
+      resources.push(...page.resources);
+      nextCursor = page.nextCursor;
+    } while (nextCursor !== undefined);
+
+    const first = resources[0];
+    return first ? server.readResource(first.uri) : null;
+  }
+
+  return <button onClick={() => void loadResources()}>Load resources</button>;
+}
 ```

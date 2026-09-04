@@ -1,228 +1,165 @@
 # ComposerPrimitive
 
-Message input form for sending messages.
+The interface for composing a new message or editing an existing one: submit behavior, keyboard shortcuts, focus management, attachment and quote state, and streaming status. `Root` renders a `<form>`, `Input` a `<textarea>`, `Send` and `Cancel` `<button>`s.
 
 ## Parts
 
-| Part | Description |
-|------|-------------|
-| `.Root` | Form container |
-| `.Input` | Text input/textarea |
-| `.Send` | Submit button |
-| `.Cancel` | Cancel generation |
-| `.AddAttachment` | Attach files button |
-| `.Attachments` | Render attachments |
-| `.AttachmentDropzone` | Drag-drop area |
-| `.Dictate` | Start voice input |
-| `.StopDictation` | Stop voice input |
-| `.If` | Conditional rendering (deprecated; prefer `AuiIf`) |
+| Part | Renders | Notes |
+|------|---------|-------|
+| `.Root` | `<form>` | Submits on Enter (Shift+Enter for a newline by default). Accepts `compact`; see below. |
+| `.Input` | `<textarea>` | `submitMode` (`"enter"` default, `"ctrlEnter"`, `"none"`), `cancelOnEscape`, `unstable_insertNewlineOnTouchEnter`, `unstable_focusOnRunStart`, `unstable_focusOnScrollToBottom`. |
+| `.Send` | `<button>` | Disabled when the composer cannot send (empty, or gated; see below). |
+| `.Cancel` | `<button>` | Cancels the in flight run, or exits edit mode without resending. |
+| `.AddAttachment` | `<button>` | Opens the file picker. |
+| `.Attachments` | list | Children render function `{ attachment }`. See [composer-input.md](./composer-input.md). |
+| `.AttachmentByIndex` | one attachment | `index` plus `components={{ Attachment }}`. |
+| `.AttachmentDropzone` | `<div>` | Sets `data-dragging` while a file hovers over it; inert without the attachments capability. |
+| `.Dictate` / `.StopDictation` | `<button>` | Start and stop a dictation session. See [composer-input.md](./composer-input.md#dictation). |
+| `.DictationTranscript` | `<span>` | Interim transcript while dictation is active. |
+| `.Quote` / `.QuoteText` / `.QuoteDismiss` | `<div>` / `<span>` / `<button>` | Quoted text preview. Only `.Quote` renders when a quote is set. See [composer-input.md](./composer-input.md#quoting). |
+| `.Queue` | queue UI | Queued messages sent while a run is in flight; render `QueueItemPrimitive` inside. |
+| `.Unstable_TriggerPopoverRoot` / `.Unstable_TriggerPopover` and friends | popover | `@` mention and `/` slash command popovers. See [mentions.md](./mentions.md). |
+| `.If` | conditional | Deprecated (`editing`, `dictation` only). Use `AuiIf`. |
 
-## Basic Structure
+## New message vs edit mode
+
+The same primitives handle both: a `Composer` inside a `ThreadPrimitive.Root` composes a new message, and a `Composer` inside a `MessagePrimitive.Root` edits that message. Behavior switches automatically based on where it renders.
 
 ```tsx
+// New message composer, inside ThreadPrimitive
 <ComposerPrimitive.Root>
-  <ComposerPrimitive.Input placeholder="Type a message..." />
+  <ComposerPrimitive.Input />
   <ComposerPrimitive.Send>Send</ComposerPrimitive.Send>
 </ComposerPrimitive.Root>
-```
 
-## ComposerPrimitive.Root
-
-Form element that handles submission.
-
-```tsx
-<ComposerPrimitive.Root
-  className="flex gap-2 p-4 border-t"
-  onSubmit={() => console.log("Submitted")}
->
-  {children}
+// Edit composer, inside a MessagePrimitive.Root
+<ComposerPrimitive.Root>
+  <ComposerPrimitive.Input />
+  <ComposerPrimitive.Send>Save</ComposerPrimitive.Send>
+  <ComposerPrimitive.Cancel>Cancel</ComposerPrimitive.Cancel>
 </ComposerPrimitive.Root>
 ```
 
-## ComposerPrimitive.Input
+`useAuiState((s) => s.composer.isEditing)` reads the same flag from either context, but scoping the edit UI through the message's own render branch (as in the [SKILL.md custom thread example](../SKILL.md#custom-thread-example)) is more idiomatic than a manual check. See [messages.md](./messages.md#editing) for the full editing flow, including `aui.composer.beginEdit()`.
 
-Auto-resizing textarea for message input.
+## The asChild pattern
 
-```tsx
-<ComposerPrimitive.Input
-  className="flex-1 resize-none rounded-lg border px-4 py-2"
-  placeholder="Type a message..."
-  rows={1}
-  autoFocus
-/>
-```
-
-### Props
-
-- `placeholder` - Placeholder text
-- `rows` - Initial row count (auto-resizes)
-- `autoFocus` - Focus on mount
-- `disabled` - Disable input
-- Standard textarea props
-
-## ComposerPrimitive.Send
-
-Submit button. Disabled when input is empty or generating.
+Every part accepts `asChild` to merge its behavior onto your own element, so keyboard handling, disabled state, and form submission wire onto your design system's component instead of a bare native one:
 
 ```tsx
-<ComposerPrimitive.Send
-  className="bg-blue-500 text-white px-4 py-2 rounded-lg disabled:opacity-50"
->
-  Send
+<ComposerPrimitive.Input asChild>
+  <textarea className="my-textarea" placeholder="Type here..." />
+</ComposerPrimitive.Input>
+
+<ComposerPrimitive.Send asChild>
+  <MyButton variant="primary">Send</MyButton>
 </ComposerPrimitive.Send>
 ```
 
-## ComposerPrimitive.Cancel
+Own the input DOM entirely, a `contentEditable` surface or an editor library `asChild` cannot express? See [composer-input.md](./composer-input.md#headless-composer-input) for `unstable_useComposerInput`.
 
-Cancel ongoing generation.
+## Compact mode
 
-```tsx
-<AuiIf condition={({ thread }) => thread.isRunning}>
-  <ComposerPrimitive.Cancel className="bg-red-500 text-white px-4 py-2 rounded-lg">
-    Stop
-  </ComposerPrimitive.Cancel>
-</AuiIf>
-```
-
-## Conditional rendering with `AuiIf`
-
-Deprecated `ComposerPrimitive.If` supports only `editing` and `dictation` props.
-Prefer `AuiIf` for richer state checks (`thread`, `composer`, etc.).
+Pass `compact` on `Root` to opt into a `data-compact` attribute: it is set while the input holds at most one line of text and the composer has no attachments, quote, queued messages, or active dictation. The prop only exposes the attribute; style the collapse yourself.
 
 ```tsx
-// While sending
-<AuiIf condition={({ thread }) => thread.isRunning}>
-  <ComposerPrimitive.Cancel>Stop</ComposerPrimitive.Cancel>
-</AuiIf>
-
-// Not generating
-<AuiIf condition={({ thread }) => !thread.isRunning}>
+<ComposerPrimitive.Root
+  compact
+  className="flex flex-col data-[compact]:flex-row data-[compact]:items-center"
+>
+  <ComposerPrimitive.Input placeholder="Ask anything..." />
   <ComposerPrimitive.Send>Send</ComposerPrimitive.Send>
-</AuiIf>
-
-// Has file attachments
-<AuiIf condition={({ composer }) => composer.attachments.length > 0}>
-  <AttachmentList />
-</AuiIf>
+</ComposerPrimitive.Root>
 ```
 
-### Available Conditions
+Once the text wraps to a second line the composer expands and stays expanded until the input clears, so the layout does not oscillate right at the wrap boundary.
 
-- `thread.isRunning` - Thread is currently generating
-- `composer.attachments.length > 0` - Composer has file attachments
-- `composer.isEditing` - Composer is in edit mode
-- `composer.dictation != null` - Dictation is active
+## Patterns
 
-## Attachments
-
-### Add Attachment Button
+### Custom submit behavior
 
 ```tsx
-<ComposerPrimitive.AddAttachment
-  className="p-2 rounded hover:bg-gray-100"
+<ComposerPrimitive.Root
+  onSubmit={(e) => {
+    // runs before the message sends; call e.preventDefault() to cancel
+  }}
 >
-  📎 Attach
-</ComposerPrimitive.AddAttachment>
+  <ComposerPrimitive.Input />
+  <ComposerPrimitive.Send>Send</ComposerPrimitive.Send>
+</ComposerPrimitive.Root>
 ```
 
-### Attachment List
+### Gate sending on external state
+
+Disabling the whole thread via `isDisabled` also disables the text input, which feels broken while the user is still allowed to type. Set `isSendDisabled` on the runtime adapter instead, so typing stays available while sending is blocked (loading tools, pending auth, and so on):
 
 ```tsx
-<ComposerPrimitive.Attachments className="flex gap-2 mb-2">
-  <AttachmentPrimitive.Root className="flex items-center gap-1 bg-gray-100 rounded px-2 py-1">
-    <AttachmentPrimitive.Name className="text-sm" />
-    <AttachmentPrimitive.Remove className="text-red-500">×</AttachmentPrimitive.Remove>
-  </AttachmentPrimitive.Root>
-</ComposerPrimitive.Attachments>
+const runtime = useExternalStoreRuntime({
+  isSendDisabled: !toolsLoaded,
+  onNew,
+  messages,
+});
 ```
 
-### Drag-Drop Zone
+While `isSendDisabled` is `true`, `composer.canSend` is `false`, `ComposerPrimitive.Send` is disabled, Enter and the steer hotkey become no ops, and `aui.composer.send()` short circuits at the runtime so no direct call can escape the gate. It only gates the thread composer; saving an in progress edit is unaffected. Read the same flag for an inline hint:
 
 ```tsx
-<ComposerPrimitive.AttachmentDropzone
-  className="border-2 border-dashed rounded-lg p-4 text-center"
->
-  Drop files here
-</ComposerPrimitive.AttachmentDropzone>
-```
-
-## Voice Input
-
-```tsx
-<AuiIf condition={({ composer }) => composer.dictation == null}>
-  <ComposerPrimitive.Dictate className="p-2 rounded hover:bg-gray-100">
-    🎤 Voice
-  </ComposerPrimitive.Dictate>
-</AuiIf>
-
-<AuiIf condition={({ composer }) => composer.dictation != null}>
-  <ComposerPrimitive.StopDictation className="p-2 rounded bg-red-100">
-    ⏹️ Stop
-  </ComposerPrimitive.StopDictation>
+<AuiIf condition={(s) => !s.composer.canSend}>
+  <p className="text-sm text-muted-foreground">Loading tools, hang on...</p>
 </AuiIf>
 ```
 
-## Complete Example
+### Ctrl+Enter to submit
 
 ```tsx
-function CustomComposer() {
+<ComposerPrimitive.Input submitMode="ctrlEnter" />
+```
+
+Plain Enter inserts a newline; Ctrl (Cmd) plus Enter submits.
+
+### Mobile and touch devices
+
+```tsx
+<ComposerPrimitive.Input unstable_insertNewlineOnTouchEnter />
+```
+
+On touch primary devices (`(pointer: coarse) and (not (any-pointer: fine))`), Enter inserts a newline instead of sending, so the on screen Return key never fires a half finished message; submission moves to the explicit Send button, matching WhatsApp, Slack, Discord, iMessage, ChatGPT, and Claude.ai. Desktop behavior, and a tablet with a hardware keyboard under an explicit `submitMode`, are unchanged.
+
+### Floating composer
+
+```tsx
+function FloatingComposer() {
   return (
-    <ComposerPrimitive.Root className="border-t p-4">
-      <ComposerPrimitive.AttachmentDropzone className="absolute inset-0 flex items-center justify-center bg-blue-50/80 border-2 border-dashed border-blue-300 rounded-lg opacity-0 pointer-events-none data-[dragging]:opacity-100 data-[dragging]:pointer-events-auto">
-        <p className="text-blue-500">Drop files to attach</p>
-      </ComposerPrimitive.AttachmentDropzone>
-
-      <AuiIf condition={({ composer }) => composer.attachments.length > 0}>
-        <ComposerPrimitive.Attachments className="flex flex-wrap gap-2 mb-2">
-          <AttachmentPrimitive.Root className="group flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1.5">
-            <AttachmentPrimitive.Name className="text-sm truncate max-w-[150px]" />
-            <AttachmentPrimitive.Remove className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100">
-              ×
-            </AttachmentPrimitive.Remove>
-          </AttachmentPrimitive.Root>
-        </ComposerPrimitive.Attachments>
-      </AuiIf>
-
-      <div className="flex items-end gap-2">
-        <ComposerPrimitive.AddAttachment className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
-          <PaperclipIcon className="w-5 h-5" />
-        </ComposerPrimitive.AddAttachment>
-
-        <ComposerPrimitive.Input
-          className="flex-1 max-h-40 resize-none rounded-lg border border-gray-200 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Type a message..."
-          rows={1}
-        />
-
-        <AuiIf condition={({ composer }) => composer.dictation == null}>
-          <ComposerPrimitive.Dictate className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded">
-            <MicIcon className="w-5 h-5" />
-          </ComposerPrimitive.Dictate>
-        </AuiIf>
-
-        <AuiIf condition={({ composer }) => composer.dictation != null}>
-          <ComposerPrimitive.StopDictation className="p-2 text-red-500 bg-red-50 rounded animate-pulse">
-            <StopIcon className="w-5 h-5" />
-          </ComposerPrimitive.StopDictation>
-        </AuiIf>
-
-        <AuiIf condition={({ thread }) => thread.isRunning}>
-          <ComposerPrimitive.Cancel className="p-2 text-red-500 hover:bg-red-50 rounded">
-            <StopIcon className="w-5 h-5" />
-          </ComposerPrimitive.Cancel>
-        </AuiIf>
-
-        <AuiIf condition={({ thread }) => !thread.isRunning}>
-          <ComposerPrimitive.Send className="p-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:hover:bg-blue-500">
-            <SendIcon className="w-5 h-5" />
-          </ComposerPrimitive.Send>
-        </AuiIf>
-      </div>
-    </ComposerPrimitive.Root>
+    <div className="fixed bottom-6 left-1/2 z-40 w-full max-w-md -translate-x-1/2">
+      <ComposerPrimitive.Root>
+        <div className="rounded-xl border bg-background/80 shadow-lg backdrop-blur-sm">
+          <ComposerPrimitive.Input
+            asChild
+            unstable_focusOnRunStart={false}
+            unstable_focusOnScrollToBottom={false}
+          >
+            <textarea
+              placeholder="Ask a question..."
+              className="w-full resize-none bg-transparent px-3 py-2.5 text-sm focus:outline-none"
+              rows={1}
+            />
+          </ComposerPrimitive.Input>
+        </div>
+      </ComposerPrimitive.Root>
+    </div>
   );
 }
 ```
 
-## Accessing Composer State
+`ComposerPrimitive` is not bound to any layout. The two `unstable_focusOn*` flags stop a composer living outside the main thread scroll flow from stealing focus on run start or scroll to bottom.
 
-Read composer state with `useAuiState((s) => s.composer...)` (e.g. `s.composer.text`, `s.composer.attachments`) and act via `useAui().composer` (e.g. `.setText("")`). See the `/runtime` skill for the full state API.
+## Common Gotchas
+
+**Send button stays disabled**
+- `canSend` requires editing mode plus non empty content plus `isSendDisabled` not set. An in flight run without queue support also disables `Send` directly; check `s.thread.isRunning` and whether your runtime supports queued sends.
+
+**`ComposerPrimitive.If` ignores most conditions**
+- It only understands `editing` and `dictation`. Use `AuiIf` (`s.composer.isEditing`, `s.composer.dictation != null`) for anything else.
+
+**Attachments, quoting, dictation, or input history need more setup than the bare primitive**
+- Those parts render the right DOM, but the surrounding adapters and hooks live in [composer-input.md](./composer-input.md).

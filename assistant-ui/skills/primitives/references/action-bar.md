@@ -1,230 +1,130 @@
 # ActionBarPrimitive
 
-Message action buttons (copy, edit, reload, etc.).
+Message actions: copy, reload, edit, feedback, speech, export. Handles auto hide on hover, automatic disabling per action, and floating behavior. `Root` renders a `<div>`; every action renders a `<button>`. Must render inside `MessagePrimitive.Root`, which it reads message state from.
 
 ## Parts
 
-| Part | Description |
-|------|-------------|
-| `.Root` | Container |
-| `.Copy` | Copy message to clipboard |
-| `.Edit` | Enter edit mode |
-| `.Reload` | Regenerate response |
-| `.Speak` | Text-to-speech |
-| `.StopSpeaking` | Stop TTS |
-| `.FeedbackPositive` | Thumbs up |
-| `.FeedbackNegative` | Thumbs down |
-| `.ExportMarkdown` | Export message |
+| Part | Notes |
+|------|-------|
+| `.Root` | `hideWhenRunning`, `autohide` (`"never"` default, `"not-last"`, `"always"`), `autohideFloat` (`"never"` default, `"always"`, `"single-branch"`). |
+| `.Copy` | Disabled with no copyable text, or while an assistant message is still running. `copiedDuration` (default `3000`ms) controls how long `data-copied` stays set. |
+| `.Reload` | Disabled while the thread is running or disabled, or the message is not from the assistant. Creates a new branch. |
+| `.Edit` | Disabled while already editing. Calls `aui.composer.beginEdit()`. |
+| `.Speak` / `.StopSpeaking` | Disabled with no speakable text, or while running. Requires a `SpeechSynthesisAdapter`. |
+| `.FeedbackPositive` / `.FeedbackNegative` | `data-submitted` once `s.message.metadata.submittedFeedback` matches. Requires a `feedback` adapter. |
+| `.ExportMarkdown` | Downloads Markdown, or calls a custom `onExport` handler. |
 
-## Basic Usage
-
-```tsx
-<ActionBarPrimitive.Root>
-  <ActionBarPrimitive.Copy />
-  <ActionBarPrimitive.Reload />
-  <ActionBarPrimitive.Edit />
-</ActionBarPrimitive.Root>
-```
-
-## ActionBarPrimitive.Root
-
-Container for action buttons. Usually placed inside a message.
+## Auto hide and floating
 
 ```tsx
 <ActionBarPrimitive.Root
-  className="flex gap-2 mt-2"
-  hideWhenRunning  // Hide while generating
-  autohide="not-last"  // "always" | "not-last" | "never"
-  autohideFloat="single-branch"  // Float behavior
+  hideWhenRunning
+  autohide="not-last"
+  autohideFloat="always"
+  className="data-[floating]:opacity-0 data-[floating]:group-hover:opacity-100 data-[floating]:transition-opacity"
 >
-  {children}
+  <ActionBarPrimitive.Copy>Copy</ActionBarPrimitive.Copy>
+  <ActionBarPrimitive.Reload>Regenerate</ActionBarPrimitive.Reload>
 </ActionBarPrimitive.Root>
 ```
 
-### Props
+`autohide="not-last"` hides the bar on every message except the last, revealed on hover (the hover state `MessagePrimitive.Root` tracks automatically); `"always"` hides on every message. When `autohideFloat` is set, a hidden bar keeps rendering with a `data-floating` attribute instead of leaving the DOM, so you can animate it in with CSS rather than mounting on hover. `"single-branch"` only floats when the message has exactly one branch.
 
-- `hideWhenRunning` - Hide while assistant is generating
-- `autohide` - Only show on message hover
-- `autohideFloat` - Float positioning mode
-
-## ActionBarPrimitive.Copy
-
-Copy message content to clipboard.
+## Copy and feedback state
 
 ```tsx
-<ActionBarPrimitive.Copy
-  className="p-1 rounded hover:bg-gray-100"
-  copiedDuration={2000}  // Duration of "copied" state
->
-  <CopyIcon className="w-4 h-4" />
+<ActionBarPrimitive.Copy copiedDuration={2000} className="group">
+  <CopyIcon className="group-data-[copied]:hidden" />
+  <CheckIcon className="hidden group-data-[copied]:block" />
 </ActionBarPrimitive.Copy>
 
-// With copied state
-<ActionBarPrimitive.Copy>
-  <AuiIf condition={({ message }) => message.isCopied}>
-    <CheckIcon className="w-4 h-4 text-green-500" />
-  </AuiIf>
-  <AuiIf condition={({ message }) => !message.isCopied}>
-    <CopyIcon className="w-4 h-4" />
-  </AuiIf>
-</ActionBarPrimitive.Copy>
+<ActionBarPrimitive.FeedbackPositive className="data-[submitted]:text-green-500">👍</ActionBarPrimitive.FeedbackPositive>
+<ActionBarPrimitive.FeedbackNegative className="data-[submitted]:text-red-500">👎</ActionBarPrimitive.FeedbackNegative>
 ```
 
-## ActionBarPrimitive.Reload
+`FeedbackPositive` and `FeedbackNegative` are mutually exclusive (submitting one replaces the other in `s.message.metadata.submittedFeedback`), but there is no built in path back to "no feedback": `aui.message.submitFeedback({ type })` only ever writes a reaction.
 
-Regenerate the assistant's response.
+## ActionBarMorePrimitive: the overflow menu
+
+A Radix `DropdownMenu` scoped to the action bar's interaction lock, for grouping secondary actions behind a "more" button.
+
+| Part | Renders | Notes |
+|------|---------|-------|
+| `.Root` | provider only | Radix `DropdownMenu.Root`. |
+| `.Trigger` | `<button>` | Opens the menu. |
+| `.Content` | `<div>` (portal) | Defaults `sideOffset={4}`. |
+| `.Item` | `<div>` | Maps to `DropdownMenu.Item`; prefer `asChild` to compose an `ActionBarPrimitive` button into it. |
+| `.Separator` | `<div>` | Visual divider. |
 
 ```tsx
-<ActionBarPrimitive.Reload className="p-1 rounded hover:bg-gray-100">
-  <RefreshIcon className="w-4 h-4" />
-  Regenerate
-</ActionBarPrimitive.Reload>
+import { ActionBarMorePrimitive, ActionBarPrimitive } from "@assistant-ui/react";
+import { MoreHorizontalIcon } from "lucide-react";
+
+<ActionBarPrimitive.Root>
+  <ActionBarPrimitive.Copy>Copy</ActionBarPrimitive.Copy>
+  <ActionBarPrimitive.Reload>Regenerate</ActionBarPrimitive.Reload>
+  <ActionBarMorePrimitive.Root>
+    <ActionBarMorePrimitive.Trigger className="flex size-8 items-center justify-center rounded-lg hover:bg-muted">
+      <MoreHorizontalIcon className="size-4" />
+    </ActionBarMorePrimitive.Trigger>
+    <ActionBarMorePrimitive.Content side="bottom" align="end">
+      <ActionBarMorePrimitive.Item asChild>
+        <ActionBarPrimitive.ExportMarkdown>Export Markdown</ActionBarPrimitive.ExportMarkdown>
+      </ActionBarMorePrimitive.Item>
+      <ActionBarMorePrimitive.Separator />
+      <ActionBarMorePrimitive.Item asChild>
+        <ActionBarPrimitive.FeedbackPositive>Helpful</ActionBarPrimitive.FeedbackPositive>
+      </ActionBarMorePrimitive.Item>
+    </ActionBarMorePrimitive.Content>
+  </ActionBarMorePrimitive.Root>
+</ActionBarPrimitive.Root>
 ```
 
-## ActionBarPrimitive.Edit
-
-Enter edit mode for user messages.
-
-```tsx
-<AuiIf condition={({ message }) => message.role === "user"}>
-  <ActionBarPrimitive.Edit className="p-1 rounded hover:bg-gray-100">
-    <EditIcon className="w-4 h-4" />
-    Edit
-  </ActionBarPrimitive.Edit>
-</AuiIf>
-```
-
-## ActionBarPrimitive.Speak / StopSpeaking
-
-Text-to-speech controls.
-
-```tsx
-<AuiIf condition={({ message }) => message.speech == null}>
-  <ActionBarPrimitive.Speak className="p-1 rounded hover:bg-gray-100">
-    🔊 Read aloud
-  </ActionBarPrimitive.Speak>
-</AuiIf>
-
-<AuiIf condition={({ message }) => message.speech != null}>
-  <ActionBarPrimitive.StopSpeaking className="p-1 rounded bg-red-100">
-    ⏹️ Stop
-  </ActionBarPrimitive.StopSpeaking>
-</AuiIf>
-```
-
-## ActionBarPrimitive.FeedbackPositive / FeedbackNegative
-
-Thumbs up/down feedback buttons.
-
-```tsx
-<ActionBarPrimitive.FeedbackPositive
-  className="p-1 rounded hover:bg-gray-100"
->
-  👍
-</ActionBarPrimitive.FeedbackPositive>
-
-<ActionBarPrimitive.FeedbackNegative>
-  👎
-</ActionBarPrimitive.FeedbackNegative>
-```
-
-Requires a feedback adapter in the runtime:
+## Feedback adapter
 
 ```tsx
 const runtime = useChatRuntime({
-  transport: new AssistantChatTransport({
-    api: "/api/chat",
-  }),
   adapters: {
     feedback: {
       submit: async ({ messageId, type }) => {
-        await fetch("/api/feedback", {
-          method: "POST",
-          body: JSON.stringify({ messageId, type }),
-        });
+        await fetch("/api/feedback", { method: "POST", body: JSON.stringify({ messageId, type }) });
       },
     },
   },
 });
 ```
 
-`ActionBarPrimitive` has no `.If` part. Use `AuiIf` for copy/speech conditional rendering.
-
-## Complete Example
+## Patterns
 
 ```tsx
-function MessageActionBar() {
-  return (
-    <ActionBarPrimitive.Root
-      className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-      hideWhenRunning
-    >
-      <ActionBarPrimitive.Copy
-        className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-        copiedDuration={2000}
-      >
-        <AuiIf condition={({ message }) => message.isCopied}>
-          <CheckIcon className="w-4 h-4 text-green-500" />
-        </AuiIf>
-        <AuiIf condition={({ message }) => !message.isCopied}>
-          <CopyIcon className="w-4 h-4" />
-        </AuiIf>
-      </ActionBarPrimitive.Copy>
+// Assistant action bar
+<ActionBarPrimitive.Root hideWhenRunning autohide="not-last" autohideFloat="single-branch">
+  <ActionBarPrimitive.Copy>Copy</ActionBarPrimitive.Copy>
+  <ActionBarPrimitive.Reload>Regenerate</ActionBarPrimitive.Reload>
+  <ActionBarPrimitive.ExportMarkdown>Export</ActionBarPrimitive.ExportMarkdown>
+</ActionBarPrimitive.Root>
 
-      <AuiIf condition={({ message }) => message.role === "assistant"}>
-        <ActionBarPrimitive.Reload className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100">
-          <RefreshIcon className="w-4 h-4" />
-        </ActionBarPrimitive.Reload>
-      </AuiIf>
+// User action bar
+<ActionBarPrimitive.Root hideWhenRunning autohide="not-last">
+  <ActionBarPrimitive.Edit>Edit</ActionBarPrimitive.Edit>
+</ActionBarPrimitive.Root>
 
-      <AuiIf condition={({ message }) => message.role === "user"}>
-        <ActionBarPrimitive.Edit className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100">
-          <EditIcon className="w-4 h-4" />
-        </ActionBarPrimitive.Edit>
-      </AuiIf>
-
-      <AuiIf condition={({ message }) => message.speech == null}>
-        <ActionBarPrimitive.Speak className="p-1.5 rounded text-gray-500 hover:text-gray-700 hover:bg-gray-100">
-          <SpeakerIcon className="w-4 h-4" />
-        </ActionBarPrimitive.Speak>
-      </AuiIf>
-      <AuiIf condition={({ message }) => message.speech != null}>
-        <ActionBarPrimitive.StopSpeaking className="p-1.5 rounded text-red-500 bg-red-50">
-          <StopIcon className="w-4 h-4" />
-        </ActionBarPrimitive.StopSpeaking>
-      </AuiIf>
-
-      <div className="border-l pl-1 ml-1">
-        <ActionBarPrimitive.FeedbackPositive
-          className="p-1.5 rounded text-gray-500 hover:text-green-600 hover:bg-green-50"
-        >
-          <ThumbsUpIcon className="w-4 h-4" />
-        </ActionBarPrimitive.FeedbackPositive>
-        <ActionBarPrimitive.FeedbackNegative
-          className="p-1.5 rounded text-gray-500 hover:text-red-600 hover:bg-red-50"
-        >
-          <ThumbsDownIcon className="w-4 h-4" />
-        </ActionBarPrimitive.FeedbackNegative>
-      </div>
-    </ActionBarPrimitive.Root>
-  );
-}
+// Speech toggle
+<AuiIf condition={(s) => s.message.speech == null}>
+  <ActionBarPrimitive.Speak>Play</ActionBarPrimitive.Speak>
+</AuiIf>
+<AuiIf condition={(s) => s.message.speech != null}>
+  <ActionBarPrimitive.StopSpeaking>Stop</ActionBarPrimitive.StopSpeaking>
+</AuiIf>
 ```
 
-## Using with Messages
+## Common Gotchas
 
-```tsx
-function AssistantMessage() {
-  return (
-    <MessagePrimitive.Root className="group flex mb-4">
-      <Avatar fallback="AI" />
-      <div className="flex-1">
-        <MessagePrimitive.Parts />
-        <MessageActionBar />
-      </div>
-    </MessagePrimitive.Root>
-  );
-}
-```
+**"must be used within MessagePrimitive" error**
+- `ActionBarPrimitive` reads message state from the nearest `MessagePrimitive.Root`. Render it inside your message component.
 
-Note the `group` class on `.Root` to enable hover state propagation.
+**Feedback buttons do nothing**
+- They require a `feedback` adapter on the runtime (`adapters.feedback.submit`). With none configured, `submitFeedback` has nowhere to send.
+
+**Copy button never shows the checkmark**
+- Toggle icons off `data-copied` (via `className` or `AuiIf` on `s.message.isCopied`), not local component state; the attribute already tracks `copiedDuration` for you.

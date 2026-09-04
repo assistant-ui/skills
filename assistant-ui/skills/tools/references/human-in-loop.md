@@ -1,339 +1,214 @@
-# Human-in-the-Loop Tools
+# Human in the loop
 
-Tools that require user confirmation or input.
+Three different pauses share the tool-call surface. Pick by who owns the action and what the user is being asked for.
+
+| Mechanism | The user supplies | Marker | Renderer callback |
+| --- | --- | --- | --- |
+| Human tool | the tool result itself | `execute: humanTool()` | `addResult(result)` |
+| Execution interrupt | an answer the executor asked for mid-run | `human(payload)` inside a frontend `execute` | `resume(payload)` |
+| Approval gate | permission for an action your backend performs | runtime emits `approval` on the part | `respondToApproval(response)` |
 
 ## Contents
 
-- [Overview](#overview)
-- [Confirmation Pattern](#confirmation-pattern)
-- [Selection Pattern](#selection-pattern)
-- [Form Input Pattern](#form-input-pattern)
-- [Multi-Step Workflow](#multi-step-workflow)
-- [Rating/Feedback Pattern](#ratingfeedback-pattern)
-- [Timeout/Auto-Cancel](#timeoutauto-cancel)
+- [Human tools](#human-tools) | [Execution interrupts](#execution-interrupts) | [Approval gates](#approval-gates) | [Approval options](#approval-options) | [Approval questions](#approval-questions) | [Cancelled and expired gates](#cancelled-and-expired-gates) | [Wiring the AI SDK v7 gate](#wiring-the-ai-sdk-v7-gate) | [Other runtimes](#other-runtimes)
 
-## Overview
+## Human tools
 
-Human-in-the-loop tools pause execution waiting for user input. Detect the paused state with `status.type === "requires-action"`. The render props give three ways to respond:
+The agent pauses on the call and the renderer produces the result. Call `addResult` exactly once; the run resumes with that payload.
 
-- `addResult(result)`: the renderer itself supplies the tool result (the pattern used throughout this page).
-- `resume(payload)`: resume a frontend tool that paused by calling `context.human(payload)` inside its `execute` function.
-- `respondToApproval({ approved, reason? })`: answer a server-side approval gate.
+```tsx title="app/toolkit.tsx"
+"use generative";
 
-AI SDK v7 has two ways to raise that gate, and they coexist rather than replacing one another: `needsApproval` on the tool definition (a boolean or a function of the input) gates that one tool everywhere it is used, while the call-level `toolApproval` option on `streamText` / `generateText` gates per call and can vary by input. Either one pauses the run and surfaces `approval` on the tool part; `respondToApproval` answers both, reading the approval id off the part.
+import { defineToolkit, humanTool } from "@assistant-ui/react";
+import { z } from "zod";
 
-## Confirmation Pattern
-
-Ask user to confirm before executing:
-
-```tsx
-// Backend tool returns requires-action status
-const deleteTool = tool({
-  description: "Delete a file (requires user confirmation)",
-  inputSchema: z.object({ path: z.string() }),
-  execute: async ({ path }) => {
-    // Return requires-action to wait for confirmation
-    return { action: "confirm", path };
+export default defineToolkit({
+  select_date: {
+    description: "Ask the user to select a date.",
+    parameters: z.object({ prompt: z.string() }),
+    execute: humanTool(),
+    render: ({ args, result, addResult }) => {
+      if (result) return <p>Selected {new Date(result.date).toLocaleDateString()}</p>;
+      return (
+        <div>
+          <p>{args.prompt}</p>
+          <DatePicker onChange={(date) => addResult({ date: date.toISOString() })} />
+        </div>
+      );
+    },
   },
 });
+```
 
-// Frontend shows confirmation UI
-const DeleteToolUI = makeAssistantToolUI({
-  toolName: "delete_file",
-  render: ({ args, result, status, addResult }) => {
-    // Initial state - show confirmation
-    if (status.type === "requires-action" || !result?.confirmed) {
+A human tool declares a `render`; the compiler enforces it. `hitl` and `hitlTool` are deprecated aliases of `humanTool`.
+
+## Execution interrupts
+
+A frontend executor can ask for input in the middle of its own work. `human(payload)` on the execution context pauses it and surfaces the payload to the renderer as `interrupt.payload`; `resume(value)` sends the answer back and the executor continues.
+
+```tsx
+request_approval: {
+  description: "Request user approval for an action.",
+  parameters: z.object({ action: z.string() }),
+  execute: async ({ action }, { human }) => {
+    "use client";
+    const response = await human({ action });
+    return { approved: response.approved, reason: response.reason };
+  },
+  render: ({ result, interrupt, resume }) => {
+    if (result) return <p>{result.approved ? "Approved" : `Rejected: ${result.reason}`}</p>;
+    if (interrupt) {
       return (
-        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <div className="flex items-center gap-2 mb-3">
-            <WarningIcon className="text-yellow-600" />
-            <span className="font-medium">Confirm deletion</span>
-          </div>
-          <p className="mb-4">Are you sure you want to delete <code>{args.path}</code>?</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => addResult({ confirmed: true })}
-              className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-            >
-              Delete
+        <div>
+          <p>{interrupt.payload.action}</p>
+          <button onClick={() => resume({ approved: true })}>Approve</button>
+          <button onClick={() => resume({ approved: false, reason: "not now" })}>Reject</button>
+        </div>
+      );
+    }
+    return <p>Processing</p>;
+  },
+},
+```
+
+`human()` is not available during server-side execution, and a WebMCP caller cannot answer one either.
+
+## Approval gates
+
+Some runtimes pause on the server and emit an approval request that the client must answer before the tool runs. The gate arrives as `approval` on the tool part, and `respondToApproval` is the only correct way to answer it, because it reads the approval id from the part.
+
+```tsx
+import { useState } from "react";
+import { defineToolkit, type ToolApprovalResponse } from "@assistant-ui/react";
+
+const toolkit = defineToolkit({
+  deploy: {
+    type: "backend",
+    render: ({ args, approval, respondToApproval, result }) => {
+      const [error, setError] = useState<string | null>(null);
+
+      // A refused response rejects and a bad precondition throws, so try plus
+      // await covers both and the controls stay actionable.
+      const answer = async (response: ToolApprovalResponse) => {
+        setError(null);
+        try {
+          await respondToApproval(response);
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : String(failure));
+        }
+      };
+
+      if (approval?.approved === undefined && approval?.resolution === undefined) {
+        if (approval?.isAutomatic) return <p>Auto approved by policy</p>;
+        return (
+          <div>
+            <p>Approve deploy to {args.target}?</p>
+            <button onClick={() => void answer({ approved: true })}>Approve</button>
+            <button onClick={() => void answer({ approved: false, reason: "user denied" })}>
+              Deny
             </button>
-            <button
-              onClick={() => addResult({ confirmed: false })}
-              className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
-            >
-              Cancel
-            </button>
+            {error && <p role="alert">{error}</p>}
           </div>
-        </div>
-      );
-    }
+        );
+      }
 
-    // After user responds
-    if (result?.confirmed) {
-      return (
-        <div className="p-4 bg-green-50 rounded-lg">
-          <CheckIcon className="text-green-500" />
-          <span>File deleted: {args.path}</span>
-        </div>
-      );
-    }
-
-    return (
-      <div className="p-4 bg-gray-50 rounded-lg">
-        <span>Deletion cancelled</span>
-      </div>
-    );
+      if (approval?.approved === false) {
+        return <p>Denied{approval.reason ? `: ${approval.reason}` : ""}</p>;
+      }
+      return result === undefined ? <p>Approved, running</p> : <p>Deployed</p>;
+    },
   },
 });
 ```
 
-## Selection Pattern
+The three states of `approval.approved`:
 
-Let user choose from options:
+- `undefined`: the gate is open and the renderer should ask. This is the only state in which `respondToApproval` is legal.
+- `true`: recorded as allow. The server is producing the result, or has produced one on `result`.
+- `false`: recorded as deny. The runtime records an error result, sets `isError`, and exposes `approval.reason`.
+
+`approval.isAutomatic` is `true` when a server-side policy granted the decision instead of the user, so render a badge rather than buttons. `respondToApproval` resolves once the runtime accepted the response and rejects when it could not be recorded, for example an expired gate or an answer the provider refuses. Await it before disabling the controls, so a refused response leaves the request retryable rather than spending it.
+
+## Approval options
+
+A host can attach decision options to a gate, for example allow once, allow for this session, and always allow. Each option carries a machine readable `kind` of `"allow-once"`, `"allow-always"`, `"reject-once"`, or `"reject-always"`; scope semantics such as session versus global live in the option's `id` and `label`, which only the host interprets.
+
+```ts
+const approval = {
+  id: "a1",
+  options: [
+    { id: "once", kind: "allow-once" },
+    { id: "session", kind: "allow-always", label: "Allow for this session" },
+    {
+      id: "always",
+      kind: "allow-always",
+      label: "Always allow",
+      grants: ["git *"],
+      confirm: true,
+    },
+    { id: "deny", kind: "reject-once" },
+  ],
+};
+```
+
+Answer with the chosen option and the kind resolves the decision:
 
 ```tsx
-const SelectToolUI = makeAssistantToolUI({
-  toolName: "select_option",
-  render: ({ args, result, status, addResult }) => {
-    if (status.type !== "complete") {
-      return (
-        <div className="p-4 bg-blue-50 rounded-lg">
-          <p className="mb-3">{args.prompt}</p>
-          <div className="flex flex-wrap gap-2">
-            {args.options.map((option: any) => (
-              <button
-                key={option.id}
-                onClick={() => addResult({ selected: option.id })}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="p-4 bg-gray-50 rounded-lg">
-        Selected: {args.options.find((o: any) => o.id === result?.selected)?.label}
-      </div>
-    );
-  },
-});
+await respondToApproval({ optionId: "session" });
 ```
 
-## Form Input Pattern
+The runtime receives `{ approvalId, approved, optionId, text?, reason? }`, so a host that persists an always-allow decision keys its own store off `optionId`. Persistence is entirely host owned: assistant-ui never stores a decision and never auto-answers a future approval. `grants` lists the patterns the option would persist, so show them before the user commits, and `confirm` opts the option into a confirmation step. An option with a custom `_`-prefixed kind must be answered with an explicit `approved` value, optionally alongside the `optionId` so the choice is still recorded.
 
-Collect structured data from user:
+## Approval questions
+
+An approval request can ask for something other than permission. `approval.prompt` carries the question and `approval.display` says how to present it: `"decision"` (the default) for a yes or no gate, `"select"` when the answer is one of `approval.options`, and `"text"` when the user types it. `approval.allowFreeform` accepts a typed answer alongside the options, and `toolApprovalAcceptsText(approval)` reports whether a text affordance belongs on screen.
 
 ```tsx
-const FormToolUI = makeAssistantToolUI({
-  toolName: "collect_info",
-  render: ({ args, status, addResult }) => {
-    const [formData, setFormData] = useState({});
+import { toolApprovalAcceptsText } from "@assistant-ui/react";
 
-    if (status.type !== "complete") {
-      return (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            addResult(formData);
-          }}
-          className="p-4 bg-gray-50 rounded-lg space-y-4"
-        >
-          <h3 className="font-medium">{args.title}</h3>
+if (approval && toolApprovalAcceptsText(approval)) {
+  await respondToApproval({ text: "staging" });
+}
+```
 
-          {args.fields.map((field: any) => (
-            <div key={field.name}>
-              <label className="block text-sm font-medium mb-1">
-                {field.label}
-              </label>
-              <input
-                type={field.type || "text"}
-                required={field.required}
-                onChange={(e) =>
-                  setFormData((d) => ({ ...d, [field.name]: e.target.value }))
-                }
-                className="w-full border rounded px-3 py-2"
-              />
-            </div>
-          ))}
+The runtime records a free-form answer as `{ approvalId, approved: true, text }`, because answering a question is not refusing it. A `text` response to a request that declares neither `display: "text"` nor `allowFreeform` throws, so a host never receives an answer it has nowhere to record.
 
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-500 text-white rounded"
-          >
-            Submit
-          </button>
-        </form>
-      );
-    }
+An answer on its own resolves only a question. On a decision the approval is the authorization, so a bare `text` throws there and the answer must accompany an explicit decision (`{ approved, text }`) or a chosen option; otherwise a typed note would authorize the call. That is why the default `ToolFallback` shows a text field beside Allow and Deny with no separate submit on a decision, and renders a text field with no Deny control for a question.
 
-    return <div>Information collected</div>;
+## Cancelled and expired gates
+
+An approval that ends without a decision, from a cancelled run or an expired request, is recorded by the host as `approval.resolution` of `"cancelled"` or `"expired"`. That closes the gate without recording a deny, so treat a set `resolution` the same way as a set `approved` and stop rendering the controls.
+
+## Wiring the AI SDK v7 gate
+
+On the server, gate the call with the call-level `toolApproval` option, either a per-tool status or a function of the input.
+
+```ts title="app/api/chat/route.ts"
+const result = streamText({
+  model: openai("gpt-5.6-luna"),
+  messages: await convertToModelMessages(messages),
+  tools: { deploy: deployTool },
+  toolApproval: {
+    deploy: (input) =>
+      input.target === "production" ? "user-approval" : "not-applicable",
   },
 });
 ```
 
-## Multi-Step Workflow
-
-Chain multiple interactions:
+On the client, let the runtime post the recorded decision back.
 
 ```tsx
-const WizardToolUI = makeAssistantToolUI({
-  toolName: "setup_wizard",
-  render: ({ args, result, status, addResult }) => {
-    const [step, setStep] = useState(0);
-    const [data, setData] = useState({});
+import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 
-    const steps = args.steps || [];
-    const currentStep = steps[step];
-
-    if (status.type === "complete") {
-      return <div>Setup complete!</div>;
-    }
-
-    return (
-      <div className="p-4 bg-gray-50 rounded-lg">
-        <div className="mb-4">
-          <div className="text-sm text-gray-500">
-            Step {step + 1} of {steps.length}
-          </div>
-          <h3 className="font-medium">{currentStep.title}</h3>
-        </div>
-
-        <div className="mb-4">
-          {currentStep.type === "select" && (
-            <div className="space-y-2">
-              {currentStep.options.map((opt: any) => (
-                <button
-                  key={opt.value}
-                  onClick={() => {
-                    const newData = { ...data, [currentStep.name]: opt.value };
-                    setData(newData);
-
-                    if (step < steps.length - 1) {
-                      setStep(step + 1);
-                    } else {
-                      addResult(newData);
-                    }
-                  }}
-                  className="w-full p-3 text-left border rounded hover:bg-gray-100"
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {step > 0 && (
-          <button
-            onClick={() => setStep(step - 1)}
-            className="text-blue-500"
-          >
-            ← Back
-          </button>
-        )}
-      </div>
-    );
-  },
+const runtime = useChatRuntime({
+  sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
 });
 ```
 
-## Rating/Feedback Pattern
+MCP tools execute on the server, so gate them the same way, keyed by the model-visible name including any `prefix`.
 
-```tsx
-const RatingToolUI = makeAssistantToolUI({
-  toolName: "request_rating",
-  render: ({ args, status, addResult }) => {
-    const [rating, setRating] = useState(0);
-    const [comment, setComment] = useState("");
+## Other runtimes
 
-    if (status.type === "complete") {
-      return <div>Thank you for your feedback!</div>;
-    }
+Approval gates require a runtime that implements them. The AI SDK v7 runtime emits boolean gates for `toolApproval`-gated tools. `LocalRuntime` supports gates your `ChatModelAdapter` emits: emit `approval: { id }` in the pending state and end the run with `status: { type: "requires-action", reason: "tool-calls" }`; a deny synthesizes an error result while an allow leaves the result to your adapter. Its `unstable_humanToolNames` option covers the other case, where the user supplies the result through `addResult`. The Eve runtime projects its input requests onto the question fields, and the AG-UI runtime admits only gates it can answer with a decision.
 
-    return (
-      <div className="p-4 bg-gray-50 rounded-lg">
-        <p className="mb-3">{args.prompt}</p>
-
-        <div className="flex gap-1 mb-3">
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button
-              key={star}
-              onClick={() => setRating(star)}
-              className={`text-2xl ${
-                star <= rating ? "text-yellow-400" : "text-gray-300"
-              }`}
-            >
-              ★
-            </button>
-          ))}
-        </div>
-
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          placeholder="Additional comments (optional)"
-          className="w-full border rounded p-2 mb-3"
-        />
-
-        <button
-          onClick={() => addResult({ rating, comment })}
-          disabled={rating === 0}
-          className="px-4 py-2 bg-blue-500 text-white rounded disabled:opacity-50"
-        >
-          Submit
-        </button>
-      </div>
-    );
-  },
-});
-```
-
-## Timeout/Auto-Cancel
-
-```tsx
-const TimedToolUI = makeAssistantToolUI({
-  toolName: "timed_action",
-  render: ({ args, status, addResult }) => {
-    const [timeLeft, setTimeLeft] = useState(args.timeout || 30);
-
-    useEffect(() => {
-      if (status.type !== "requires-action") return;
-
-      const timer = setInterval(() => {
-        setTimeLeft((t) => {
-          if (t <= 1) {
-            addResult({ timeout: true });
-            return 0;
-          }
-          return t - 1;
-        });
-      }, 1000);
-
-      return () => clearInterval(timer);
-    }, [status, addResult]);
-
-    if (status.type !== "requires-action") {
-      return <div>Action completed</div>;
-    }
-
-    return (
-      <div className="p-4 bg-yellow-50 rounded-lg">
-        <p>{args.message}</p>
-        <p className="text-sm text-gray-500">
-          Auto-cancelling in {timeLeft}s
-        </p>
-        <button
-          onClick={() => addResult({ confirmed: true })}
-          className="mt-2 px-4 py-2 bg-blue-500 text-white rounded"
-        >
-          Confirm
-        </button>
-      </div>
-    );
-  },
-});
-```
+For prebuilt UI, the `ToolFallback` element renders declared options and the confirmation step automatically, and the standalone `approval-card` and `permission-grant` elements cover a richer capability prompt. See the [elements skill](../../elements/SKILL.md).

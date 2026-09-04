@@ -1,32 +1,23 @@
 # Helicone
 
-Log and monitor LLM calls by routing them through the Helicone proxy. No SDK or wrapper is needed; you only change the provider's `baseURL` and add an auth header.
+Helicone is a provider proxy. Point the provider client at its gateway and add its authentication header to record cost, latency, prompts, completions, and request diffs. It is independent of the assistant-ui runtime and can pair with AI SDK, LangGraph, Mastra, or another server backend.
 
-## How It Works
+## Environment
 
-Helicone is a proxy. Point your OpenAI provider at Helicone's gateway instead of `api.openai.com`, and every request is logged (cost, latency, prompts, completions) before being forwarded to OpenAI. Streaming, tools, and attachments keep working unchanged because the request shape is identical.
-
-## Environment Variables
-
-```
+```sh
 HELICONE_API_KEY=sk-helicone-...
 OPENAI_API_KEY=sk-...
 ```
 
-Server-side only. Never set the Helicone key in client code.
+Both keys stay on the server. The Helicone proxy receives the provider key, so neither value belongs in a client component.
 
-## Route Setup (AI SDK)
+## AI SDK route
 
-Create the provider with `createOpenAI` from `@ai-sdk/openai`, override `baseURL`, and attach the `Helicone-Auth` header. Use the provider exactly as you would the default `openai` export.
+Create an OpenAI provider with Helicone's base URL and the `Helicone-Auth` header. `createOpenAI` still reads `OPENAI_API_KEY` and sends the provider authorization header.
 
 ```ts
 import { createOpenAI } from "@ai-sdk/openai";
-import {
-  streamText,
-  convertToModelMessages,
-  createUIMessageStreamResponse,
-  toUIMessageStream,
-} from "ai";
+import { streamText, convertToModelMessages } from "ai";
 import type { UIMessage } from "ai";
 
 const openai = createOpenAI({
@@ -38,21 +29,19 @@ const openai = createOpenAI({
 
 export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json();
+
   const result = streamText({
-    model: openai("gpt-5.4-mini"),
+    model: openai("gpt-5.6-luna"),
     messages: await convertToModelMessages(messages),
   });
-  return createUIMessageStreamResponse({
-    stream: toUIMessageStream({ stream: result.stream }),
-  });
+
+  return result.toUIMessageStreamResponse();
 }
 ```
 
-The `OPENAI_API_KEY` env var is still read by `createOpenAI`; Helicone forwards it to OpenAI.
+## OpenAI SDK route
 
-## Route Setup (OpenAI SDK)
-
-If you call the OpenAI SDK directly instead of the AI SDK, set `baseURL` and `defaultHeaders` on the client.
+For a route that calls the OpenAI SDK directly, set the same base URL and header on that client. The response must still be adapted into the stream your UI runtime expects.
 
 ```ts
 import OpenAI from "openai";
@@ -67,31 +56,21 @@ const openai = new OpenAI({
 export async function POST(req: Request) {
   const { messages } = await req.json();
   const stream = await openai.chat.completions.create({
-    model: "gpt-5.4-mini",
+    model: "gpt-5.6-luna",
     messages,
     stream: true,
   });
+
   return new Response(stream.toReadableStream());
 }
 ```
 
-## Custom Metadata
+## Per request metadata
 
-Add per request headers to tag and filter sessions in the Helicone dashboard. Pass them alongside `Helicone-Auth` in the `headers` (AI SDK) or `defaultHeaders` (OpenAI SDK) object.
+Add `Helicone-User-Id`, `Helicone-Property-*`, or session headers to the same header object to filter and aggregate requests in Helicone. The request still streams and tool calls and attachments retain their normal provider behavior because the proxy preserves the upstream request shape.
 
-```ts
-const openai = createOpenAI({
-  baseURL: "https://oai.helicone.ai/v1",
-  headers: {
-    "Helicone-Auth": `Bearer ${process.env.HELICONE_API_KEY}`,
-    "Helicone-User-Id": "user_123",
-    "Helicone-Property-App": "support-bot",
-  },
-});
-```
+## Verify
 
-`Helicone-User-Id` groups requests by end user; any `Helicone-Property-*` header becomes a custom filterable dimension.
+Send a message and inspect the Helicone dashboard after a few seconds. The request host must be `oai.helicone.ai`, not `api.openai.com`. Confirm that the outgoing request carries `Helicone-Auth` and the provider `Authorization` header, then confirm token counts, latency, prompt, and completion are present in the dashboard.
 
-## Other Providers
-
-For Anthropic, Gemini, and others, swap the base URL to the matching Helicone gateway. See Helicone's provider docs for the exact host per provider; the auth header stays the same.
+For Anthropic, Gemini, or another provider, use that provider's Helicone gateway URL. The `Helicone-Auth` header remains the integration point.

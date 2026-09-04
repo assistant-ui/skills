@@ -1,76 +1,70 @@
-# MCP OAuth and Auth Modes
+# MCP OAuth and authentication
 
-Let end users connect and authenticate MCP servers from the browser with `@assistant-ui/react-mcp`. Auth modes are `none`, `bearer`, and `oauth` (PKCE + DCR).
+Each connector or custom server declares one `MCPAuthConfig`. OAuth state is persisted through the manager storage and completed from a single browser callback route.
 
 ## Contents
 
-- [Auth modes](#auth-modes)
-- [Connectors and the manager resource](#connectors-and-the-manager-resource)
-- [OAuth connect flow](#oauth-connect-flow)
-- [OAuth callback route](#oauth-callback-route)
-- [Server connect UI](#server-connect-ui)
-- [Imperative connect and auth](#imperative-connect-and-auth)
-- [Reading connection state](#reading-connection-state)
-- [Token storage](#token-storage)
+- [Authentication shapes](#authentication-shapes)
+- [OAuth flow and CIMD](#oauth-flow-and-cimd)
+- [Callback route and hook](#callback-route-and-hook)
+- [Connection lifecycle](#connection-lifecycle)
 
-## Auth modes
+## Authentication shapes
 
-Each connector or custom server carries an `auth` config. Three shapes:
+The supported auth union has exactly three variants.
 
 ```ts
-// no auth header
-{ type: "none" }
+const noAuth = { type: "none" };
 
-// Authorization: Bearer …
-{ type: "bearer", token: "…" }
+const bearerAuth = {
+  type: "bearer",
+  token: "token",
+};
 
-// PKCE + DCR + refresh; every field below the type is optional
-{
+const oauthAuth = {
   type: "oauth",
   scopes: ["read"],
-  authorizationEndpoint: "…", // overrides RFC 8414 discovery
-  tokenEndpoint: "…",
-  registrationEndpoint: "…",
-  clientId: "…",              // skip DCR with a static client
-  clientSecret: "…",
-}
+  authorizationEndpoint: "https://auth.example.com/authorize",
+  tokenEndpoint: "https://auth.example.com/token",
+  registrationEndpoint: "https://auth.example.com/register",
+  clientId: "client-id",
+  clientSecret: "client-secret",
+};
 ```
 
-With `oauth` and no endpoint overrides, the client discovers metadata (RFC 8414), dynamically registers (DCR, RFC 7591), runs PKCE, exchanges the code, and refreshes tokens on 401. Set `clientId` (and `clientSecret`) to skip DCR with a pre-registered client.
+`none` sends no auth header. `bearer` accepts an optional token and sends it as a bearer authorization header when present. OAuth accepts optional `scopes`, endpoint overrides, `clientId`, and `clientSecret`. Omit endpoint overrides to use authorization server metadata discovery. The add form can create `none`, bearer, and OAuth records, but its OAuth form only supplies scopes. Configure static client metadata on an application connector when required.
 
-## Connectors and the manager resource
+## OAuth flow and CIMD
 
-OAuth connectors are declared with `defineConnector({ ..., auth: { type: "oauth", scopes } })` and mounted via `McpManagerResource` on the `aui` instance. The `oauthRedirectUri` option defaults to `"${window.location.origin}/mcp/callback"`. See [./setup.md](./setup.md) for the full `defineConnector` / `McpManagerResource` / provider setup.
+For OAuth, the client performs discovery, PKCE, token exchange, and refresh through the MCP SDK. It persists pending state and tokens with the manager storage, exposes a server `authorizationUrl`, and embeds the server id in OAuth `state` so one callback route can resolve any connected server.
 
-## OAuth connect flow
+The 2026-07-28 MCP specification deprecates RFC 7591 dynamic client registration in favor of Client ID Metadata Documents (CIMD). Dynamic registration remains available for authorization servers that support it. If an authorization server is CIMD only and has no `registration_endpoint`, configure a static `clientId`; include `clientSecret` only when the registered client requires it. A static `clientId` bypasses dynamic registration.
 
-1. The user triggers a connect on an `oauth` server (button or imperative call).
-2. The client runs discovery/DCR/PKCE and opens the authorization URL.
-3. The provider redirects back to `oauthRedirectUri` with `?state=…&code=…`. The server id is encoded in the OAuth `state` param, so one callback route resolves any server.
-4. The callback route completes the exchange; `autoConnect` then connects the server.
-
-Set the redirect URI explicitly when not using the default route:
+Set the redirect URI on the manager whenever it differs from the default `${window.location.origin}/mcp/callback`.
 
 ```ts
-McpManagerResource({
+import { McpManagerResource } from "@assistant-ui/react-mcp";
+
+const mcp = McpManagerResource({
   connectors,
   oauthRedirectUri: `${window.location.origin}/auth/mcp`,
 });
 ```
 
-## OAuth callback route
+## Callback route and hook
 
-Render `McpOAuthCallback` at the redirect path. It reads `code` and `state` from the URL and calls `completeAuth` on the right server. Wrap it in the same `Providers` so the manager resource is in scope.
+Render `McpOAuthCallback` at the configured redirect URI under the same provider tree as `McpManagerResource`. It reads the full current URL by default, validates the state, resolves the server, calls `completeAuth`, and then calls `onComplete(serverId)` or `onError(error)`.
 
 ```tsx
-// app/mcp/callback/page.tsx
 "use client";
+
 import { McpOAuthCallback } from "@assistant-ui/react-mcp";
 import { useRouter } from "next/navigation";
 import { Providers } from "../../providers";
 
 export default function Callback() {
   const router = useRouter();
+
   return (
     <Providers>
       <McpOAuthCallback onComplete={() => router.replace("/mcp")} />
@@ -79,69 +73,34 @@ export default function Callback() {
 }
 ```
 
-`McpOAuthCallback` takes `onComplete: () => void`, fired after the token exchange resolves.
-
-## Server connect UI
-
-`McpServerPrimitive` action buttons render only when the server's state matches, so no manual gating is needed: `ConnectButton` when connectable, `OAuthLink` when authorization is required, `DisconnectButton` when connected.
+Use `useMcpOAuthCallback` to build a custom callback screen. Its result is `{ status, serverId, error }`, where `status` is `idle`, `running`, `done`, or `error`.
 
 ```tsx
-"use client";
-import {
-  McpManagerPrimitive,
-  McpServerPrimitive,
-} from "@assistant-ui/react-mcp";
+import { useMcpOAuthCallback } from "@assistant-ui/react-mcp";
 
-const ServerCard = () => (
-  <McpServerPrimitive.Root>
-    <McpServerPrimitive.Icon />
-    <McpServerPrimitive.Name />
-    <McpServerPrimitive.Status />
-    <McpServerPrimitive.ConnectButton>Connect</McpServerPrimitive.ConnectButton>
-    <McpServerPrimitive.DisconnectButton>Disconnect</McpServerPrimitive.DisconnectButton>
-    <McpServerPrimitive.OAuthLink>Authorize ↗</McpServerPrimitive.OAuthLink>
-    <McpServerPrimitive.RemoveButton>Remove</McpServerPrimitive.RemoveButton>
-    <McpServerPrimitive.Error />
-  </McpServerPrimitive.Root>
-);
+export function CallbackStatus() {
+  const { status, serverId, error } = useMcpOAuthCallback({
+    onComplete: (id) => console.log(id),
+    onError: (reason) => console.error(reason),
+  });
 
-export default function McpPage() {
-  return (
-    <McpManagerPrimitive.Root>
-      <h2>Connectors</h2>
-      <McpManagerPrimitive.Connectors>
-        {() => <ServerCard />}
-      </McpManagerPrimitive.Connectors>
-      <h2>Your servers</h2>
-      <McpManagerPrimitive.CustomServers>
-        {() => <ServerCard />}
-      </McpManagerPrimitive.CustomServers>
-      <McpManagerPrimitive.AddCustomTrigger>
-        Add custom server
-      </McpManagerPrimitive.AddCustomTrigger>
-    </McpManagerPrimitive.Root>
-  );
+  return <p>{error ? error.message : `${status}: ${serverId ?? ""}`}</p>;
 }
 ```
 
-## Imperative connect and auth
+The hook accepts an optional full callback `url`; otherwise it uses `window.location.href`. The OAuth code is single use, so render one callback handler for a URL and let it finish before navigating away.
 
-`aui.mcp.server({ id }).connect()`, called from an event handler, triggers the OAuth flow when the server needs it. See [./setup.md](./setup.md) for the full imperative API (`addCustomServer`, `connect`, `callTool`).
+## Connection lifecycle
 
-## Reading connection state
+Use `McpServerPrimitive` for state matched actions or call the server methods in an event handler. `ConnectButton` begins a normal connection. If the server needs OAuth it reaches `authRequired`, produces an authorization URL, and `OAuthLink` opens it. A completed callback resumes connection and tool listing.
 
-Read state with `useAuiState` from `@assistant-ui/store`. The `mcpServer.*` selectors require an `McpServerByIdProvider` in scope, which the manager iteration primitives supply automatically.
+| State | Meaning |
+|---|---|
+| `disconnected` | No active connection. |
+| `authRequired` | OAuth is needed before connection can continue. |
+| `authPending` | Authorization is in progress. |
+| `connecting` | The client is opening the transport or listing tools. |
+| `connected` | Tools and resource methods are ready. |
+| `error` | The latest connection attempt failed. Read `s.mcpServer.lastError`. |
 
-```ts
-import { useAuiState } from "@assistant-ui/store";
-
-const isHydrated = useAuiState((s) => s.mcp.isHydrated);
-const connectionState = useAuiState((s) => s.mcpServer.connectionState);
-const name = useAuiState((s) => s.mcpServer.name);
-const icon = useAuiState((s) => s.mcpServer.icon ?? null);
-const error = useAuiState((s) => s.mcpServer.lastError?.message ?? null);
-```
-
-## Token storage
-
-OAuth tokens persist through the manager's `storage`. `McpLocalStorage` (the default) keeps them in plain text and is XSS-exposed; for anything beyond local prototyping use `McpCustomStorage` against an HTTP-only-cookie-backed endpoint. See [./setup.md](./setup.md) for the storage backends and a full `McpCustomStorage` example.
+`connectionTimeout` applies to transport connection and tool listing. A custom server or connector setting wins over the manager setting. Call `disconnect()` to close a live or pending connection. `remove()` and `aui.mcp.removeServer(id)` only remove custom servers and clear their auth state.

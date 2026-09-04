@@ -1,81 +1,89 @@
-# AI SDK Legacy (v6, v5, and v4)
+# AI SDK Legacy Versions (v6, v5, v4)
 
-Keep an app on a legacy AI SDK release instead of migrating to v7. Each older AI SDK major needs a pinned adapter release, because `@assistant-ui/react-ai-sdk@latest` (1.4.x) depends on `ai@^7`. For new projects, see `ai-sdk.md` instead.
+Reference for projects that have not migrated to [AI SDK v7](./ai-sdk.md) yet. All three legacy lines are documented for existing apps only; none receive new features.
 
-| AI SDK | Adapter package to install | Runtime hook |
-|---|---|---|
-| `ai@^7` + `@ai-sdk/react@^4` | `@assistant-ui/react-ai-sdk@latest` | `useChatRuntime` |
+## Contents
+
+- [Version table](#version-table) | [v6](#v6-last-supported-line) | [v5](#v5) | [v4](#v4-react-data-stream) | [Migrating up](#migrating-up)
+
+## Version table
+
+| AI SDK | Runtime package | Runtime hook |
+| --- | --- | --- |
+| `ai@^7` + `@ai-sdk/react@^4` | `@assistant-ui/ai-sdk` (current) | `useChatRuntime` |
 | `ai@^6` + `@ai-sdk/react@^3` | `@assistant-ui/react-ai-sdk@1.3.40` | `useChatRuntime` |
 | `ai@^5` + `@ai-sdk/react@^2` | `@assistant-ui/react-ai-sdk@1.1.21` | `useChatRuntime` |
 | `ai@^4` | `@assistant-ui/react-data-stream` | `useDataStreamRuntime` |
 
-These pins receive no new features and have known compatibility gaps against current `@assistant-ui/react`.
+`@assistant-ui/react-ai-sdk` re-exports the same API `@assistant-ui/ai-sdk` ships; pin the version shown above rather than installing `latest` on a legacy AI SDK major, since later `react-ai-sdk` releases target v7.
 
-## Contents
-
-- [AI SDK v6 (legacy)](#ai-sdk-v6-legacy)
-- [AI SDK v5 (legacy)](#ai-sdk-v5-legacy)
-- [AI SDK v4 (legacy)](#ai-sdk-v4-legacy)
-  - [Install](#install-1)
-  - [Backend route](#backend-route-1)
-  - [Frontend with useDataStreamRuntime](#frontend-with-usedatastreamruntime)
-  - [useDataStreamRuntime options](#usedatastreamruntime-options)
-- [Why these are legacy](#why-these-are-legacy)
-
-## AI SDK v6 (legacy)
-
-Pin `@assistant-ui/react-ai-sdk@1.3.40` with `ai@^6` and `@ai-sdk/react@^3`.
+## v6 (last supported line)
 
 ```bash
-npm install @assistant-ui/react @assistant-ui/react-ai-sdk@1.3.40 ai@^6 @ai-sdk/react@^3 @ai-sdk/openai@^3 zod
+npm install @assistant-ui/react @assistant-ui/react-ai-sdk@1.3.40 ai@^6 @ai-sdk/react@^3 @ai-sdk/openai zod
 ```
 
-The wiring is the same as v7 except the route response:
-
-```ts
+```ts title="app/api/chat/route.ts"
 import { openai } from "@ai-sdk/openai";
-import { streamText, convertToModelMessages, type UIMessage } from "ai";
+import { streamText, convertToModelMessages, tool, zodSchema } from "ai";
+import { z } from "zod";
 
 export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
-
+  const { messages } = await req.json();
   const result = streamText({
-    model: openai("gpt-5.4-nano"),
-    messages: await convertToModelMessages(messages),
+    model: openai("gpt-5.6-luna"),
+    messages: await convertToModelMessages(messages), // async in v6
+    tools: {
+      get_current_weather: tool({
+        description: "Get the current weather",
+        inputSchema: zodSchema(z.object({ city: z.string() })),
+        execute: async ({ city }) => `The weather in ${city} is sunny`,
+      }),
+    },
   });
-
   return result.toUIMessageStreamResponse();
 }
 ```
 
-In v7 that method is deprecated in favor of `createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) })`.
+<!-- before -->
+```tsx title="app/page.tsx"
+// Pinned to @assistant-ui/react-ai-sdk@1.3.40 for AI SDK v6; v7 imports the same API from @assistant-ui/ai-sdk.
+import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 
-## AI SDK v5 (legacy)
-
-Pin `@assistant-ui/react-ai-sdk@1.1.21` with `ai@^5`. Tools use `parameters:` (not `inputSchema:`), and the route returns `toDataStreamResponse()`.
-
-### Install
-
-```bash
-npm install @assistant-ui/react @assistant-ui/react-ai-sdk@1.1.21 ai@^5 @ai-sdk/react@^2 @ai-sdk/openai@^1 zod
+const runtime = useChatRuntime();
+// <AssistantRuntimeProvider runtime={runtime}><Thread /></AssistantRuntimeProvider>
 ```
 
-### Backend route
+Everything under [ai-sdk.md](./ai-sdk.md) (frontend tools, multi-step via `stopWhen`, approval gates via `needsApproval`, quote context, token usage, history via `withFormat`, runtime options, `useAISDKRuntime`) applies the same way on v6; only the response call differs (`result.toUIMessageStreamResponse()` directly, not wrapped in `createUIMessageStreamResponse`/`toUIMessageStream`), and every import comes from `@assistant-ui/react-ai-sdk` instead of `@assistant-ui/ai-sdk`. The v6 approval gate uses `needsApproval` (boolean or function) on the tool definition rather than v7's call-level `toolApproval` option:
 
 ```ts
-// app/api/chat/route.ts
+deploy: tool({
+  description: "Deploy the current build to an environment.",
+  inputSchema: z.object({ target: z.string() }),
+  needsApproval: ({ input }) => input.target === "production",
+  execute: async ({ target }) => ({ deployed: target }),
+}),
+```
+
+## v5
+
+```bash
+npm install @assistant-ui/react @assistant-ui/react-ai-sdk@1.1.21 ai@^5 @ai-sdk/openai@^1 zod
+```
+
+<!-- before -->
+```ts title="app/api/chat/route.ts"
 import { openai } from "@ai-sdk/openai";
 import { streamText, tool } from "ai";
 import type { Message } from "ai";
 import { z } from "zod";
 
-export const maxDuration = 30;
-
 export async function POST(req: Request) {
   const { messages }: { messages: Message[] } = await req.json();
-
   const result = streamText({
-    model: openai("gpt-5.4-nano"),
+    model: openai("gpt-5.6-luna"),
     messages,
     tools: {
       get_current_weather: tool({
@@ -85,115 +93,66 @@ export async function POST(req: Request) {
       }),
     },
   });
-
   return result.toDataStreamResponse();
 }
 ```
 
-Note: in v5 `streamText` takes `messages` directly (no `convertToModelMessages`), tools use `parameters:`, and the response is `toDataStreamResponse()`.
-
-### Frontend
-
-`@assistant-ui/react-ai-sdk@1.1.21` exposes `useChatRuntime` and `useAISDKRuntime`. Prefer `useChatRuntime`; reach for `useAISDKRuntime` when you need to own the `useChat` instance.
-
-```tsx
-"use client";
-
-import { useChat } from "@ai-sdk/react";
-import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
+<!-- before -->
+```tsx title="app/page.tsx"
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
-import { Thread } from "@/components/assistant-ui/thread";
+import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 
-export default function Home() {
-  const chat = useChat({ api: "/api/chat" });
-  const runtime = useAISDKRuntime(chat);
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <div className="h-dvh">
-        <Thread />
-      </div>
-    </AssistantRuntimeProvider>
-  );
-}
+const runtime = useChatRuntime();
 ```
 
-`useVercelUseChatRuntime` was the pre-0.11.3 name for this wiring and no longer exists on any current release line.
+<!-- before -->
+```ts
+// On @assistant-ui/react-ai-sdk older than 0.11.3, use useVercelUseChatRuntime with useChat from "ai/react" instead
+import { useChat } from "ai/react";
+import { useVercelUseChatRuntime } from "@assistant-ui/react-ai-sdk";
 
-## AI SDK v4 (legacy)
+const chat = useChat({ api: "/api/chat" });
+const runtime = useVercelUseChatRuntime(chat);
+```
 
-`@assistant-ui/react-ai-sdk` targets `ai@^6` and up, so v4 apps integrate through `@assistant-ui/react-data-stream`, which speaks the same data stream protocol that v4's `toDataStreamResponse()` emits.
+v5 differs from v6 in the message type (`Message` vs `UIMessage`), a synchronous `convertToModelMessages`, `parameters: z.object({...})` instead of `inputSchema: zodSchema(z.object({...}))`, and `toDataStreamResponse()` instead of `toUIMessageStreamResponse()`. AI SDK's own [v6 migration guide](https://ai-sdk.dev/docs/migration-guides/migration-guide-6-0) has codemods for the package-side rewrite.
 
-### Install
+## v4 (`react-data-stream`)
+
+AI SDK v4 predates `@assistant-ui/ai-sdk`'s current-major-only support; v4 projects plug into the wire protocol directly through [`@assistant-ui/react-data-stream`](../../streaming/SKILL.md), the same data stream protocol v4's `toDataStreamResponse()` emits.
 
 ```bash
-npm install @assistant-ui/react @assistant-ui/react-data-stream ai@^4 @ai-sdk/openai
+npm install @assistant-ui/react @assistant-ui/react-data-stream ai@^4
 ```
 
-### Backend route
-
-```ts
-// app/api/chat/route.ts
+<!-- before -->
+```ts title="app/api/chat/route.ts"
 import { streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
 export async function POST(req: Request) {
   const { messages } = await req.json();
-  const result = streamText({ model: openai("gpt-5.4-nano"), messages });
+  const result = streamText({ model: openai("gpt-5.6-luna"), messages });
   return result.toDataStreamResponse();
 }
 ```
 
-### Frontend with useDataStreamRuntime
-
-`useDataStreamRuntime` comes from `@assistant-ui/react-data-stream`. Set `protocol: "data-stream"` so it parses v4's `toDataStreamResponse()` output; the default protocol expects the SSE format used by newer AI SDK releases.
-
-```tsx
-"use client";
-
+```tsx title="app/page.tsx"
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useDataStreamRuntime } from "@assistant-ui/react-data-stream";
-import { Thread } from "@/components/assistant-ui/thread";
+import { Thread } from "@/components/assistant-ui/elements/thread.aui";
 
-export default function Home() {
-  const runtime = useDataStreamRuntime({
-    api: "/api/chat",
-    protocol: "data-stream",
-  });
-
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <div className="h-full">
-        <Thread />
-      </div>
-    </AssistantRuntimeProvider>
-  );
-}
+const runtime = useDataStreamRuntime({ api: "/api/chat" });
 ```
 
-### useDataStreamRuntime options
+`useDataStreamRuntime` auto-detects the `x-vercel-ai-data-stream: v1` response header; pass `protocol: "data-stream"` explicitly if a proxy strips it. It also accepts `initialMessages`, `onFinish`, `onError`, `headers`, `body`, and the standard `LocalRuntimeOptions`.
 
-- `api`: endpoint URL for the data stream protocol.
-- `protocol`: `"data-stream"` to pair with v4's `toDataStreamResponse()`.
-- `headers`: `Record<string, string>`, `Headers`, or an async function returning headers.
-- `body`: object or async function returning extra request body params.
-- Lifecycle callbacks: `onResponse`, `onFinish`, `onError`, `onCancel`.
+An older `@assistant-ui/react-ai-sdk` line supported v4 directly through `0.10.16`; it has no upgrade path and is not maintained. Start new v4 integrations on `react-data-stream` instead.
 
-Note: human in the loop tools (`human()` interrupts) are not supported by the data stream runtime; use `LocalRuntime` directly if you need approval flows.
+## Migrating up
 
-## Why these are legacy
+1. v4 to v7: swap `@assistant-ui/react-data-stream` for `@assistant-ui/ai-sdk`, move the backend to `streamText` + `convertToModelMessages` + `createUIMessageStreamResponse`, and switch `useDataStreamRuntime` to `useChatRuntime`.
+2. v5 to v6: add `await` to `convertToModelMessages(...)`, convert `parameters: z.object({...})` to `inputSchema: zodSchema(z.object({...}))`, replace `toDataStreamResponse()` with `toUIMessageStreamResponse()`, and switch the `Message` type to `UIMessage`.
+3. v6 to v7: swap `@assistant-ui/react-ai-sdk` imports for `@assistant-ui/ai-sdk`, and wrap the response in `createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) })`.
 
-Each AI SDK major introduced breaking API changes, and `@assistant-ui/react-ai-sdk` tracks the newest one. Differences that show up when a legacy stack is upgraded:
-
-| Area | v4 | v5 | v6 | v7 (current) |
-|---|---|---|---|---|
-| `ai` package | `ai@^4` | `ai@^5` | `ai@^6` | `ai@^7` |
-| `@ai-sdk/react` | `ai/react` | `^2` | `^3` | `^4` |
-| `@ai-sdk/openai` | any | `^1` | `^3` | `^4` |
-| Adapter package | `@assistant-ui/react-data-stream` | `@assistant-ui/react-ai-sdk@1.1.21` | `@assistant-ui/react-ai-sdk@1.3.40` | `@assistant-ui/react-ai-sdk@latest` |
-| Runtime hook | `useDataStreamRuntime` | `useChatRuntime` | `useChatRuntime` | `useChatRuntime` |
-| `convertToModelMessages` | not used | sync | async (`await`) | async (`await`) |
-| Tool schema key | n/a | `parameters:` | `inputSchema:` | `inputSchema: zodSchema(...)` |
-| Response | `toDataStreamResponse()` | `toDataStreamResponse()` | `toUIMessageStreamResponse()` | `createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) })` |
-
-To move off legacy, switch the runtime hook to `useChatRuntime`, update the backend to v7 `streamText`, and apply the AI SDK codemods at `ai-sdk.dev/docs/migration-guides`.
+AI SDK's own [migration guides](https://ai-sdk.dev/docs/migration-guides) provide codemods for each package-side rewrite; see [update](../../update/SKILL.md) for the assistant-ui side (registry paths, `AuiConfig`, event renames) that tends to land alongside an AI SDK bump.

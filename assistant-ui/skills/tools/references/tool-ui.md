@@ -1,276 +1,253 @@
-# makeAssistantToolUI
+# Tool UI
 
-Render custom UI for tool calls.
+A tool call renders through the `render` (or `renderText`) field of its toolkit entry. The renderer receives the live call, so it covers the streaming arguments, the running state, the result, and any question the runtime raises before the tool may proceed.
 
-> **Deprecated.** `makeAssistantToolUI` and `useAssistantToolUI` carry `@deprecated` in the source. Put `render` / `renderText` on the matching toolkit entry, or use the inline tool render overrides on `MessagePrimitive.Parts` for per-message UI. See the [toolkit migration guide](https://assistant-ui.com/docs/migrations/toolkit-tools) and [toolkits.md](./toolkits.md). This page documents the existing API for codebases that still use it.
+## Contents
 
-## makeAssistantToolUI
+- [Renderer props](#renderer-props) | [Status states](#status-states) | [renderText and display](#rendertext-and-display) | [Streaming arguments](#streaming-arguments) | [Partial results](#partial-results) | [Deferred rendering](#deferred-rendering) | [Renderers that need component state](#renderers-that-need-component-state) | [Elapsed time](#elapsed-time) | [ToolFallback and ToolGroup](#toolfallback-and-toolgroup) | [Data parts](#data-parts)
 
-Returns a React component that registers the tool UI renderer.
+## Renderer props
+
+`ToolCallMessagePartProps<TArgs, TResult>` is the full tool-call part plus three callbacks.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `args` | `TArgs` | Parsed arguments, partial while the model is still streaming them |
+| `argsText` | `string` | Raw, possibly partial JSON |
+| `result` | `TResult \| undefined` | The result, once the call has one |
+| `isError` | `boolean \| undefined` | Whether the result represents a failure |
+| `status` | `ToolCallMessagePartStatus` | See below |
+| `toolName` | `string` | The name the model called |
+| `toolCallId` | `string` | Stable id for this invocation |
+| `timing` | `ToolCallTiming \| undefined` | Wall clock start and completion, when tracked |
+| `interrupt` | `{ type: "human"; payload: unknown } \| undefined` | A paused `human()` request |
+| `approval` | object `\| undefined` | Approval gate state: `id`, `approved?`, `options?`, `optionId?`, `resolution?` |
+| `addResult` | `(result) => void` | Sets this part's result from the renderer instead of an executor |
+| `resume` | `(payload: unknown) => void` | Resumes a paused frontend execution |
+| `respondToApproval` | `(response: ToolApprovalResponse) => Promise<void>` | Answers an approval gate |
+
+Type a standalone renderer with `ToolCallMessagePartComponent`.
 
 ```tsx
-import { makeAssistantToolUI } from "@assistant-ui/react";
+import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 
-const WeatherToolUI = makeAssistantToolUI({
-  toolName: "get_weather",
-  render: ({ args, result, status }) => {
-    if (status.type === "running") {
-      return <div className="animate-pulse">Loading weather...</div>;
-    }
+type Args = { query: string };
+type Result = { results: { title: string; url: string }[] };
 
-    if (result) {
-      return (
-        <div className="p-4 bg-blue-50 rounded-lg">
-          <h3 className="font-bold">{result.city}</h3>
-          <p className="text-2xl">{result.temperature}°</p>
-        </div>
-      );
-    }
-
-    return null;
-  },
-});
-
-<AssistantRuntimeProvider runtime={runtime}>
-  <WeatherToolUI />
-  <Thread />
-</AssistantRuntimeProvider>
+export const WebSearchToolUI: ToolCallMessagePartComponent<Args, Result> = ({
+  args,
+  status,
+  result,
+}) => (
+  <div>
+    <span>Search results for: {args.query}</span>
+    {status.type === "running" && <LoadingSpinner />}
+    {result?.results.map((item) => (
+      <a key={item.url} href={item.url}>
+        {item.title}
+      </a>
+    ))}
+  </div>
+);
 ```
 
-## Render Props
-
-The render component receives `ToolCallMessagePartProps`:
+## Status states
 
 ```tsx
-interface ToolCallMessagePartProps {
-  toolCallId: string;
-  toolName: string;
-
-  args: Record<string, unknown>;
-  argsText: string;  // Raw streamed JSON string
-
-  // Result (undefined while running)
-  result?: unknown;
-  isError?: boolean;
-  artifact?: unknown;  // UI-only artifact attached to the result
-
-  // Status is an OBJECT, not a string. Branch on status.type.
-  status: ToolCallMessagePartStatus;
-
-  // Supply a result from the renderer (instead of a tool execute function)
-  addResult: (result: unknown) => void;
-  // Resume a frontend tool paused via context.human(...)
-  resume: (payload: unknown) => void;
-  // Respond to a server-side approval gate
-  respondToApproval: (response: { approved: boolean; reason?: string }) => void;
-}
-
-type ToolCallMessagePartStatus =
-  | { type: "running" }       // Tool executing
-  | { type: "complete" }      // Finished successfully
-  | { type: "incomplete"; reason: "cancelled" | "length" | "content-filter" | "other" | "error" }
-  | { type: "requires-action"; reason: "interrupt" };  // Waiting for input
-```
-
-## useAssistantToolUI
-
-Hook variant for dynamic registration:
-
-```tsx
-import { useAssistantToolUI } from "@assistant-ui/react";
-
-function DynamicToolUI({ toolConfig }) {
-  useAssistantToolUI({
-    toolName: toolConfig.name,
-    render: ({ args, result, status }) => (
-      <toolConfig.Component args={args} result={result} status={status} />
-    ),
-  });
-
-  return <Thread />;
-}
-```
-
-## Status Handling
-
-```tsx
-const ComprehensiveToolUI = makeAssistantToolUI({
-  toolName: "process_data",
-  render: ({ args, result, status }) => {
-    switch (status.type) {
-      case "running":
-        return (
-          <div className="flex items-center gap-2">
-            <Spinner />
-            <span>Processing {args.filename}...</span>
-          </div>
-        );
-
-      case "complete":
-        return (
-          <div className="p-4 bg-green-50 rounded">
-            <CheckIcon className="text-green-500" />
-            <pre>{JSON.stringify(result, null, 2)}</pre>
-          </div>
-        );
-
-      case "incomplete":
-        return (
-          <div className="p-4 bg-yellow-50 rounded">
-            <WarningIcon className="text-yellow-500" />
-            <span>Processing was cancelled</span>
-          </div>
-        );
-
-      case "requires-action":
-        return (
-          <div className="p-4 bg-blue-50 rounded">
-            <span>Waiting for user input...</span>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  },
-});
-```
-
-## Styled Components
-
-```tsx
-const SearchToolUI = makeAssistantToolUI({
-  toolName: "search",
-  render: ({ args, result, status }) => (
-    <div className="my-4 border rounded-lg overflow-hidden">
-      <div className="px-4 py-2 bg-gray-100 border-b flex items-center gap-2">
-        <SearchIcon className="w-4 h-4" />
-        <span className="font-medium">Search: {args.query}</span>
-      </div>
-
-      <div className="p-4">
-        {status.type === "running" && (
-          <div className="space-y-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-16 bg-gray-100 animate-pulse rounded" />
-            ))}
-          </div>
-        )}
-
-        {status.type === "complete" && result?.results && (
-          <div className="space-y-3">
-            {result.results.map((item: any) => (
-              <a
-                key={item.url}
-                href={item.url}
-                className="block p-3 hover:bg-gray-50 rounded"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <div className="font-medium text-blue-600">{item.title}</div>
-                <div className="text-sm text-gray-500 truncate">{item.url}</div>
-                <div className="text-sm text-gray-700 mt-1">{item.snippet}</div>
-              </a>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  ),
-});
-```
-
-## Generative UI
-
-For assistant-ui's declarative generative UI system (`MessagePrimitive.GenerativeUI` + the `render_gui` tool and `parseRenderGuiResult`), see [./generative-ui.md](./generative-ui.md).
-
-You can also map a tool's result to a component yourself with `makeAssistantToolUI`. The tool name below (`render_widget`) is your own, not a built-in:
-
-```tsx
-import { Chart, Table, Form, Card } from "./components";
-
-const componentMap: Record<string, React.ComponentType<any>> = {
-  chart: Chart,
-  table: Table,
-  form: Form,
-  card: Card,
+render: ({ status }) => {
+  switch (status.type) {
+    case "running":
+      return <LoadingState />;
+    case "requires-action":
+      return <UserInputRequired reason={status.reason} />;
+    case "incomplete":
+      if (status.reason === "cancelled") return <div>Operation cancelled</div>;
+      if (status.reason === "error") return <ErrorDisplay error={status.error} />;
+      return <div>Failed: {status.reason}</div>;
+    case "complete":
+      return <SuccessDisplay />;
+  }
 };
+```
 
-const WidgetToolUI = makeAssistantToolUI({
-  toolName: "render_widget",
-  render: ({ args, result }) => {
-    const Component = componentMap[args.type];
+`requires-action` carries `reason: "tool-calls" | "interrupt"`. Handle every branch: a renderer that assumes `result` is defined crashes on the running and cancelled paths.
 
-    if (!Component) {
-      return <div>Unknown component: {args.type}</div>;
-    }
+## renderText and display
 
-    return (
-      <div className="my-4">
-        <Component {...args.props} data={result} />
-      </div>
-    );
+`renderText` replaces a component with a one-line status. Each of `running` and `complete` is a string or a function of `({ args, result })`.
+
+```tsx
+renderText: {
+  running: ({ args }) => `Searching for ${args.query}`,
+  complete: "Search complete",
+},
+```
+
+`display` on the entry is `"inline"` by default, which lets the tool card sit inside the collapsed tool group. Set `display: "standalone"` for UI that should stand on its own, such as a human-in-the-loop form or a generative surface for a backend tool.
+
+## Streaming arguments
+
+`useToolArgsStatus` reports per-field streaming state inside a tool-call renderer. Each top-level key of the args object moves from `"streaming"` to `"complete"` as the partial JSON arrives.
+
+```tsx
+import { useToolArgsStatus } from "@assistant-ui/react";
+
+const toolkit = defineToolkit({
+  submit_form: {
+    type: "backend",
+    render: ({ args }) => {
+      const { propStatus } = useToolArgsStatus<{ email: string; phone: string }>();
+      return (
+        <form>
+          <input
+            value={args.email ?? ""}
+            className={propStatus.email === "streaming" ? "loading" : ""}
+            disabled
+          />
+          <input
+            value={args.phone ?? ""}
+            className={propStatus.phone === "streaming" ? "loading" : ""}
+            disabled
+          />
+        </form>
+      );
+    },
   },
 });
 ```
 
-## With External State
+## Partial results
+
+A streaming executor can publish intermediate results, so read `result` defensively while `status.type === "running"`.
 
 ```tsx
-function ToolUIWithState() {
-  const [favorites, setFavorites] = useState<string[]>([]);
+render: ({ result, status }) => (
+  <div>
+    {status.type === "running" && <Progress value={result?.progress ?? 0} />}
+    {(result?.insights ?? []).map((insight: string, i: number) => (
+      <p key={i}>{insight}</p>
+    ))}
+  </div>
+),
+```
 
-  useAssistantToolUI({
-    toolName: "show_products",
-    render: ({ result }) => (
-      <div className="grid grid-cols-3 gap-4">
-        {result?.products?.map((product: any) => (
-          <div key={product.id} className="border rounded p-4">
-            <img src={product.image} alt={product.name} />
-            <h3>{product.name}</h3>
-            <button
-              onClick={() => setFavorites((f) => [...f, product.id])}
-              className={favorites.includes(product.id) ? "text-red-500" : ""}
-            >
-              ♥
-            </button>
-          </div>
-        ))}
-      </div>
-    ),
-  });
+## Deferred rendering
 
-  return <Thread />;
+When partial arguments would render a misleading intermediate state, or the component is expensive to mount, return `null` until the call completes. The arguments still stream into `args`; you just ignore them until then.
+
+```tsx
+render: ({ args, status }) => {
+  if (status.type !== "complete") return null;
+  return <Chart title={args.title} data={args.series} />;
+},
+```
+
+To place the component outside the message parts, gate at the message level with `AuiIf` and read the captured part from `s.message.parts`.
+
+```tsx
+import { AuiIf, MessagePrimitive, useAuiState } from "@assistant-ui/react";
+
+function PostMessageCard() {
+  const parts = useAuiState((s) => s.message.parts);
+  const chartCall = parts.find(
+    (p) => p.type === "tool-call" && p.toolName === "render_chart",
+  );
+  if (!chartCall) return null;
+  return <Chart {...chartCall.args} />;
 }
+
+<MessagePrimitive.Root>
+  <MessagePrimitive.Parts />
+  <AuiIf
+    condition={(s) =>
+      s.message.role === "assistant" && s.message.status?.type === "complete"
+    }
+  >
+    <PostMessageCard />
+  </AuiIf>
+</MessagePrimitive.Root>;
 ```
 
-## Tool Call Metadata
+## Renderers that need component state
 
-The render props already carry the tool call metadata (`toolCallId`, `toolName`, `status`, `args`, `result`), so no extra context hook is needed:
+A `render` field is static. When the UI needs props or state from the component tree, build the toolkit in a hook with `useInlineRender` and mount it on a scoped provider.
 
-```tsx
-const MetadataToolUI = makeAssistantToolUI({
-  toolName: "process_data",
-  render: ({ toolCallId, toolName, status }) => (
-    <div className="text-xs text-gray-500">
-      {toolName} ({toolCallId.slice(0, 8)}) - {status.type}
-    </div>
-  ),
-});
-```
+```tsx title="inventory-toolkit.tsx"
+"use client";
 
-## Multiple Tools
+import { defineToolkit, useInlineRender } from "@assistant-ui/react";
+import { useMemo } from "react";
 
-```tsx
-function App() {
-  return (
-    <AssistantRuntimeProvider runtime={runtime}>
-      <WeatherToolUI />
-      <SearchToolUI />
-      <ChartToolUI />
-      <TableToolUI />
-      <Thread />
-    </AssistantRuntimeProvider>
+export function useInventoryToolkit(productId: string) {
+  const renderInventory = useInlineRender(({ result }) => (
+    <p>
+      Stock for {productId}: {result.quantity} in {result.warehouse}
+    </p>
+  ));
+
+  return useMemo(
+    () =>
+      defineToolkit({
+        check_inventory: { type: "backend", render: renderInventory },
+      }),
+    [renderInventory],
   );
 }
 ```
+
+```tsx title="ProductPage.tsx"
+import { AuiConfig, AuiProvider, Tools, useAui } from "@assistant-ui/react";
+import { useInventoryToolkit } from "./inventory-toolkit";
+
+function ProductPage({ productId }: { productId: string }) {
+  const toolkit = useInventoryToolkit(productId);
+  const aui = useAui();
+  const config = AuiConfig({ tools: Tools({ toolkit }) });
+  return (
+    <AuiProvider extends={aui} config={config}>
+      <div>Product details</div>
+    </AuiProvider>
+  );
+}
+```
+
+`useInlineRender` keeps the renderer identity stable, so the tool subtree is not remounted on every parent render.
+
+## Elapsed time
+
+`useToolCallElapsed()` returns the elapsed milliseconds of the current tool call, ticking once per second while it runs. It reads `part.timing` and returns `undefined` outside a tool-call scope, when no timing was recorded, or when the call ended without a recorded completion.
+
+```tsx
+import { useToolCallElapsed } from "@assistant-ui/react";
+
+function ToolDuration() {
+  const elapsedMs = useToolCallElapsed();
+  if (elapsedMs === undefined) return null;
+  return <span>{(elapsedMs / 1000).toFixed(1)}s</span>;
+}
+```
+
+## ToolFallback and ToolGroup
+
+A tool call with no registered renderer falls back to the `ToolFallback` element: a collapsed one-line summary that opens into the arguments, the result, and the approval controls when the call is waiting on a decision. `ToolGroup` collapses consecutive tool calls in one turn behind a single row. Both are copied into your project by the CLI.
+
+```bash
+npx assistant-ui@latest add tool-fallback tool-group
+```
+
+Replace the fallback for every unregistered tool with `<Thread components={{ ToolFallback: MyToolCard }} />`; a tool with its own renderer still wins. `ToolFallback` renders declared approval options automatically, including the confirmation step. Both elements are documented in the [elements skill](../../elements/SKILL.md).
+
+## Data parts
+
+Tool UI is for calls the model makes. When the backend or orchestrator decides what to render and pushes a named data event onto the assistant message, register the renderer with `makeAssistantDataUI` instead: data parts arrive as terminal events, so the renderer fires once with the final data and needs no deferred pattern.
+
+```tsx
+import { makeAssistantDataUI } from "@assistant-ui/react";
+
+export const ChartUI = makeAssistantDataUI<{ series: number[]; title: string }>({
+  name: "chart",
+  render: ({ data }) => <Chart title={data.title} series={data.series} />,
+});
+```
+
+Mount `<ChartUI />` once inside the provider tree; it renders nothing itself and only registers the renderer. `useAssistantDataUI` is the hook form. For UI the model composes from a vocabulary you ship, see the [generative-ui skill](../../generative-ui/SKILL.md).

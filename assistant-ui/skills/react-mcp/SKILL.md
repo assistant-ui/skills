@@ -1,6 +1,6 @@
 ---
 name: react-mcp
-description: "Lets end users add, authenticate, and manage MCP servers from the browser in assistant-ui apps with @assistant-ui/react-mcp. Use when building user-managed MCP server UIs: mounting McpManagerResource via useAui({ mcp }), declaring presets with defineConnector, dropping in McpConfigDialog, or composing McpManagerPrimitive (Root, Connectors, CustomServers, AddCustomTrigger), McpServerPrimitive (Root, Name, Icon, Status, ConnectButton, DisconnectButton, OAuthLink, RemoveButton, Error, Tools, ToolName), McpAddFormPrimitive (NameField, UrlField, AuthSelect, AuthFields, Submit, Cancel), and McpElicitationPrimitive (Root, Message, Fields, Items, Accept, Decline, Cancel, Error) for server-initiated input requests. Covers auth modes none/bearer/oauth, the OAuth flow with McpOAuthCallback and useMcpOAuthCallback, connection states, storage via McpLocalStorage/McpMemoryStorage/McpCustomStorage, reading state with useAuiState (s.mcp, s.mcpServer) and useMcpElicitation/useMcpElicitationField/useMcpServerTool, and imperative addCustomServer/connect/callTool. Distinct from developer-defined backend @ai-sdk/mcp tools in the tools skill. Reach for this when connected-server tools are missing, OAuth never completes, an elicitation prompt does not render, or servers do not persist."
+description: "Adds user managed browser MCP servers to assistant-ui with `@assistant-ui/react-mcp`. Use when mounting `McpManagerResource`, declaring `defineConnector` presets, persisting custom servers and OAuth state, composing `McpManagerPrimitive`, `McpServerPrimitive`, `McpAddFormPrimitive`, or `McpElicitationPrimitive`, handling an OAuth callback, browsing MCP resources, or diagnosing missing server tools, connection failures, and OAuth redirects. This covers end user chosen servers, not application owned backend MCP tools. For those use tools; for the chat runtime use runtime; for the copied dialog use elements."
 license: MIT
 ---
 
@@ -8,31 +8,23 @@ license: MIT
 
 **Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
-Let end users add, authenticate, and manage MCP servers from the browser with `@assistant-ui/react-mcp`. The connected servers' tools are merged into the chat runtime automatically.
-
-## Contents
-
-- [References](#references) | [Routes vs tools](#routes-vs-tools) | [Mount the manager](#mount-the-manager) | [Drop-in dialog](#drop-in-dialog) | [Compose from primitives](#compose-from-primitives) | [OAuth connect flow](#oauth-connect-flow) | [Custom storage](#custom-storage) | [Elicitation](#elicitation) | [Imperative API](#imperative-api) | [Common Gotchas](#common-gotchas) | [Related Skills](#related-skills)
+`@assistant-ui/react-mcp` lets users connect preset or custom Streamable HTTP MCP servers in the browser. The manager persists server and auth state, exposes connection state to primitives, and registers each connected tool into `modelContext` as a frontend tool named `serverId__toolName`.
 
 ## References
 
-- [./references/setup.md](./references/setup.md) -- McpManagerResource, defineConnector, storage, useAui({ mcp })
-- [./references/ui.md](./references/ui.md) -- McpManagerPrimitive / McpServerPrimitive / McpConfigDialog
-- [./references/oauth.md](./references/oauth.md) -- OAuth connect flow and auth modes
-
-## Routes vs tools
-
-This skill is for **user-managed** MCP servers: the end user picks and authenticates servers at runtime in the browser. Each server's tools are namespaced as `serverId__toolName` and exposed to the chat runtime with no extra wiring.
-
-For **developer-defined** tools (frontend `makeAssistantTool`, backend AI SDK `tool()`, custom tool-call UI), use the [tools](../tools/SKILL.md) skill instead. The two compose: a chat built with `useChatRuntime` can use both app tools and user-connected MCP tools at once.
+- [./references/setup.md](./references/setup.md) -- manager configuration, storage, state, imperative methods, and resource reads
+- [./references/ui.md](./references/ui.md) -- the copied configuration dialog and every manager, server, and add form primitive
+- [./references/oauth.md](./references/oauth.md) -- auth shapes, OAuth callback handling, CIMD, and connection states
 
 ## Mount the manager
 
-`McpManagerResource({ connectors })` builds the `mcp` scope; pass it to `useAui` and wrap the app in `AuiProvider`. Connectors are presets declared with `defineConnector`.
+Declare fixed connectors with `defineConnector`, then extend the nearest `aui` scope with a config. `connectionTimeout` is a manager default in milliseconds. A connector or custom server can override it for its own connect and `listTools()` readiness flow.
 
 ```tsx
 "use client";
-import { AuiProvider, useAui } from "@assistant-ui/react";
+
+import type { ReactNode } from "react";
+import { AuiConfig, AuiProvider, useAui } from "@assistant-ui/react";
 import { McpManagerResource, defineConnector } from "@assistant-ui/react-mcp";
 
 const connectors = [
@@ -48,183 +40,173 @@ const connectors = [
     name: "Weather",
     url: "https://mcp.example.com/weather",
     auth: { type: "none" },
+    connectionTimeout: 10_000,
   }),
 ];
 
-export function Providers({ children }: { children: React.ReactNode }) {
-  const aui = useAui({ mcp: McpManagerResource({ connectors }) });
-  return <AuiProvider value={aui}>{children}</AuiProvider>;
-}
-```
-
-Defaults: `storage` is `McpLocalStorage()`, `oauthRedirectUri` is `${window.location.origin}/mcp/callback`, and `autoConnect` is `true`.
-
-## Drop-in dialog
-
-`McpConfigDialog` is the shadcn dialog that lists connectors and custom servers with inline auth controls and an add form. Drop it anywhere under the provider.
-
-```tsx
-import { McpConfigDialog } from "@/components/assistant-ui/mcp-config";
-
-export default function Page() {
-  return (
-    <header className="flex items-center justify-between">
-      <h1>My app</h1>
-      <McpConfigDialog />
-    </header>
-  );
-}
-```
-
-Pass `children` to override the default trigger: `<McpConfigDialog><Button>Servers</Button></McpConfigDialog>`.
-
-## Compose from primitives
-
-`McpManagerPrimitive` iterates servers; nested `McpServerPrimitive.*` reads each item's scope automatically. Conditional buttons render only when the connection state matches.
-
-```tsx
-"use client";
-import { McpManagerPrimitive, McpServerPrimitive } from "@assistant-ui/react-mcp";
-
-const ServerCard = () => (
-  <McpServerPrimitive.Root>
-    <McpServerPrimitive.Icon />
-    <McpServerPrimitive.Name />
-    <McpServerPrimitive.Status />
-    <McpServerPrimitive.ConnectButton>Connect</McpServerPrimitive.ConnectButton>
-    <McpServerPrimitive.DisconnectButton>Disconnect</McpServerPrimitive.DisconnectButton>
-    <McpServerPrimitive.OAuthLink>Authorize</McpServerPrimitive.OAuthLink>
-    <McpServerPrimitive.RemoveButton>Remove</McpServerPrimitive.RemoveButton>
-    <McpServerPrimitive.Error />
-  </McpServerPrimitive.Root>
-);
-
-export default function McpPage() {
-  return (
-    <McpManagerPrimitive.Root>
-      <h2>Connectors</h2>
-      <McpManagerPrimitive.Connectors>{() => <ServerCard />}</McpManagerPrimitive.Connectors>
-      <h2>Your servers</h2>
-      <McpManagerPrimitive.CustomServers>{() => <ServerCard />}</McpManagerPrimitive.CustomServers>
-      <McpManagerPrimitive.AddCustomTrigger>Add custom server</McpManagerPrimitive.AddCustomTrigger>
-    </McpManagerPrimitive.Root>
-  );
-}
-```
-
-`RemoveButton` is hidden on connectors (presets cannot be removed). Omit `AddCustomTrigger` and `CustomServers` to disable user-added servers. Build the add form with `McpAddFormPrimitive` (`Root`, `NameField`, `UrlField`, `AuthSelect`, `AuthFields`, `Error`, `Submit`, `Cancel`); see [ui.md](./references/ui.md).
-
-## OAuth connect flow
-
-`auth` is one of `{ type: "none" }`, `{ type: "bearer", token? }`, or `{ type: "oauth", scopes?, ... }`. For OAuth, add a callback route at the configured `oauthRedirectUri` and render `McpOAuthCallback` inside the same provider so it can finish the handshake.
-
-```tsx
-"use client";
-import { McpOAuthCallback } from "@assistant-ui/react-mcp";
-import { useRouter } from "next/navigation";
-import { Providers } from "../../providers";
-
-export default function Callback() {
-  const router = useRouter();
-  return (
-    <Providers>
-      <McpOAuthCallback onComplete={() => router.replace("/mcp")} />
-    </Providers>
-  );
-}
-```
-
-See [oauth.md](./references/oauth.md) for the full auth-mode shapes and connection-state values (`connected`, `connecting`, `authRequired`, `authPending`, `error`, `disconnected`).
-
-## Custom storage
-
-Replace the default `McpLocalStorage()` to persist custom servers and auth state on a backend (use `McpMemoryStorage()` for SSR/tests).
-
-```ts
-import { McpManagerResource, McpCustomStorage } from "@assistant-ui/react-mcp";
-
-const aui = useAui({
-  mcp: McpManagerResource({
-    connectors,
-    storage: McpCustomStorage({
-      loadCustomServers: async () => fetch("/api/mcp/servers").then((r) => r.json()),
-      saveCustomServers: async (records) =>
-        fetch("/api/mcp/servers", { method: "PUT", body: JSON.stringify(records) }),
-      loadAuthState: async (id) =>
-        fetch(`/api/mcp/auth/${id}`).then((r) => (r.ok ? r.json() : null)),
-      saveAuthState: async (id, state) =>
-        fetch(`/api/mcp/auth/${id}`, { method: "PUT", body: JSON.stringify(state) }),
-      clearAuthState: async (id) => fetch(`/api/mcp/auth/${id}`, { method: "DELETE" }),
+export function Providers({ children }: { children: ReactNode }) {
+  const aui = useAui();
+  const config = AuiConfig({
+    mcp: McpManagerResource({
+      connectors,
+      connectionTimeout: 15_000,
     }),
-  }),
-});
+  });
+
+  return (
+    <AuiProvider extends={aui} config={config}>
+      {children}
+    </AuiProvider>
+  );
+}
 ```
 
-## Elicitation
+Connectors are application presets and cannot be removed. A custom server is user supplied through `McpAddFormPrimitive` or `aui.mcp.addCustomServer(...)`. Both kinds share state, storage, elicitation, and the tool registration path. See [setup](./references/setup.md) for manager options and storage lifetime rules.
 
-A connected server can ask the user for structured input mid-run. Render the request with `McpElicitationPrimitive`; the parts read the active request and its JSON Schema, so no manual form wiring is needed.
+## Continue after frontend tool calls
+
+The manager registers connected tools automatically. A chat runtime still needs to send completed frontend tool results to the route so the model can continue.
+
+```tsx
+"use client";
+
+import type { ReactNode } from "react";
+import { lastAssistantMessageIsCompleteWithToolCalls } from "ai";
+import { AssistantRuntimeProvider } from "@assistant-ui/react";
+import { useChatRuntime } from "@assistant-ui/ai-sdk";
+
+export function Chat({ children }: { children: ReactNode }) {
+  const runtime = useChatRuntime({
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+  });
+
+  return <AssistantRuntimeProvider runtime={runtime}>{children}</AssistantRuntimeProvider>;
+}
+```
+
+If no chat runtime provides `modelContext`, the manager mounts a minimal one. Use `aui.mcp.server({ id }).callTool(...)` for a direct call in an event handler.
+
+## Use the configuration UI
+
+Install the styled dialog with `npx assistant-ui@latest add mcp-config`. It is a copied runtime connected element, so import it from `@/components/assistant-ui/elements/mcp-config.aui` and render it under the manager provider.
+
+```tsx
+import { McpConfigDialog } from "@/components/assistant-ui/elements/mcp-config.aui";
+
+export function ServerSettings() {
+  return <McpConfigDialog />;
+}
+```
+
+Pass an element as `children` to replace its default trigger. For a settings page, sidebar, or custom add flow, compose the headless primitives in [ui](./references/ui.md).
+
+## Render elicitation requests
+
+An MCP server can request structured input while a tool call is in flight. Render `Items` in the same `mcpServer` scope as the connected server. Set `elicitation: false` on a connector or custom server to opt it out of the protocol capability.
 
 ```tsx
 import { McpElicitationPrimitive } from "@assistant-ui/react-mcp";
 
-<McpElicitationPrimitive.Root>
-  <McpElicitationPrimitive.Message />
-  <McpElicitationPrimitive.Fields>
-    <McpElicitationPrimitive.Items />
-  </McpElicitationPrimitive.Fields>
-  <McpElicitationPrimitive.Error />
-  <McpElicitationPrimitive.Accept>Submit</McpElicitationPrimitive.Accept>
-  <McpElicitationPrimitive.Decline>Decline</McpElicitationPrimitive.Decline>
-  <McpElicitationPrimitive.Cancel>Cancel</McpElicitationPrimitive.Cancel>
-</McpElicitationPrimitive.Root>;
+type FieldSchema = {
+  type?: string;
+  enum?: readonly string[];
+};
+
+export function ElicitationRequests() {
+  return (
+    <McpElicitationPrimitive.Items>
+      {() => (
+        <McpElicitationPrimitive.Root>
+          <McpElicitationPrimitive.Message />
+          <McpElicitationPrimitive.Error />
+          <McpElicitationPrimitive.Fields>
+            {({ name, schema, value, setValue }) => {
+              const field = schema as FieldSchema;
+              if (field.type === "boolean") {
+                return (
+                  <label>
+                    {name}
+                    <input
+                      type="checkbox"
+                      checked={value === true}
+                      onChange={(event) => setValue(event.target.checked)}
+                    />
+                  </label>
+                );
+              }
+              if (field.enum) {
+                return (
+                  <label>
+                    {name}
+                    <select
+                      value={typeof value === "string" ? value : ""}
+                      onChange={(event) => setValue(event.target.value)}
+                    >
+                      {!field.enum.includes("") && <option value="">Select {name}</option>}
+                      {field.enum.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                );
+              }
+              return (
+                <label>
+                  {name}
+                  <input
+                    value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
+                    onChange={(event) => setValue(event.target.value)}
+                  />
+                </label>
+              );
+            }}
+          </McpElicitationPrimitive.Fields>
+          <McpElicitationPrimitive.Accept>Submit</McpElicitationPrimitive.Accept>
+          <McpElicitationPrimitive.Decline>Decline</McpElicitationPrimitive.Decline>
+          <McpElicitationPrimitive.Cancel>Cancel</McpElicitationPrimitive.Cancel>
+        </McpElicitationPrimitive.Root>
+      )}
+    </McpElicitationPrimitive.Items>
+  );
+}
 ```
 
-`useMcpElicitation()` returns the active `MCPElicitation` (`id`, `message`, `requestedSchema`, and a validation `error` when the server rejects a submission). Inside a field, `useMcpElicitationField()` gives `{ name, schema, value, setValue }` for a fully custom input. Drafts are seeded from the schema's defaults.
+The render function receives a separate active request each time. Numeric strings are coerced when valid, while boolean fields must set a boolean. An empty string is unanswered unless the property allows it through an enum member or default, so render enum properties as a select. `Accept` remains disabled for missing required fields and invalid values.
 
-The three responses are distinct: `accept` sends `content`, `decline` refuses this request, `cancel` dismisses it without answering.
+## v1 scope
 
-## Imperative API
-
-Inside event handlers, drive the manager through `useAui().mcp`.
-
-```ts
-const aui = useAui();
-await aui.mcp.addCustomServer({ name, url, auth: { type: "bearer", token } });
-await aui.mcp.server({ id }).connect();
-await aui.mcp.server({ id }).callTool("echo", { text: "hi" });
-```
-
-Read reactive state with `useAuiState`, scoped under `s.mcp` (manager) and `s.mcpServer` (current item inside a `McpServerPrimitive` subtree):
-
-```ts
-const isHydrated = useAuiState((s) => s.mcp.isHydrated);
-const connectionState = useAuiState((s) => s.mcpServer.connectionState);
-```
+This package ships tool listing and invocation, resource listing and reads, form elicitation, OAuth with PKCE and DCR, bearer and no auth, Streamable HTTP transport, and manual connect or disconnect. Prompts, sampling, automatic reconnect with backoff, persisted per tool enablement, per tool consent, and built in token encryption are deferred.
 
 ## Common Gotchas
 
-**Tools not appearing in chat**
-- The server must reach the `connected` state; check `McpServerPrimitive.Status` or `s.mcpServer.connectionState`.
-- Tool names are prefixed `serverId__toolName`; reference that exact name in tool UI.
+**Tools never reach the model**
 
-**OAuth never completes**
-- The callback route path must match `oauthRedirectUri` (default `/mcp/callback`).
-- `McpOAuthCallback` must be rendered inside the same provider as the manager.
+- The server must be `connected`. Its tools are named `serverId__toolName`, not just the MCP tool name.
+- Configure `sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls` on `useChatRuntime` so completed frontend tool calls resume the model.
 
-**Servers not persisting / SSR errors**
-- Default `McpLocalStorage()` needs the browser; use `McpMemoryStorage()` or `McpCustomStorage(...)` on the server.
+**OAuth callback fails or never completes**
 
-**Custom server cannot be removed**
-- `RemoveButton` hides on connector presets by design; only user-added servers are removable.
+- The callback route must exactly match `oauthRedirectUri` and render `McpOAuthCallback` beneath the manager provider.
+- A CIMD only authorization server without a registration endpoint needs a static OAuth `clientId`.
 
-**Elicitation prompt never renders**
-- `McpElicitationPrimitive.Root` renders nothing when there is no active request; mount it inside the same provider as the manager and check `useMcpElicitation()`.
+**Server state leaks across users or a storage swap loses records**
 
-**Transport**
-- Only StreamableHTTP is supported. `listResources()` supports pagination; prompts, sampling, and auto-reconnect are not yet wired.
+- `McpLocalStorage()` is browser only and stores tokens in plain text. Use an HTTP only cookie backed `McpCustomStorage` for production auth state.
+- Do not swap `storage` for another user. Remount the manager because custom server records hydrate only once. See [storage identity](./references/setup.md#storage-and-scope-identity).
+
+**An elicitation form stays blank**
+
+- `Items` renders nothing without pending requests and requires the matching server scope. Confirm that the server is connected and has not set `elicitation: false`.
+
+**A resource browser stops after the first page**
+
+- Pass each returned `nextCursor` to `listResources({ cursor })` until it is absent, then call `readResource(uri)` for a selected item.
 
 ## Related Skills
 
-- [tools](../tools/SKILL.md) -- developer-defined frontend/backend tools and custom tool-call UI (`makeAssistantTool`, AI SDK `tool()`, `makeAssistantToolUI`); the complement to user-managed MCP servers.
-- [setup](../setup/SKILL.md) -- scaffold with the `mcp` template (`npx assistant-ui@latest create -t mcp`) and pick a runtime.
-- [runtime](../runtime/SKILL.md) -- the chat runtime (`useChatRuntime`) that MCP tools are merged into.
+- [tools](../tools/SKILL.md) -- developer owned frontend and backend tools that complement user managed MCP servers
+- [setup](../setup/SKILL.md) -- CLI setup and the `mcp` project template
+- [runtime](../runtime/SKILL.md) -- `useChatRuntime` and runtime provider configuration
+- [elements](../elements/SKILL.md) -- installing and modifying the copied `mcp-config` element

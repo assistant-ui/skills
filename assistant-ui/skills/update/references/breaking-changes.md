@@ -1,140 +1,60 @@
-# Breaking Changes Quick Reference
+# Breaking changes quick reference
 
-Fast lookup for breaking changes by version.
+Use this table to route an error to the full guide. Apply all rows newer than the installed version.
 
-## By Version
+| Version or symptom | Check | Destination |
+| --- | --- | --- |
+| Before 0.8.x | Historical UI package split is excluded from the current upgrade bundle | Install or move copied components through Elements |
+| Before 0.9.x | Edge package split | Run v0-9/edge-package-split |
+| Before 0.11.x | ContentPart names or MessagePrimitive.Content | [assistant-ui.md](./assistant-ui.md#011-contentpart-to-messagepart) |
+| Before 0.12.x | useAssistantApi, context hooks, or kebab-case events | [assistant-ui.md](./assistant-ui.md#012-unified-state-api) |
+| Before 0.14.x | Removed aliases, runtime members, or primitive components props | [assistant-ui.md](./assistant-ui.md#014-removals-and-primitive-children) |
+| Before 0.15.x | aui.thread(), legacy hooks, tools map, mcp-app, or old provider props | [assistant-ui.md](./assistant-ui.md#015-scope-properties-and-removals) |
+| AI SDK v4 or v5 | Data stream runtime, Message, parameters, or toDataStreamResponse | [ai-sdk.md](./ai-sdk.md#v4-and-v5-to-v6) |
+| AI SDK v6 | @assistant-ui/react-ai-sdk, result.toUIMessageStreamResponse(), or needsApproval | [ai-sdk.md](./ai-sdk.md#v6-to-v7) |
+| Legacy tool registration | makeAssistantTool, useAssistantTool, makeAssistantToolUI, or useAssistantToolUI | [assistant-ui.md](./assistant-ui.md#tools-to-toolkits) |
+| LangGraph v0.7 | useCloudThreadListRuntime, onSwitchToThread, or manual thread initialization | [assistant-ui.md](./assistant-ui.md#react-langgraph-v07) |
+| React 18 | A copied shadcn Button does not forward its ref | Wrap Button with React.forwardRef |
+| 0.11 types | TextContentPart, ToolCallContentPart, ContentPartStatus, or related names | Replace ContentPart with MessagePart throughout |
+| 0.11 hooks | useContentPart, useContentPartRuntime, or useTextContentPart | Use the corresponding useMessagePart API |
+| 0.11 providers | ContentPartRuntimeProvider or ContentPartContext | Use the corresponding MessagePart provider or context |
+| 0.11 primitives | ContentPartPrimitive | Use MessagePartPrimitive |
+| 0.11 message rendering | MessagePrimitive.Content | Use MessagePrimitive.Parts |
+| 0.12 state aliases | useAssistantApi or useAssistantState | Use useAui or useAuiState |
+| 0.12 event alias | useAssistantEvent | Use useAuiEvent |
+| 0.12 conditional alias | AssistantIf | Use AuiIf |
+| 0.12 state scope | useThread, useMessage, useComposer, or useAttachment | Select the matching scope through useAuiState |
+| 0.12 action scope | useThreadRuntime, useMessageRuntime, or useComposerRuntime | Start with useAui, then apply the 0.15 property form |
+| 0.12 event name | thread.run-start, thread.run-end, or composer.attachment-add | Use the camelCase event names |
+| 0.14 local runtime | useLocalThreadRuntime | Use useLocalRuntime |
+| 0.14 remote thread list | unstable_useRemoteThreadListRuntime | Use useRemoteThreadListRuntime |
+| 0.14 thread list adapter | unstable_RemoteThreadListAdapter or unstable_InMemoryThreadListAdapter | Use the stable adapter names |
+| 0.14 assistant runtime | runtime.threadList or runtime.switchToThread | Use runtime.threads |
+| 0.14 thread runtime | startRun(parentId), unstable_resumeRun, or getModelConfig | Use the object, stable, or model-context form |
+| 0.14 feedback state | s.message.submittedFeedback | Read s.message.metadata.submittedFeedback |
+| 0.14 external store | getExternalStoreMessage | Use getExternalStoreMessages |
+| 0.14 transport helper | toAISDKTools | Use toToolsJSONSchema from assistant-stream |
+| 0.14 thread messages | ThreadPrimitive.Messages components prop | Use a children render function |
+| 0.14 message parts | MessagePrimitive.Parts components prop | Use a children render function |
+| 0.14 suggestions | ThreadPrimitive.Suggestions components prop | Use a children render function |
+| 0.14 thread list | ThreadListPrimitive.Items components prop | Use a children render function |
+| 0.14 attachments | ComposerPrimitive.Attachments components prop | Use a children render function |
+| 0.15 scope access | aui.thread(), aui.threads(), aui.message(), or aui.composer() | Read the scope property, then call its methods |
+| 0.15 optional scope | A truthiness check for aui.thread | Check aui.thread.source != null |
+| 0.15 legacy hooks | useAssistantRuntime or a context runtime hook | Use useAui or useAuiState with the final property mapping |
+| 0.15 tool UI map | s.tools.tools | Use s.tools.toolUIs |
+| 0.15 part grouping | mcp-app | Use standalone-tool-call |
+| 0.15 provider construction | useAui({ ... }) | Use useAui(), AuiConfig({...}), and config |
+| 0.15 provider prop | AuiProvider value | Use extends plus config |
+| 0.15 runtime provider | AssistantRuntimeProvider aui | Use AssistantRuntimeProvider config |
+| 0.15 thread event | threadListItem.switchedTo or threadListItem.switchedAway | Use threads.selectionChanged |
+| 0.15 primitive conditionals | ThreadPrimitive.If, MessagePrimitive.If, or ThreadPrimitive.Empty | Use AuiIf |
+| 0.15 part hooks | useMessagePartText, useMessagePartReasoning, or another specialized part hook | Select and narrow s.part with useAuiState |
+| 0.15 registry path | @/components/assistant-ui/thread or another retired path | Use @/components/assistant-ui/elements/<name>.aui |
+| 0.15 interactables | useAssistantInteractable, Interactables(), or useInteractableState | Use unstable interactables before the 2026-09-14 removal date |
+| AI SDK v7 package | @assistant-ui/react-ai-sdk in current source | Import from @assistant-ui/ai-sdk |
+| AI SDK v7 route | result.toUIMessageStreamResponse() | Use createUIMessageStreamResponse with toUIMessageStream |
+| AI SDK v7 approval | needsApproval | Configure the call-level toolApproval option |
+| AI SDK agent loop | maxSteps | Use stopWhen: stepCountIs(n) |
 
-| Version | Breaking Change | Migration |
-|---------|-----------------|-----------|
-| **0.15.0** | `aui` scope accessors become properties; v0.12-era legacy context hooks removed; `ToolsState.tools` removed; `"mcp-app"` group key removed; `useAui(clients, { parent })` removed | `aui.thread` not `aui.thread()`; `useAui`/`useAuiState`; `s.tools.toolUIs[n]?.[0]?.render`; `"standalone-tool-call"`; `AuiProvider` |
-| **0.14.0** | `components` prop → children render functions; deprecated hooks/aliases removed | Children render functions; `useAui`/`useAuiState`/`useAuiEvent`/`AuiIf`; drop `unstable_` prefixes |
-| **0.13.0** | `ThreadPrimitive.ViewportSlack` removed | Use `topAnchorMessageClamp` on `ThreadPrimitive.Viewport` |
-| **0.12.0** | Unified state API | Use `useAui`, `useAuiState`, `useAuiEvent`, `AuiIf` |
-| **0.11.0** | Runtime rearchitecture | Use `useAssistantApi`/`useAssistantState` (renamed to `useAui`/`useAuiState` in 0.12) |
-| **0.10.0** | CommonJS dropped | Use ESM, set `"type": "module"` |
-| **0.8.18** | `setResult`/`setArtifact` merged | Use `setResponse({ result, artifact })` |
-| **0.8.0** | UI moved out of core | Use shadcn registry (recommended) or primitives |
-| **0.7.44** | `runtime.switchToThread()` moved | Use `runtime.threads.switchToThread()` |
-| **0.7.44** | `runtime.threadList` renamed | Use `runtime.threads` |
-| **0.7.0** | Deprecated features dropped | Update to non-deprecated APIs |
-| **0.5.74** | `maxToolRoundtrips` renamed | Use `maxSteps` |
-| **0.4.0** | `AssistantMessage` renamed | Use `ThreadAssistantMessage` |
-| **0.4.0** | `UserMessage` renamed | Use `ThreadUserMessage` |
-| **0.3.0** | `Message.InProgress` dropped | Use message status |
-| **0.2.0** | `MessagePartText` renders as `<p>` | Adjust CSS |
-
-## By Pattern
-
-### Import Changes
-
-```diff
-# Styled components (0.8.0+) - use shadcn registry (recommended)
-- import { Thread } from "@assistant-ui/react";
-+ import { Thread } from "@/components/assistant-ui/thread";
-# Note: Run `npx assistant-ui add thread` to install
-
-# Message types (0.4.0+)
-- import type { AssistantMessage, UserMessage } from "@assistant-ui/react";
-+ import type { ThreadAssistantMessage, ThreadUserMessage } from "@assistant-ui/react";
-
-# AI SDK v6+ (react-ai-sdk 1.0+)
-- import { useChat } from "ai/react";
-- import { useAISDKRuntime } from "@assistant-ui/react-ai-sdk";
-+ import { useChatRuntime, AssistantChatTransport } from "@assistant-ui/react-ai-sdk";
-```
-
-### API Changes
-
-```diff
-# Thread switching (0.7.44+)
-- runtime.switchToThread(id);
-- runtime.switchToNewThread();
-- runtime.threadList
-+ runtime.threads.switchToThread(id);
-+ runtime.threads.switchToNewThread();
-+ runtime.threads
-
-# Tool response (0.8.18+)
-- tool.setResult(result);
-- tool.setArtifact(artifact);
-+ tool.setResponse({ result, artifact });
-
-# State access (0.11.0+)
-- const { messages } = useThread();
-+ const messages = useAuiState(s => s.thread.messages);
-
-# Actions (0.11.0+)
-- useThreadActions().append(...)
-+ useAui().thread.append(...)
-
-# Scope accessors are properties (0.15.0+)
-- aui.thread().getState();
-- aui.threads().switchToNewThread();
-+ aui.thread.getState();
-+ aui.threads.switchToNewThread();
-
-# Tool UI registry (0.15.0+)
-- useAuiState((s) => s.tools.tools[toolName]?.[0]);
-+ useAuiState((s) => s.tools.toolUIs[toolName]?.[0]?.render);
-
-# Part grouping (0.15.0+)
-- groupPartByType({ "mcp-app": [] });
-+ groupPartByType({ "standalone-tool-call": [] });
-```
-
-### Config Changes
-
-```diff
-# Tool steps (0.5.74+)
-- maxToolRoundtrips: 5,
-+ maxSteps: 5,
-```
-
-## Search Commands
-
-Find code needing updates:
-
-```bash
-# All breaking patterns
-grep -rn "runtime\.switchToThread\|runtime\.threadList\|AssistantMessage[^C]\|UserMessage[^C]\|setResult\|setArtifact\|maxToolRoundtrips" --include="*.tsx" --include="*.ts"
-
-# Specific version checks
-grep -rn "from ['\"]@assistant-ui/react['\"]" --include="*.tsx" | grep -v Primitive  # 0.8.0
-grep -rn "Message\.InProgress" --include="*.tsx"  # 0.3.0
-```
-
-## AI SDK Changes (Separate)
-
-See [./ai-sdk-v6.md](./ai-sdk-v6.md) for the v4/v5 → v6 migration, which is still the bulk of the work for older projects:
-
-| Old (v4/v5) | v6 |
-|-----|-----|
-| `maxSteps` | `stopWhen: stepCountIs(n)` |
-| `parameters` | `inputSchema` (in `tool()`) |
-| `toDataStreamResponse()` | `toUIMessageStreamResponse()` |
-| `generateObject()` | `generateText() + Output.object()` |
-| `CoreMessage` | `ModelMessage` |
-| `Message` | `UIMessage` |
-
-v6 → v7 is a much smaller step, but the route response and the `@ai-sdk/*` major line both move:
-
-| v6 | v7 |
-|----|----|
-| `ai@^6`, `@ai-sdk/react@^3`, `@ai-sdk/openai@^3` | `ai@^7`, `@ai-sdk/react@^4`, `@ai-sdk/openai@^4` |
-| `result.toUIMessageStreamResponse()` | `createUIMessageStreamResponse({ stream: toUIMessageStream({ stream: result.stream }) })` (the method still compiles but is deprecated) |
-| `inputSchema: z.object({...})` | `inputSchema: zodSchema(z.object({...}))` |
-| n/a | `toolApproval` call-level option + `lastAssistantMessageIsCompleteWithApprovalResponses` |
-
-## Version Compatibility
-
-Current latest: `@assistant-ui/react` 0.15.x, `@assistant-ui/react-ai-sdk` 1.4.x, `@assistant-ui/core` 0.3.x, `@assistant-ui/store` 0.3.x, `assistant-stream` 0.3.x.
-
-| @assistant-ui/react | react-ai-sdk | AI SDK | Zod |
-|---------------------|--------------|--------|-----|
-| 0.15.x | 1.4.x | 7.x | 3.25+ or 4.x |
-| 0.14.x | 1.3.x | 6.x | 3.25+ or 4.x |
-| 0.12.x to 0.13.x | 1.3.x | 6.x | 3.25+ or 4.x |
-| 0.11.x | 1.2.x | 6.x | 3.25+ or 4.x |
-| 0.10.x | 0.x | 4.x to 5.x | 3.x |
-| 0.8.x to 0.9.x | 0.x | 4.x | 3.x |
-| < 0.8.0 | 0.x | 4.x | 3.x |
+The current target is @assistant-ui/react 0.15.x, @assistant-ui/ai-sdk 0.0.x, ai 7.x, and @ai-sdk/react 4.x. Run npx assistant-ui@latest doctor and npx assistant-ui@latest info when a dependency mismatch remains.
