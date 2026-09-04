@@ -1,196 +1,188 @@
 # MessagePrimitive
 
-Individual message display.
+Renders a single message: its content parts, attachments, quote, hover state, and error display. `Root` renders a `<div>` that provides message context and tracks hover (consumed by `ActionBarPrimitive` for auto hide, no extra wiring needed).
 
 ## Parts
 
-| Part | Description |
-|------|-------------|
-| `.Root` | Message container |
-| `.Parts` | Message body with parts (canonical) |
-| `.Content` | Message body with parts |
-| `.If` | Conditional rendering (deprecated; prefer `AuiIf`) |
-| `.Error` | Render fallback when message has an error |
-| `.PartByIndex` | Render a single part by index |
-| `.Attachments` | Render message attachments |
-| `.AttachmentByIndex` | Render one attachment by index |
+| Part | Renders | Notes |
+|------|---------|-------|
+| `.Root` | `<div>` | Message container; sets `data-message-id`, tracks hover. |
+| `.Parts` | list | The canonical parts renderer. `.Content` is a deprecated alias. |
+| `.PartByIndex` | one part | `index` plus `components={{ Text, Image, ... }}`. |
+| `.GroupedParts` | list | Adjacent grouping (chain of thought, tool groups). See [part-grouping.md](./part-grouping.md). |
+| `.Unstable_PartsGrouped` / `.Unstable_PartsGroupedByParentId` | list | Non adjacent grouping, unstable. See [part-grouping.md](./part-grouping.md). |
+| `.Attachments` | list | User message attachments, read only. Children render function `{ attachment }`. |
+| `.AttachmentByIndex` | one attachment | `index` plus `components={{ Attachment }}`. |
+| `.Quote` | conditional | Renders quote metadata when the message carries one. Place above `.Parts`. |
+| `.Error` | conditional | Renders children only when the message has an error. |
+| `.GenerativeUI` | generative UI | Renders the message's generative UI parts. |
+| `.If` | conditional | Deprecated. Use `AuiIf`. |
 
-## Basic Structure
+## Part types
 
-```tsx
-<MessagePrimitive.Root>
-  <Avatar src="/user-avatar.png" />
-  <MessagePrimitive.Parts />
-</MessagePrimitive.Root>
-```
+Which bucket a part falls into decides how it grows over time.
 
-## MessagePrimitive.Root
+| Kind | Parts | Grows by |
+|------|-------|----------|
+| Modality | `text`, `image`, `file` | Never. `file` carries every non image binary modality through its `mimeType`; the payload is inline base64 or a URL. |
+| Provider channel | `reasoning`, `source`, `tool-call`, `generative-ui` | Never. Each mirrors a channel the model already emits. |
+| Extensibility | `data` | Freely, routed by `name`. This is the growth path for anything app level. |
 
-Container for a single message.
+`Unstable_AudioMessagePart` and the `Unstable_Audio` slot are deprecated: send audio as a `file` part with an `audio/*` mime type and a filename instead. Adapter coverage for the `file` path is uneven, check your runtime's converter before relying on it.
 
-```tsx
-<MessagePrimitive.Root
-  className="flex gap-2 mb-4"
-  data-role="user"  // or "assistant"
->
-  {children}
-</MessagePrimitive.Root>
-```
+## Tool and data resolution
 
-## MessagePrimitive.Parts
-
-Renders message content parts (text, images, tool calls, etc.). `MessagePrimitive.Parts` is canonical; `MessagePrimitive.Content` is a deprecated alias. As of 0.14 it takes a children render function that receives `{ part }`; the `components` prop still works but is deprecated.
+Inside the `children` render function, tool call and data parts expose resolved UI helpers directly:
 
 ```tsx
-<MessagePrimitive.Parts />
-
 <MessagePrimitive.Parts>
   {({ part }) => {
-    switch (part.type) {
-      case "text":
-        return <p className="whitespace-pre-wrap">{part.text}</p>;
-      case "image":
-        return <img src={part.image} alt="" className="max-w-full rounded" />;
-      case "tool-call":
-        return (
-          part.toolUI ?? (
-            <div className="bg-gray-100 rounded p-2">
-              <strong>{part.toolName}</strong>
-              {part.result && <pre>{JSON.stringify(part.result, null, 2)}</pre>}
-            </div>
-          )
-        );
-      case "reasoning":
-        return (
-          <details className="text-gray-500">
-            <summary>Thinking...</summary>
-            <p>{part.text}</p>
-          </details>
-        );
-      case "source":
-        return (
-          <a href={part.url} className="text-blue-500">
-            {part.title}
-          </a>
-        );
-      case "file":
-        return (
-          <a
-            href={`data:${part.mimeType};base64,${part.data}`}
-            download={part.filename ?? "file"}
-          >
-            📄 {part.filename ?? "file"}
-          </a>
-        );
-      default:
-        return null; // registered tool/data UIs still render
-    }
+    if (part.type === "tool-call") return part.toolUI ?? <ToolFallback {...part} />;
+    if (part.type === "data") return part.dataRendererUI ?? null;
+    return null;
   }}
 </MessagePrimitive.Parts>
 ```
 
-### Part Types
+`part.toolUI` and `part.dataRendererUI` resolve in this order: an inline `tools.Override` (deprecated `components` prop) wins over everything; then a toolkit's globally registered `render` (see [tools](../../tools/SKILL.md)); then a per `.Parts` `tools.by_name[toolName]` inline override; then `tools.Fallback`. Returning `null` from your `children` function still lets a registered UI render; return `<></>` to suppress it outright.
 
-| Type | Description | Properties |
-|------|-------------|------------|
-| `Text` | Plain text | `text` |
-| `Image` | Image attachment | `image` (URL) |
-| `ToolCall` | Tool invocation | `toolName`, `args`, `argsText`, `result?`, `isError?`, `artifact?` |
-| `Reasoning` | Chain-of-thought | `text` |
-| `Source` | Citation/reference | `url`, `title` |
-| `File` | File attachment | `filename?`, `data`, `mimeType` |
+## MessagePartPrimitive
 
-## MessagePrimitive.If / AuiIf
+Inside a custom part component, these sub primitives read the current part's content:
 
-`MessagePrimitive.If` still exists but is deprecated. Prefer `AuiIf` for the most flexible state checks.
+| Part | Renders | Notes |
+|------|---------|-------|
+| `.Text` | text | `smooth` prop for a token by token reveal; `[data-status]` is `"running"`, `"complete"`, or `"incomplete"`. |
+| `.Image` | `<img>` | Renders the current image part. |
+| `.InProgress` | conditional | Renders children only while the current part is still streaming. |
+| `.Messages` | nested list | Renders a nested message list carried by the current part (parts that embed sub messages, for example multi agent output). |
 
 ```tsx
-<MessagePrimitive.If user>User message content</MessagePrimitive.If>
-<MessagePrimitive.If assistant>Assistant message content</MessagePrimitive.If>
-<MessagePrimitive.If system>System message content</MessagePrimitive.If>
-<MessagePrimitive.If hasBranches>
-  <BranchPickerPrimitive.Root>...</BranchPickerPrimitive.Root>
-</MessagePrimitive.If>
-
-<MessagePrimitive.If copied>Copied</MessagePrimitive.If>
-<MessagePrimitive.If speaking>Playing speech</MessagePrimitive.If>
-<MessagePrimitive.If submittedFeedback="positive">Positive feedback</MessagePrimitive.If>
-```
-
-When you need custom conditions (for example branch metadata), use `AuiIf`:
-
-```tsx
-<AuiIf condition={({ message }) => message.branchCount > 1}>
-  <BranchPickerPrimitive.Root>...</BranchPickerPrimitive.Root>
-</AuiIf>
-
-<AuiIf condition={({ message }) => message.isCopied}>
-  <CheckIcon />
-</AuiIf>
-```
-
-## Complete Example
-
-```tsx
-function CustomUserMessage() {
+function MyText() {
   return (
-    <MessagePrimitive.Root className="flex justify-end mb-4">
-      <Avatar
-        fallback="U"
-        className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center ml-2"
-      />
-      <div className="max-w-[80%]">
-        <div className="bg-blue-500 text-white rounded-2xl rounded-tr-sm px-4 py-2">
-          <MessagePrimitive.Parts />
-        </div>
-      </div>
-    </MessagePrimitive.Root>
-  );
-}
-
-function CustomAssistantMessage() {
-  return (
-    <MessagePrimitive.Root className="flex mb-4">
-      <Avatar
-        src="/ai-avatar.png"
-        fallback="AI"
-        className="w-8 h-8 rounded-full mr-2 shrink-0"
-      />
-
-      <div className="max-w-[80%]">
-        <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-2">
-          <MessagePrimitive.Parts />
-        </div>
-      </div>
-
-      <ActionBarPrimitive.Root className="flex gap-2 mt-1 opacity-0 hover:opacity-100 transition-opacity">
-        <ActionBarPrimitive.Copy className="text-xs text-gray-500 hover:text-gray-700">
-          Copy
-        </ActionBarPrimitive.Copy>
-        <ActionBarPrimitive.Reload className="text-xs text-gray-500 hover:text-gray-700">
-          Regenerate
-        </ActionBarPrimitive.Reload>
-        <ActionBarPrimitive.Speak className="text-xs text-gray-500 hover:text-gray-700">
-          🔊
-        </ActionBarPrimitive.Speak>
-      </ActionBarPrimitive.Root>
-    </MessagePrimitive.Root>
+    <p className="whitespace-pre-wrap">
+      <MessagePartPrimitive.Text />
+      <MessagePartPrimitive.InProgress>
+        <span className="animate-pulse">▊</span>
+      </MessagePartPrimitive.InProgress>
+    </p>
   );
 }
 ```
 
-## Error and branching support
+## Attachments
 
-Use `MessagePrimitive.Error` to render a fallback UI only when the message has an error:
+`MessagePrimitive.Attachments` renders sent, read only attachments (composer side pending attachments are a different iterator: `ComposerPrimitive.Attachments`, see [composer-input.md](./composer-input.md)). `AttachmentPrimitive.Remove` throws `"Message attachments cannot be removed"` here; only render it inside a composer.
 
 ```tsx
-<MessagePrimitive.Error>
-  <ErrorPrimitive.Root>
+<MessagePrimitive.Attachments>
+  {({ attachment }) => {
+    if (attachment.type === "image") {
+      const imageSrc = attachment.content?.find((p) => p.type === "image")?.image;
+      return imageSrc ? <img src={imageSrc} alt={attachment.name} className="max-w-xs rounded-lg" /> : null;
+    }
+    return <div className="rounded-lg border p-2 text-sm">{attachment.name}</div>;
+  }}
+</MessagePrimitive.Attachments>
+```
+
+## Patterns
+
+### Custom text rendering
+
+```tsx
+function MarkdownText() {
+  return (
+    <div className="prose prose-sm">
+      <MessagePartPrimitive.Text />
+    </div>
+  );
+}
+
+<MessagePrimitive.Parts>
+  {({ part }) => (part.type === "text" ? <MarkdownText /> : null)}
+</MessagePrimitive.Parts>
+```
+
+### Tool UI with by_name (deprecated components prop)
+
+```tsx
+<MessagePrimitive.Parts
+  components={{
+    tools: {
+      by_name: {
+        get_weather: ({ result }) => (
+          <div className="rounded-lg border p-3">
+            <p className="font-medium">Weather</p>
+            <p>{result?.temperature}°F, {result?.condition}</p>
+          </div>
+        ),
+      },
+      Fallback: ({ toolName, status }) => (
+        <div className="text-muted-foreground text-sm">
+          {status.type === "running" ? `Running ${toolName}...` : `${toolName} completed`}
+        </div>
+      ),
+    },
+  }}
+/>
+```
+
+New code should register a toolkit's `render` instead of an inline `by_name` map. See [tools](../../tools/SKILL.md).
+
+### Error display
+
+```tsx
+import { ErrorPrimitive, MessagePrimitive } from "@assistant-ui/react";
+
+<MessagePrimitive.Root>
+  <MessagePrimitive.Parts />
+  <ErrorPrimitive.Root className="mt-2 rounded-md bg-destructive/10 p-2 text-sm text-destructive" role="alert">
     <ErrorPrimitive.Message />
   </ErrorPrimitive.Root>
-</MessagePrimitive.Error>
+</MessagePrimitive.Root>
 ```
 
-## Accessing Message State
+`ErrorPrimitive.Root` always renders its `<div role="alert">`; `.Message` auto reads the error text from message state and returns `null` when there is none, or renders your `children` instead if you pass them. `MessagePrimitive.Error` is the simpler alternative: it renders `children` only when the message has an error, with no `role="alert"` and no automatic text.
 
-Read message state with `useAuiState((s) => s.message...)` and act via `useAui().message` (e.g. `.reload()`). On assistant messages `s.message.status` is an object; branch on `status.type`. See the `/runtime` skill for the full state API.
+### Render after the stream completes
+
+Gate a follow up card, feedback prompt, or generated component on the assistant message having actually finished, so it never flickers through partial states:
+
+```tsx
+<AuiIf
+  condition={(s) => s.message.role === "assistant" && s.message.status?.type === "complete"}
+>
+  <FollowUpCard />
+</AuiIf>
+```
+
+`s.message.status` is a discriminated union (`running | requires-action | complete | incomplete`) defined only on assistant messages; the `role === "assistant"` guard keeps the predicate type safe.
+
+### Role based styling
+
+`MessagePrimitive.Root` sets `data-message-id` but not a role attribute. Set your own from the branch you already took in `ThreadPrimitive.Messages`:
+
+```tsx
+function UserMessage() {
+  return (
+    <MessagePrimitive.Root data-role="user" className="flex justify-end">
+      <MessagePrimitive.Parts />
+    </MessagePrimitive.Root>
+  );
+}
+```
+
+## Common Gotchas
+
+**A part type renders nothing**
+- `MessagePrimitive.Parts` with no `children` falls back to sensible defaults (`text` as a `<p>`, `image` via `MessagePartPrimitive.Image`); reasoning, source, file, audio, and unregistered tool or data parts render nothing. Add a case for every part type your backend can produce.
+
+**`GenerativeUI` and `.Parts` seem to double render**
+- `MessagePrimitive.GenerativeUI` is a dedicated primitive for generative UI parts, a sibling to `.Parts` and `.Attachments` rather than a slot inside the deprecated `components` map. Render it alongside `.Parts` (or return it from the `generative-ui` case in your `children` function), not both a custom case and the standalone primitive for the same parts.
+
+**`ActionBarPrimitive` or `BranchPickerPrimitive` throws "must be used within..."**
+- Both read state from the nearest `MessagePrimitive.Root`. Render them inside your message component, not beside it.
+
+**Audio never renders**
+- `Unstable_AudioMessagePart` is deprecated and user only. Send and render audio as a `file` part with an `audio/*` `mimeType` instead.

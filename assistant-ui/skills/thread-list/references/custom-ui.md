@@ -1,406 +1,176 @@
 # Custom Thread List UI
 
-Build custom thread list interfaces.
+Use primitives when the installed element's built in search, day groups, layout, or action menu does not match the product. They need an `AssistantRuntimeProvider` ancestor and establish item scope as the list iterates.
 
 ## Contents
 
-- [Using Primitives](#using-primitives)
-- [Fully Custom with Hooks](#fully-custom-with-hooks)
-- [With Search](#with-search)
-- [With Drag and Drop](#with-drag-and-drop)
-- [Modal/Dropdown Style](#modaldropdown-style)
-- [With Categories/Folders](#with-categoriesfolders)
+- [Primitive inventory](#primitive-inventory)
+- [Build a list](#build-a-list)
+- [Load more](#load-more)
+- [Search and grouping](#search-and-grouping)
+- [Installed element composition](#installed-element-composition)
 
-## Using Primitives
+## Primitive Inventory
+
+The API reference pages cover three namespaces. All button and menu parts accept `asChild` where their reference says so, which is how an action primitive can supply behavior to a menu item.
+
+### ThreadListPrimitive
+
+| Part | Renders | Use |
+| --- | --- | --- |
+| `Root` | `div` | Container and list keyboard focus group |
+| `New` | `button` | Selects a fresh placeholder thread and has `data-active` while it is current |
+| `Items` | No fixed wrapper | Iterates regular rows, supplying the item scope to its children render function |
+| `ItemByIndex` | No fixed element | Renders one row at an index for a custom arrangement |
+| `LoadMore` | `button` | Appends the next page and disables when loading or no `nextCursor` exists |
+
+### ThreadListItemPrimitive
+
+| Part | Renders | Use |
+| --- | --- | --- |
+| `Root` | `div` | Provides one item scope, `data-active`, and `aria-current` for the selected thread |
+| `Trigger` | `button` | Selects this thread |
+| `Title` | React fragment | Renders the title or its `fallback` without a wrapper element |
+| `Archive` | `button` | Archives this thread and disables when unavailable |
+| `Unarchive` | `button` | Restores this archived thread and disables when unavailable |
+| `Delete` | `button` | Deletes this thread and disables when unavailable |
+
+### ThreadListItemMorePrimitive
+
+| Part | Renders | Use |
+| --- | --- | --- |
+| `Root` | No fixed element | Overflow menu root; `sharedFocusGroup` makes it part of list arrow key navigation and non modal |
+| `Trigger` | `button` | Opens the overflow menu |
+| `Content` | Portaled `div` | Positioned dropdown panel |
+| `Item` | `div` | Menu item slot, usually wrapped in an action primitive with `asChild` |
+| `Separator` | `div` | Visual separator between menu item groups |
+
+`ThreadListPrimitive.Items` should use its children render function. The old `components` API is deprecated. `ItemByIndex` remains available for the installed element's specialized grouping but does not replace the render function for a normal custom list.
+
+## Build a List
+
+Use `Items` for regular conversations and the `archived` prop for the archived section. Each rendered child is already inside the matching `threadListItem` scope, so nested primitives and `useAuiState((s) => s.threadListItem...)` read the correct row.
 
 ```tsx
 import {
-  ThreadListPrimitive,
+  ThreadListItemMorePrimitive,
   ThreadListItemPrimitive,
+  ThreadListPrimitive,
 } from "@assistant-ui/react";
 
-function CustomThreadList() {
+function ThreadRow() {
   return (
-    <ThreadListPrimitive.Root className="flex flex-col h-full">
-      <ThreadListPrimitive.New className="m-2 p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
-        + New Conversation
-      </ThreadListPrimitive.New>
-
-      <div className="flex-1 overflow-y-auto">
-        <ThreadListPrimitive.Items>
-          {() => <CustomThreadItem />}
-        </ThreadListPrimitive.Items>
-      </div>
-
-      <div className="border-t p-2">
-        <h3 className="text-sm text-gray-500 mb-2">Archived</h3>
-        <ThreadListPrimitive.Items archived>
-          {() => <CustomThreadItem archived />}
-        </ThreadListPrimitive.Items>
-      </div>
-    </ThreadListPrimitive.Root>
-  );
-}
-
-function CustomThreadItem({ archived = false }) {
-  return (
-    <ThreadListItemPrimitive.Root className="group flex items-center p-2 rounded hover:bg-gray-100">
-      <ThreadListItemPrimitive.Trigger className="flex-1 text-left truncate">
-        <ThreadListItemPrimitive.Title />
+    <ThreadListItemPrimitive.Root className="group flex items-center">
+      <ThreadListItemPrimitive.Trigger className="min-w-0 flex-1 text-left">
+        <ThreadListItemPrimitive.Title fallback="New conversation" />
       </ThreadListItemPrimitive.Trigger>
-
-      <div className="hidden group-hover:flex gap-1">
-        {archived ? (
-          <ThreadListItemPrimitive.Unarchive className="p-1 text-gray-500 hover:text-green-600">
-            ↩️
-          </ThreadListItemPrimitive.Unarchive>
-        ) : (
-          <ThreadListItemPrimitive.Archive className="p-1 text-gray-500 hover:text-yellow-600">
-            📁
+      <ThreadListItemMorePrimitive.Root sharedFocusGroup>
+        <ThreadListItemMorePrimitive.Trigger>
+          More
+        </ThreadListItemMorePrimitive.Trigger>
+        <ThreadListItemMorePrimitive.Content>
+          <ThreadListItemPrimitive.Archive asChild>
+            <ThreadListItemMorePrimitive.Item>
+              Archive
+            </ThreadListItemMorePrimitive.Item>
           </ThreadListItemPrimitive.Archive>
-        )}
-        <ThreadListItemPrimitive.Delete className="p-1 text-gray-500 hover:text-red-600">
-          🗑️
-        </ThreadListItemPrimitive.Delete>
-      </div>
+          <ThreadListItemMorePrimitive.Separator />
+          <ThreadListItemPrimitive.Delete asChild>
+            <ThreadListItemMorePrimitive.Item>
+              Delete
+            </ThreadListItemMorePrimitive.Item>
+          </ThreadListItemPrimitive.Delete>
+        </ThreadListItemMorePrimitive.Content>
+      </ThreadListItemMorePrimitive.Root>
     </ThreadListItemPrimitive.Root>
   );
 }
-```
 
-## Fully Custom with Hooks
-
-```tsx
-import { useAui, useAuiState } from "@assistant-ui/react";
-
-function FullyCustomThreadList() {
-  const api = useAui();
-  const { threads, archivedThreads, mainThreadId, isLoading } = useAuiState((s) => ({
-    threads: s.threads.threadIds,
-    archivedThreads: s.threads.archivedThreadIds,
-    mainThreadId: s.threads.mainThreadId,
-    isLoading: s.threads.isLoading,
-  }));
-
-  if (isLoading) return <LoadingSpinner />;
-
+function ArchivedThreadRow() {
   return (
-    <div className="w-64 h-full bg-gray-50">
-      <div className="p-4 border-b">
-        <button
-          onClick={() => api.threads.switchToNewThread()}
-          className="w-full py-2 bg-blue-500 text-white rounded-lg"
-        >
-          New Chat
-        </button>
-      </div>
-
-      <nav className="p-2 space-y-1">
-        {threads.map((threadId) => (
-          <ThreadItem
-            key={threadId}
-            id={threadId}
-            isActive={threadId === mainThreadId}
-          />
-        ))}
-      </nav>
-
-      {archivedThreads.length > 0 && (
-        <div className="border-t mt-4 pt-4 px-2">
-          <h3 className="text-xs text-gray-500 uppercase mb-2">Archived</h3>
-          {archivedThreads.map((threadId) => (
-            <ThreadItem key={threadId} id={threadId} archived />
-          ))}
-        </div>
-      )}
-    </div>
+    <ThreadListItemPrimitive.Root>
+      <ThreadListItemPrimitive.Trigger>
+        <ThreadListItemPrimitive.Title fallback="New conversation" />
+      </ThreadListItemPrimitive.Trigger>
+      <ThreadListItemPrimitive.Unarchive>
+        Restore
+      </ThreadListItemPrimitive.Unarchive>
+    </ThreadListItemPrimitive.Root>
   );
 }
 
-function ThreadItem({
-  id,
-  isActive = false,
-  archived = false,
-}: {
-  id: string;
-  isActive?: boolean;
-  archived?: boolean;
-}) {
-  const api = useAui();
-  const item = api.threads.item({ id });
-  const state = item.getState();
-  const [isEditing, setIsEditing] = useState(false);
-  const [title, setTitle] = useState(state.title || "");
-
-  const handleRename = async () => {
-    item.rename(title);
-    setIsEditing(false);
-  };
-
+export function CustomThreadList() {
   return (
-    <div
-      className={`group flex items-center p-2 rounded cursor-pointer ${
-        isActive ? "bg-blue-100" : "hover:bg-gray-100"
-      }`}
-      onClick={() => item.switchTo()}
-    >
-      {isEditing ? (
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={handleRename}
-          onKeyDown={(e) => e.key === "Enter" && handleRename()}
-          className="flex-1 px-2 py-1 text-sm border rounded"
-          autoFocus
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <>
-          <span className="flex-1 truncate text-sm">
-            {state.title || "Untitled"}
-          </span>
-          <div className="hidden group-hover:flex gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsEditing(true);
-              }}
-              className="p-1 text-gray-400 hover:text-gray-600"
-            >
-              ✏️
-            </button>
-            {archived ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  item.unarchive();
-                }}
-                className="p-1 text-gray-400 hover:text-green-600"
-              >
-                ↩️
-              </button>
-            ) : (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  item.archive();
-                }}
-                className="p-1 text-gray-400 hover:text-yellow-600"
-              >
-                📁
-              </button>
-            )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm("Delete this conversation?")) {
-                  item.delete();
-                }
-              }}
-              className="p-1 text-gray-400 hover:text-red-600"
-            >
-              🗑️
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+    <ThreadListPrimitive.Root>
+      <ThreadListPrimitive.New>New conversation</ThreadListPrimitive.New>
+      <h2>Recent</h2>
+      <ThreadListPrimitive.Items>
+        {() => <ThreadRow />}
+      </ThreadListPrimitive.Items>
+      <h2>Archived</h2>
+      <ThreadListPrimitive.Items archived>
+        {() => <ArchivedThreadRow />}
+      </ThreadListPrimitive.Items>
+    </ThreadListPrimitive.Root>
   );
 }
 ```
 
-## With Search
+`sharedFocusGroup` lets Up and Down move between rows and Right reach the menu trigger. It makes the dropdown non modal. Omit it when a conventional modal menu is more appropriate.
+
+## Load More
+
+Return `nextCursor` from a `RemoteThreadListAdapter.list()` page, then add the primitive at the end of the list. It performs the command and disabled state handling.
 
 ```tsx
-function SearchableThreadList() {
-  const [search, setSearch] = useState("");
-  const api = useAui();
-  const { threads, mainThreadId } = useAuiState((s) => ({
-    threads: s.threads.threadIds,
-    mainThreadId: s.threads.mainThreadId,
-  }));
+import { ThreadListPrimitive } from "@assistant-ui/react";
 
-  const filteredThreads = threads.filter((id) => {
-    if (!search) return true;
-    const item = api.threads.item({ id }).getState();
-    return item.title?.toLowerCase().includes(search.toLowerCase());
-  });
-
+export function PaginatedThreadList() {
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-2">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search conversations..."
-          className="w-full px-3 py-2 border rounded-lg"
-        />
-      </div>
-
-      <button
-        onClick={() => api.threads.switchToNewThread()}
-        className="mx-2 py-2 bg-blue-500 text-white rounded-lg"
-      >
-        + New Chat
-      </button>
-
-      <div className="flex-1 overflow-y-auto p-2">
-        {filteredThreads.length === 0 ? (
-          <p className="text-gray-500 text-center py-4">No results</p>
-        ) : (
-          filteredThreads.map((id) => (
-            <ThreadItem
-              key={id}
-              id={id}
-              isActive={id === mainThreadId}
-            />
-          ))
-        )}
-      </div>
-    </div>
+    <ThreadListPrimitive.Root>
+      <ThreadListPrimitive.Items>
+        {() => <ThreadRow />}
+      </ThreadListPrimitive.Items>
+      <ThreadListPrimitive.LoadMore>Load more</ThreadListPrimitive.LoadMore>
+    </ThreadListPrimitive.Root>
   );
 }
 ```
 
-## With Drag and Drop
+For viewport driven pagination, observe an application owned sentinel and call `aui.threads.loadMore()` only while `s.threads.hasMore` is true and the list is not loading. The primitive intentionally leaves intersection behavior to the application.
+
+## Search and Grouping
+
+The installed runtime `ThreadList` has built in case insensitive title search once the list contains a conversation. It filters untitled rows as `New Chat`, shows `No threads found` for an empty match, and groups visible rows by `lastMessageAt` under Today, Yesterday, and Earlier only when timestamps exist.
+
+For another search or grouping rule, select the stable `threadItems` reference and transform it outside the selector. That preserves `useAuiState` subscription semantics.
 
 ```tsx
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { useAuiState } from "@assistant-ui/react";
 
-function DraggableThreadList() {
-  const api = useAui();
-  const { threads } = useAuiState((s) => ({ threads: s.threads.threadIds }));
-  const [orderedThreads, setOrderedThreads] = useState(threads);
-
-  useEffect(() => {
-    setOrderedThreads(threads);
-  }, [threads]);
-
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
-
-    const items = Array.from(orderedThreads);
-    const [reordered] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reordered);
-
-    setOrderedThreads(items);
-    // Optionally persist order to backend
-  };
-
-  return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <Droppable droppableId="threads">
-        {(provided) => (
-          <div ref={provided.innerRef} {...provided.droppableProps}>
-            {orderedThreads.map((id, index) => (
-              <Draggable key={id} draggableId={id} index={index}>
-                {(provided) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                  >
-                    <ThreadItem id={id} />
-                  </div>
-                )}
-              </Draggable>
-            ))}
-            {provided.placeholder}
-          </div>
-        )}
-      </Droppable>
-    </DragDropContext>
+export function ProjectThreadTitles({ query }: { query: string }) {
+  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const normalizedQuery = query.toLowerCase();
+  const visibleItems = threadItems.filter((item) =>
+    (item.title ?? "New Chat").toLowerCase().includes(normalizedQuery),
   );
-}
-```
-
-## Modal/Dropdown Style
-
-```tsx
-function ThreadDropdown() {
-  const [open, setOpen] = useState(false);
-  const api = useAui();
-  const { threads, mainThreadId, currentItem } = useAuiState((s) => ({
-    threads: s.threads.threadIds,
-    mainThreadId: s.threads.mainThreadId,
-    currentItem: s.threadListItem,
-  }));
 
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="px-4 py-2 border rounded-lg flex items-center gap-2"
-      >
-        <span>{currentItem?.title || "Select Thread"}</span>
-        <span>{open ? "▲" : "▼"}</span>
-      </button>
-
-      {open && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white border rounded-lg shadow-lg z-50">
-          <button
-            onClick={() => {
-              api.threads.switchToNewThread();
-              setOpen(false);
-            }}
-            className="w-full px-4 py-2 text-left hover:bg-gray-100 border-b"
-          >
-            + New Chat
-          </button>
-          <div className="max-h-64 overflow-y-auto">
-            {threads.map((id) => {
-              const item = api.threads.item({ id }).getState();
-              return (
-                <button
-                  key={id}
-                  onClick={() => {
-                    api.threads.switchToThread(id);
-                    setOpen(false);
-                  }}
-                  className={`w-full px-4 py-2 text-left hover:bg-gray-100 ${
-                    id === mainThreadId ? "bg-blue-50" : ""
-                  }`}
-                >
-                  {item.title || "Untitled"}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-```
-
-## With Categories/Folders
-
-```tsx
-function CategorizedThreadList() {
-  const api = useAui();
-  const { threads } = useAuiState((s) => ({ threads: s.threads.threadIds }));
-
-  const grouped = threads.reduce((acc, id) => {
-    const item = api.threads.item({ id }).getState();
-    const category = (item.title || "Untitled").charAt(0).toUpperCase();
-    if (!acc[category]) acc[category] = [];
-    acc[category].push(id);
-    return acc;
-  }, {} as Record<string, string[]>);
-
-  return (
-    <div>
-      {Object.entries(grouped).map(([category, ids]) => (
-        <div key={category} className="mb-4">
-          <h3 className="text-sm font-medium text-gray-500 px-2 mb-1">
-            {category}
-          </h3>
-          {ids.map((id) => (
-            <ThreadItem key={id} id={id} />
-          ))}
-        </div>
+    <ul>
+      {visibleItems.map((item) => (
+        <li key={item.id}>{item.title ?? "New Chat"}</li>
       ))}
-    </div>
+    </ul>
   );
 }
 ```
+
+Use `custom` metadata for application grouping or pinning. Read and write that bag with `s.threadListItem.custom` and `aui.threadListItem.updateCustom(custom)` inside a row. `updateCustom` replaces the bag, so preserve unrelated fields.
+
+Do not import or invent a `ThreadSearch` primitive. The supplied snapshot documents the list's built in search and a separate `ConversationSearch` element for searching messages within one conversation, not an exported thread search primitive.
+
+## Installed Element Composition
+
+`thread-list.aui.tsx` is a runtime connected registry component, not a general data list. It composes the list root and new control with its own search field, date grouping, and skeleton state. It renders grouped items through `ThreadListPrimitive.ItemByIndex`, then composes `ThreadListItemPrimitive.Root`, `Trigger`, `Title`, and action controls with a `ThreadListItemMorePrimitive` menu.
+
+The component sets `sharedFocusGroup` on its more menu so the trigger participates in list keyboard navigation. It renders an active row with `data-active` and `aria-current`, shows an inline rename input, and shows each row's running state. Copy and edit the installed file when that behavior is close to the product. Compose primitives directly when its grouping or search model is not.

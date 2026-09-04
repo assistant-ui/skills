@@ -4,6 +4,7 @@ Connect a realtime voice backend (ElevenLabs, LiveKit, OpenAI Realtime, etc.) to
 
 ## Contents
 
+- [Three voice modes](#three-voice-modes)
 - [Configuration](#configuration)
 - [useVoiceState](#usevoicestate)
 - [useVoiceControls](#usevoicecontrols)
@@ -13,15 +14,26 @@ Connect a realtime voice backend (ElevenLabs, LiveKit, OpenAI Realtime, etc.) to
 - [createVoiceSession Helper](#createvoicesession-helper)
 - [Status, Mode, and Transcript Types](#status-mode-and-transcript-types)
 - [Transcript Handling](#transcript-handling)
+- [Styled voice UI component](#styled-voice-ui-component)
 - [ElevenLabs Example](#elevenlabs-example)
 - [LiveKit Example](#livekit-example)
+
+## Three voice modes
+
+| Mode | Adapter | Direction |
+|------|---------|-----------|
+| Realtime duplex (this page) | `RealtimeVoiceAdapter` | Audio to audio, a live session |
+| Push-to-talk dictation | `DictationAdapter` | Audio to text, into the composer |
+| Read-aloud | `SpeechSynthesisAdapter` | Text to audio, for one message |
+
+Realtime voice is the only mode that owns both directions at once. Dictation and speech register on the same `adapters` map as attachments and feedback; see [adapters.md](./adapters.md) for both.
 
 ## Configuration
 
 Pass an adapter via `adapters.voice`. When provided, `capabilities.voice` is automatically set to `true`.
 
 ```ts
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime } from "@assistant-ui/ai-sdk";
 
 const runtime = useChatRuntime({
   adapters: {
@@ -234,6 +246,37 @@ assistant-ui turns emitted transcripts into thread messages:
 - User transcripts (`role: "user"`, `isFinal: true`) are appended as user messages.
 - Assistant transcripts (`role: "assistant"`) are streamed into an assistant message with `running` status until `isFinal: true` marks it complete.
 
+## Styled voice UI component
+
+The `voice` registry item installs a ready-made `VoiceControl` bar and `VoiceOrb` built on the hooks above.
+
+```bash
+npx assistant-ui@latest add voice
+```
+
+Gate it on `capabilities.voice` so it only renders when a voice adapter is configured:
+
+```tsx
+import { Thread } from "@/components/assistant-ui/elements/thread.aui";
+import { VoiceControl } from "@/components/assistant-ui/elements/voice.aui";
+import { AuiIf } from "@assistant-ui/react";
+
+export default function Chat() {
+  return (
+    <div className="flex h-full flex-col">
+      <AuiIf condition={(s) => s.thread.capabilities.voice}>
+        <VoiceControl />
+      </AuiIf>
+      <div className="min-h-0 flex-1">
+        <Thread />
+      </div>
+    </div>
+  );
+}
+```
+
+See the [elements](../../elements/SKILL.md) skill for slot overrides and styling.
+
 ## ElevenLabs Example
 
 ```bash
@@ -278,3 +321,12 @@ const runtime = useChatRuntime({
   },
 });
 ```
+
+A LiveKit browser adapter joins a room; a separate agent worker (speech to text, the model, speech synthesis) must join the same room, without it the client connects but has nothing to talk to. Clone the [`with-livekit`](https://github.com/assistant-ui/assistant-ui/tree/main/examples/with-livekit) example (or `npx assistant-ui create my-app -e with-livekit`) for the adapter source, the token route, and the Python agent worker rather than re-implementing the event map from scratch.
+
+A request-context check on the token route (matching `Sec-Fetch-Site` or the `Origin` header) is not authentication. Require your application session in the token route and apply a durable rate limit before deploying, so an anonymous caller cannot consume voice capacity.
+
+## Related
+
+- [adapters.md](./adapters.md) -- dictation and speech (text to speech) adapters, the other two voice modes
+- [../../elements/SKILL.md](../../elements/SKILL.md) -- the `voice` registry item's `VoiceControl` and `VoiceOrb` components

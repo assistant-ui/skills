@@ -1,6 +1,6 @@
 # Runtime Adapters
 
-Optional capability adapters you register on the runtime `adapters` map: attachments, text to speech, dictation, suggestions, and thread history persistence.
+Optional capability adapters registered on the runtime's `adapters` map: attachments, feedback, text to speech, dictation, suggestions, and thread history persistence. Realtime duplex voice uses the same map under `adapters.voice`; see [voice.md](./voice.md).
 
 ## Contents
 
@@ -8,9 +8,9 @@ Optional capability adapters you register on the runtime `adapters` map: attachm
 - [Attachment adapters](#attachment-adapters)
 - [Built-in attachment adapters](#built-in-attachment-adapters)
 - [Custom attachment adapter](#custom-attachment-adapter)
-- [Async generator upload lifecycle](#async-generator-upload-lifecycle)
 - [CloudFileAttachmentAdapter](#cloudfileattachmentadapter)
 - [Attachment error handling](#attachment-error-handling)
+- [Feedback adapter](#feedback-adapter)
 - [Text to speech](#text-to-speech)
 - [Custom TTS adapter](#custom-tts-adapter)
 - [Dictation](#dictation)
@@ -20,65 +20,46 @@ Optional capability adapters you register on the runtime `adapters` map: attachm
 
 ## The adapters map
 
-Every adapter is registered under a named key on the runtime's `adapters` option. The same map works across runtime factories (`useChatRuntime`, `useLocalRuntime`, `useAISDKRuntime`).
+Every adapter is registered under a named key on the runtime's `adapters` option. The same map works across `useChatRuntime`, `useLocalRuntime`, and `useExternalStoreRuntime`; each runtime turns on the matching UI surface only for the adapters it was given (see the [support matrix](https://www.assistant-ui.com/docs/runtimes/concepts/adapters#support-matrix) for which adapters each runtime layer exposes).
 
 ```ts
-import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
+import { useChatRuntime } from "@assistant-ui/ai-sdk";
 
 const runtime = useChatRuntime({
   adapters: {
     attachments: /* AttachmentAdapter */,
     speech: /* SpeechSynthesisAdapter */,
     dictation: /* DictationAdapter */,
+    feedback: /* FeedbackAdapter */,
     suggestion: /* SuggestionAdapter */,
-    history: /* ThreadHistoryAdapter */,
+    history: /* ThreadHistoryAdapter, LocalRuntime-based runtimes only */,
   },
 });
 ```
 
 ## Attachment adapters
 
-An `AttachmentAdapter` controls which files the composer accepts and how they are turned into message content. The interface from `@assistant-ui/react`:
+An `AttachmentAdapter` controls which files the composer accepts and how they become message content.
 
 ```ts
-import type {
-  AttachmentAdapter,
-  PendingAttachment,
-  CompleteAttachment,
-  Attachment,
-} from "@assistant-ui/react";
+import type { AttachmentAdapter, PendingAttachment, CompleteAttachment, Attachment } from "@assistant-ui/react";
 
 type AttachmentAdapter = {
   accept: string;
-  add: (state: { file: File }) =>
-    | Promise<PendingAttachment>
-    | AsyncGenerator<PendingAttachment, void>;
+  add: (state: { file: File }) => Promise<PendingAttachment> | AsyncGenerator<PendingAttachment, void>;
   send: (attachment: PendingAttachment) => Promise<CompleteAttachment>;
-  remove: (attachment: Attachment) => Promise<void>;
+  remove?: (attachment: Attachment) => Promise<void>;
 };
 ```
 
-`accept` is a MIME type filter string, the same syntax as the HTML `accept` attribute (`"image/*"`, `"image/jpeg,image/png"`, or `"*"` for any file). `add` validates the chosen file and produces a `PendingAttachment`; `send` runs at composer send time and resolves to a `CompleteAttachment` carrying the `content` array that becomes part of the message; `remove` cleans up.
-
-The two statuses that flow through the lifecycle:
-
-```ts
-// add() typically returns a pending attachment that still needs sending
-status: { type: "requires-action", reason: "composer-send" }
-// send() returns the final, message-ready attachment
-status: { type: "complete" }
-```
+`accept` is a MIME filter (`"image/*"`, `"image/jpeg,image/png"`, or `"*"`). `add` runs when the user picks a file and returns a `PendingAttachment` with `status: { type: "requires-action", reason: "composer-send" }`, holding the file before send. `send` runs at composer send time, finalizes the upload, and resolves to a `CompleteAttachment` with `status: { type: "complete" }` and the `content` array that becomes part of the message. `remove` is optional cleanup when the user removes the attachment before sending. When `add` is an async generator it can yield intermediate `{ type: "running", reason: "uploading", progress }` states before the final `requires-action`, which is how upload progress bars work without holding the whole file as base64 in memory.
 
 ## Built-in attachment adapters
 
-Three adapters ship from `@assistant-ui/react`. `SimpleImageAttachmentAdapter` accepts `image/*` and converts files to data URLs, `SimpleTextAttachmentAdapter` accepts text files and wraps their content, and `CompositeAttachmentAdapter` combines several adapters and routes each file to the first one whose `accept` matches.
+`SimpleImageAttachmentAdapter` accepts `image/*` and converts files to data URLs; `SimpleTextAttachmentAdapter` accepts text files and wraps their content; `CompositeAttachmentAdapter` combines several and routes each file to the first whose `accept` matches.
 
 ```ts
-import {
-  CompositeAttachmentAdapter,
-  SimpleImageAttachmentAdapter,
-  SimpleTextAttachmentAdapter,
-} from "@assistant-ui/react";
+import { CompositeAttachmentAdapter, SimpleImageAttachmentAdapter, SimpleTextAttachmentAdapter } from "@assistant-ui/react";
 
 const runtime = useChatRuntime({
   adapters: {
@@ -90,152 +71,60 @@ const runtime = useChatRuntime({
 });
 ```
 
-To restrict to images only, register the single adapter directly:
-
-```ts
-const runtime = useChatRuntime({
-  adapters: {
-    attachments: new SimpleImageAttachmentAdapter(),
-  },
-});
-```
-
 ## Custom attachment adapter
 
-Implement `AttachmentAdapter` to control validation and the content shape. This vision adapter rejects oversized images and emits an inline image content part.
+Implement `AttachmentAdapter` to control validation and the content shape. A vision adapter that rejects oversized images and emits an inline image content part:
 
 ```ts
-import {
-  AttachmentAdapter,
-  PendingAttachment,
-  CompleteAttachment,
-} from "@assistant-ui/react";
-
 class VisionImageAdapter implements AttachmentAdapter {
   accept = "image/jpeg,image/png,image/webp,image/gif";
 
   async add({ file }: { file: File }): Promise<PendingAttachment> {
-    const maxSize = 20 * 1024 * 1024;
-    if (file.size > maxSize) throw new Error("Image size exceeds 20MB limit");
-    return {
-      id: crypto.randomUUID(),
-      type: "image",
-      name: file.name,
-      file,
-      status: { type: "requires-action", reason: "composer-send" },
-    };
+    if (file.size > 20 * 1024 * 1024) throw new Error("Image size exceeds 20MB limit");
+    return { id: crypto.randomUUID(), type: "image", name: file.name, file, status: { type: "requires-action", reason: "composer-send" } };
   }
 
   async send(attachment: PendingAttachment): Promise<CompleteAttachment> {
-    const base64 = await this.fileToBase64DataURL(attachment.file);
-    return {
-      id: attachment.id,
-      type: "image",
-      name: attachment.name,
-      content: [{ type: "image", image: base64 }],
-      status: { type: "complete" },
-    };
-  }
-
-  async remove(attachment: PendingAttachment): Promise<void> {}
-
-  private async fileToBase64DataURL(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
+    const image = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
       reader.onerror = reject;
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(attachment.file!);
     });
+    return { ...attachment, status: { type: "complete" }, content: [{ type: "image", image }] };
   }
+
+  async remove(): Promise<void> {}
 }
 ```
-
-Register it with any runtime:
-
-```ts
-import { useLocalRuntime } from "@assistant-ui/react";
-
-const runtime = useLocalRuntime(MyModelAdapter, {
-  adapters: {
-    attachments: new VisionImageAdapter(),
-  },
-});
-```
-
-## Async generator upload lifecycle
-
-When `add` is an async generator it can yield intermediate `PendingAttachment` states, which is how you surface upload progress. A `running` status carries a `progress` number; yield the final `requires-action` state once the file is uploaded so it is ready to send.
-
-```ts
-class ServerUploadAdapter implements AttachmentAdapter {
-  accept = "*";
-  private urls = new Map<string, string>();
-
-  async *add({ file }: { file: File }) {
-    const id = crypto.randomUUID();
-    yield {
-      id, type: "file" as const, name: file.name, file, contentType: file.type,
-      status: { type: "running" as const, reason: "uploading" as const, progress: 0 },
-    };
-
-    const form = new FormData();
-    form.append("file", file);
-    const { url } = await fetch("/api/upload", { method: "POST", body: form }).then((r) => r.json());
-    this.urls.set(id, url);
-
-    yield {
-      id, type: "file" as const, name: file.name, file, contentType: file.type,
-      status: { type: "requires-action" as const, reason: "composer-send" as const },
-    };
-  }
-
-  async send(attachment: PendingAttachment): Promise<CompleteAttachment> {
-    const url = this.urls.get(attachment.id)!;
-    this.urls.delete(attachment.id);
-    return {
-      ...attachment,
-      status: { type: "complete" },
-      content: [{ type: "file", data: url, mimeType: attachment.contentType ?? "", filename: attachment.name }],
-    };
-  }
-
-  async remove() {}
-}
-```
-
-This pattern avoids holding large files in memory as base64: the file is uploaded during `add`, and `send` only forwards the resulting URL into the message content.
 
 ## CloudFileAttachmentAdapter
 
-`CloudFileAttachmentAdapter` stores attachments in assistant-ui Cloud. Pass an `AssistantCloud` instance to the constructor; it supplies its own `accept`, `add`, `send`, and `remove` defaults.
+`CloudFileAttachmentAdapter` stores attachments in assistant-ui Cloud. Pass an `AssistantCloud` instance; it supplies its own `accept`, `add`, `send`, and `remove`.
 
 ```ts
 import { CloudFileAttachmentAdapter } from "@assistant-ui/react";
-import { AssistantCloud } from "@assistant-ui/react";
+import { AssistantCloud } from "assistant-cloud";
 
-const cloud = new AssistantCloud({ /* ... */ });
+const cloud = new AssistantCloud({ baseUrl: process.env.NEXT_PUBLIC_ASSISTANT_BASE_URL });
 
 const runtime = useChatRuntime({
-  adapters: {
-    attachments: new CloudFileAttachmentAdapter(cloud),
-  },
+  adapters: { attachments: new CloudFileAttachmentAdapter(cloud) },
 });
 ```
 
 ## Attachment error handling
 
-Failures surface as the `composer.attachmentAddError` event rather than throwing into the render tree. Subscribe with `useAuiEvent` and branch on `reason`.
+Failures surface as the `composer.attachmentAddError` event rather than throwing into the render tree.
 
 ```tsx
 import { useAuiEvent } from "@assistant-ui/react";
 
 function AttachmentErrorToast() {
   useAuiEvent("composer.attachmentAddError", ({ reason, message, error }) => {
-    if (reason === "not-accepted") {
-      toast.error("This file type is not supported.");
-    } else if (reason === "no-adapter") {
-      toast.error("Attachments are not configured for this composer.");
-    } else {
+    if (reason === "not-accepted") toast.error("This file type is not supported.");
+    else if (reason === "no-adapter") toast.error("Attachments are not configured for this composer.");
+    else {
       if (error) console.error(error);
       toast.error(message || "Attachment failed to upload.");
     }
@@ -246,6 +135,32 @@ function AttachmentErrorToast() {
 
 `no-adapter` means no `AttachmentAdapter` was configured, `not-accepted` means the file type did not match `adapter.accept`, and `adapter-error` means `add()` threw or returned an error status.
 
+## Feedback adapter
+
+A `FeedbackAdapter` records thumbs up and thumbs down on assistant messages. When present, message bubbles render feedback buttons.
+
+```ts
+import type { FeedbackAdapter } from "@assistant-ui/react";
+
+type FeedbackAdapter = {
+  submit: (feedback: { type: "positive" | "negative"; message: ThreadMessage }) => Promise<void>;
+};
+
+const feedbackAdapter: FeedbackAdapter = {
+  async submit({ type, message }) {
+    await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageId: message.id, rating: type }),
+    });
+  },
+};
+
+const runtime = useChatRuntime({ adapters: { feedback: feedbackAdapter } });
+```
+
+Trigger it from the UI with `aui.message.submitFeedback({ type: "positive" | "negative" })`, or the `ActionBarPrimitive.FeedbackPositive` / `FeedbackNegative` primitives. `adapters.feedback` being present is what turns `capabilities.feedback` on; there is no separate option.
+
 ## Text to speech
 
 Register a `SpeechSynthesisAdapter` under `adapters.speech`. The built-in `WebSpeechSynthesisAdapter` uses the browser's native Web Speech API.
@@ -253,89 +168,50 @@ Register a `SpeechSynthesisAdapter` under `adapters.speech`. The built-in `WebSp
 ```ts
 import { WebSpeechSynthesisAdapter } from "@assistant-ui/react";
 
-const runtime = useChatRuntime({
-  adapters: {
-    speech: new WebSpeechSynthesisAdapter(),
-  },
-});
+const runtime = useChatRuntime({ adapters: { speech: new WebSpeechSynthesisAdapter() } });
 ```
 
-`ActionBarPrimitive.Speak` is automatically disabled when no speech adapter is configured. Toggle speak and stop buttons off the message's `speech` state, which is `undefined` unless this message is the one being spoken.
+`ActionBarPrimitive.Speak` is disabled automatically when no speech adapter is configured. Toggle speak and stop buttons off the message's `speech` state, which is `undefined` unless this message is the one being spoken.
 
 ```tsx
-import { ActionBarPrimitive, useAuiState } from "@assistant-ui/react";
+import { ActionBarPrimitive, AuiIf } from "@assistant-ui/react";
 import { AudioLinesIcon, StopCircleIcon } from "lucide-react";
 
-const AssistantActionBar = () => {
-  const isSpeaking = useAuiState((s) => s.message.speech != null);
-  return (
-    <ActionBarPrimitive.Root>
-      {!isSpeaking && (
-        <ActionBarPrimitive.Speak>
-          <AudioLinesIcon />
-        </ActionBarPrimitive.Speak>
-      )}
-      {isSpeaking && (
-        <ActionBarPrimitive.StopSpeaking>
-          <StopCircleIcon />
-        </ActionBarPrimitive.StopSpeaking>
-      )}
-      <ActionBarPrimitive.Copy />
-    </ActionBarPrimitive.Root>
-  );
-};
+const AssistantActionBar = () => (
+  <ActionBarPrimitive.Root>
+    <AuiIf condition={(s) => s.message.speech == null}>
+      <ActionBarPrimitive.Speak><AudioLinesIcon /></ActionBarPrimitive.Speak>
+    </AuiIf>
+    <AuiIf condition={(s) => s.message.speech != null}>
+      <ActionBarPrimitive.StopSpeaking><StopCircleIcon /></ActionBarPrimitive.StopSpeaking>
+    </AuiIf>
+    <ActionBarPrimitive.Copy />
+  </ActionBarPrimitive.Root>
+);
 ```
 
 ## Custom TTS adapter
 
-The interface is a single `speak` method that returns an `Utterance`. The utterance exposes a live `status`, a `cancel`, and a `subscribe` for change notifications.
-
-```ts
-import type { SpeechSynthesisAdapter } from "@assistant-ui/react";
-
-type SpeechSynthesisAdapter = {
-  speak: (text: string) => SpeechSynthesisAdapter.Utterance;
-};
-
-type Utterance = {
-  status: SpeechSynthesisAdapter.Status;
-  cancel: () => void;
-  subscribe: (callback: () => void) => Unsubscribe;
-};
-
-type Status =
-  | { type: "starting" | "running" }
-  | { type: "ended"; reason: "finished" | "cancelled" | "error"; error?: unknown };
-```
-
-A custom adapter that fetches audio from an external endpoint and plays it through an `HTMLAudioElement`:
+The interface is one `speak` method returning an `Utterance` with a live `status`, `cancel`, and `subscribe`.
 
 ```ts
 import type { SpeechSynthesisAdapter } from "@assistant-ui/react";
 
 export class CustomTTSAdapter implements SpeechSynthesisAdapter {
-  private apiUrl: string;
-  constructor(options: { apiUrl: string }) {
-    this.apiUrl = options.apiUrl;
-  }
+  constructor(private apiUrl: string) {}
 
   speak(text: string): SpeechSynthesisAdapter.Utterance {
     const subscribers = new Set<() => void>();
     let status: SpeechSynthesisAdapter.Status = { type: "starting" };
     let audio: HTMLAudioElement | null = null;
-
-    const notify = () => { for (const cb of subscribers) cb(); };
+    const notify = () => subscribers.forEach((cb) => cb());
     const finish = (reason: "finished" | "cancelled" | "error", error?: unknown) => {
       if (status.type === "ended") return;
       status = { type: "ended", reason, error };
       notify();
     };
 
-    fetch(this.apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    })
+    fetch(this.apiUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) })
       .then((res) => res.blob())
       .then((blob) => {
         audio = new Audio(URL.createObjectURL(blob));
@@ -343,7 +219,7 @@ export class CustomTTSAdapter implements SpeechSynthesisAdapter {
         notify();
         audio.onended = () => finish("finished");
         audio.onerror = (e) => finish("error", e);
-        audio.play();
+        audio.play().catch((err) => finish("error", err));
       })
       .catch((err) => finish("error", err));
 
@@ -356,35 +232,27 @@ export class CustomTTSAdapter implements SpeechSynthesisAdapter {
 }
 ```
 
-Register it under `adapters.speech` exactly like the built-in adapter.
+Register it under `adapters.speech` exactly like the built-in adapter. Use the same shape for any provider TTS; keep the server route responsible for API keys, the adapter only needs a URL that returns audio bytes.
 
 ## Dictation
 
-Register a `DictationAdapter` under `adapters.dictation` for speech to text input. The built-in `WebSpeechDictationAdapter` wraps the browser's Web Speech recognition API.
+Register a `DictationAdapter` under `adapters.dictation` for speech to text. The built-in `WebSpeechDictationAdapter` wraps the browser's Web Speech recognition API and works in Chrome, Edge, and Safari.
 
 ```ts
 import { WebSpeechDictationAdapter } from "@assistant-ui/react";
 
 const runtime = useChatRuntime({
   adapters: {
-    dictation: new WebSpeechDictationAdapter({
-      language: "en-US",
-      continuous: true,
-      interimResults: true,
-    }),
+    dictation: new WebSpeechDictationAdapter({ language: "en-US", continuous: true, interimResults: true }),
   },
 });
-```
 
-Check browser support before registering:
-
-```ts
 if (WebSpeechDictationAdapter.isSupported()) {
   // dictation available
 }
 ```
 
-The current interim transcript is available at `composer.dictation?.transcript`; `composer.dictation` is `null` when not dictating. Toggle the mic button with `AuiIf` on that value:
+`ComposerPrimitive.Dictate` starts a session and is disabled when no dictation adapter is configured; pair it with `ComposerPrimitive.StopDictation`. Both read `composer.dictation`, which is `undefined` when not dictating.
 
 ```tsx
 import { AuiIf, ComposerPrimitive } from "@assistant-ui/react";
@@ -393,15 +261,11 @@ import { MicIcon, SquareIcon } from "lucide-react";
 function DictationButton() {
   return (
     <>
-      <AuiIf composer={{ dictation: false }}>
-        <ComposerPrimitive.Dictate>
-          <MicIcon />
-        </ComposerPrimitive.Dictate>
+      <AuiIf condition={(s) => s.composer.dictation == null}>
+        <ComposerPrimitive.Dictate><MicIcon /></ComposerPrimitive.Dictate>
       </AuiIf>
-      <AuiIf composer={{ dictation: true }}>
-        <ComposerPrimitive.StopDictation>
-          <SquareIcon />
-        </ComposerPrimitive.StopDictation>
+      <AuiIf condition={(s) => s.composer.dictation != null}>
+        <ComposerPrimitive.StopDictation><SquareIcon className="animate-pulse" /></ComposerPrimitive.StopDictation>
       </AuiIf>
     </>
   );
@@ -410,71 +274,41 @@ function DictationButton() {
 
 ## Custom dictation adapter
 
-The interface exposes an optional `disableInputDuringDictation` flag and a `listen` method that returns a session.
+`listen()` starts a session; the session reports `status`, accepts `stop` / `cancel`, and emits speech events through three `on*` methods.
 
 ```ts
 import type { DictationAdapter } from "@assistant-ui/react";
 
 type DictationAdapter = {
-  disableInputDuringDictation?: boolean;
   listen: () => DictationAdapter.Session;
+  disableInputDuringDictation?: boolean;
 };
 
-type Session = {
-  status: { type: "starting" | "running" | "ended" };
-  stop: () => Promise<void>;
-  cancel: () => void;
-  onSpeechStart: (cb: () => void) => Unsubscribe;
-  onSpeechEnd: (cb: () => void) => Unsubscribe;
-  onSpeech: (cb: (event: { transcript: string; isFinal?: boolean }) => void) => Unsubscribe;
-};
+// Session.onSpeech receives { transcript, isFinal? }: isFinal true commits text to
+// the input, isFinal false shows it as a preview later results replace.
 ```
 
-`stop` finalizes results and `cancel` discards them. The `onSpeech` callback receives a transcript chunk: `isFinal: true` commits the text to the input, while `isFinal: false` shows it as a preview only.
-
-Set `disableInputDuringDictation = true` when the underlying service returns cumulative transcripts that would conflict with simultaneous typing. The ElevenLabs Scribe adapter does this, and it registers the same way:
-
-```ts
-import { ElevenLabsScribeAdapter } from "./lib/elevenlabs-scribe-adapter";
-
-const runtime = useChatRuntime({
-  adapters: {
-    dictation: new ElevenLabsScribeAdapter({
-      tokenEndpoint: "/api/scribe-token",
-      languageCode: "en",
-      disableInputDuringDictation: true,
-    }),
-  },
-});
-```
+Set `disableInputDuringDictation = true` when the provider returns cumulative transcripts that would conflict with simultaneous typing; the ElevenLabs Scribe adapter (`npx assistant-ui create my-app -e with-elevenlabs-scribe`) does this and registers the same way as `WebSpeechDictationAdapter`. For server-side transcription, record audio in the adapter with `MediaRecorder`, POST the blob to a route that calls the AI SDK's `transcribe`, and emit one final `isFinal: true` result; keep the same `Session` surface for a streaming provider that emits partials instead.
 
 ## Suggestion adapter
 
-A `SuggestionAdapter` generates follow up prompts shown in the thread. Its single `generate` method returns a list of `ThreadSuggestion`, either as a Promise or as an async generator for incremental delivery.
+A `SuggestionAdapter` generates follow-up prompts, either as a Promise or an async generator for incremental delivery.
 
 ```ts
-import type { SuggestionAdapter, ThreadSuggestion } from "@assistant-ui/react";
+import type { SuggestionAdapter } from "@assistant-ui/react";
 
 type SuggestionAdapter = {
-  generate: (
-    options: SuggestionAdapterGenerateOptions,
-  ) =>
-    | Promise<readonly ThreadSuggestion[]>
-    | AsyncGenerator<readonly ThreadSuggestion[], void>;
+  generate: (options: { messages: readonly ThreadMessage[] }) => AsyncGenerator<{ prompt: string }[]>;
 };
-```
 
-Register it under `adapters.suggestion`:
-
-```ts
 const runtime = useChatRuntime({
   adapters: {
     suggestion: {
-      generate: async (options) => {
-        return [
-          { prompt: "What can you help me with?" },
-          { prompt: "Summarize this document" },
-        ];
+      async *generate({ messages }) {
+        const last = messages.at(-1);
+        if (!last) return;
+        const response = await fetch("/api/suggestions", { method: "POST", body: JSON.stringify(last) });
+        yield (await response.json()).suggestions;
       },
     },
   },
@@ -485,40 +319,25 @@ Read the generated entries in the UI through `thread.suggestions`.
 
 ## Thread history adapter
 
-A `ThreadHistoryAdapter` persists and restores thread messages. It exposes `load` and `append`, plus optional `resume` and `withFormat`.
+A `ThreadHistoryAdapter` persists and restores per-thread messages, used by `LocalRuntime` and the framework adapters built on it.
 
 ```ts
 type ThreadHistoryAdapter = {
-  load: () => Promise<ExportedMessageRepository & { unstable_resume?: boolean }>;
-  append: (item: ExportedMessageRepositoryItem) => Promise<void>;
-  resume?: (
-    options: ChatModelRunOptions,
-  ) => AsyncGenerator<ChatModelRunResult, void, unknown>;
-  withFormat?: <TMessage, TStorageFormat extends Record<string, unknown>>(
-    formatAdapter: MessageFormatAdapter<TMessage, TStorageFormat>,
-  ) => GenericThreadHistoryAdapter<TMessage>;
+  load: () => Promise<{ messages: { parentId: string | null; message: ThreadMessage }[] }>;
+  append: (item: { parentId: string | null; message: ThreadMessage }) => Promise<void>;
+  resume?: (input: { messages: ThreadMessage[] }) => Promise<ReadableStream | undefined>;
+  withFormat?: <Fmt>(fmt: Fmt) => ThreadHistoryAdapter;
 };
 ```
 
-`load` returns the persisted repository (an optional `unstable_resume` flag triggers a resume on mount), `append` is called for each new message, `resume` follows the same `ChatModelRunOptions` to `AsyncGenerator` contract as a model run to restore an in progress generation, and `withFormat` adapts the storage shape. `withFormat` is required when used with `useAISDKRuntime` or `useChatRuntime`, which store messages in the AI SDK format.
+`load` runs when a thread opens, `append` runs after each message completes, and `resume` follows the same shape as a model run to restore an in-progress generation. `useChatRuntime` (`@assistant-ui/ai-sdk`) requires `withFormat` so messages round-trip as AI SDK `UIMessage` objects; an adapter without it throws at runtime in that path. `ExternalStoreRuntime` does not use a history adapter at all, since you already own the message array; persist through your own store instead.
 
 ```ts
-const runtime = useLocalRuntime(chatModelAdapter, {
-  adapters: {
-    history: myHistoryAdapter,
-  },
-});
+const runtime = useLocalRuntime(chatModelAdapter, { adapters: { history: myHistoryAdapter } });
 ```
 
-The repository payload `load` resolves to and `append` receives an item of:
+## Related
 
-```ts
-type ExportedMessageRepository = {
-  headId?: string | null;
-  messages: Array<{
-    message: ThreadMessage;
-    parentId: string | null;
-    runConfig?: RunConfig;
-  }>;
-};
-```
+- [local-runtime.md](./local-runtime.md) -- the runtime these adapters mount on
+- [external-store.md](./external-store.md) -- the same adapters on `ExternalStoreRuntime`, minus `history`
+- [voice.md](./voice.md) -- realtime duplex voice via `adapters.voice`

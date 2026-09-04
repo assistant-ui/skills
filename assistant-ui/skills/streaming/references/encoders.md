@@ -1,98 +1,98 @@
 # Encoders and Decoders
 
-Encode and decode streaming formats.
+Every encoder turns an `AssistantStream` (a `ReadableStream<AssistantStreamChunk>`) into response bytes; every decoder turns bytes back into one. Pair the encoder a route used with the matching decoder on the read side.
 
-## Available Encoders
+| Class | Direction | Wire format | Content-Type | Home |
+| --- | --- | --- | --- | --- |
+| `DataStreamEncoder` / `DataStreamDecoder` | both | numbered-prefix lines (`0:`, `9:`, `aui-state:`, ...) | `text/plain; charset=utf-8` + `x-vercel-ai-data-stream: v1` | [data-stream.md](./data-stream.md) |
+| `AssistantTransportEncoder` / `AssistantTransportDecoder` | both | SSE, one JSON chunk per `data:` line, `[DONE]` terminated | `text/event-stream` | [assistant-transport.md](./assistant-transport.md) |
+| `PlainTextEncoder` / `PlainTextDecoder` | both | raw UTF-8 text, no structure | `text/plain; charset=utf-8` | this file |
+| `UIMessageStreamDecoder` | decode only | AI SDK UI message stream SSE | `text/event-stream` (set by the AI SDK response, not this class) | this file |
 
-| Encoder | Format | Use Case |
-|---------|--------|----------|
-| `DataStreamEncoder` | AI SDK Data Stream | Default (the wire format behind `toUIMessageStream`) |
-| `AssistantTransportEncoder` | Native SSE (`data: {chunk}`) | Custom backends that want all chunk types |
-| `PlainTextEncoder` | Text-only | Very simple demos |
+There is no `UIMessageStreamEncoder`: producing that format is the AI SDK's job (`toUIMessageStream` / `createUIMessageStreamResponse` / `result.toUIMessageStreamResponse()`, see [data-stream.md](./data-stream.md)); `assistant-stream` only decodes it back out.
 
-## DataStreamEncoder
+## PlainTextEncoder and PlainTextDecoder
 
-AI SDK compatible format. You normally don't call it directly. Wrap an `AssistantStream`:
-
-```ts
-import { AssistantStream, DataStreamEncoder, DataStreamDecoder } from "assistant-stream";
-
-const response = AssistantStream.toResponse(stream, new DataStreamEncoder());
-
-const stream = AssistantStream.fromResponse(response, new DataStreamDecoder());
-for await (const chunk of stream) {
-  console.log(chunk);
-}
-```
-
-## AssistantTransportEncoder
-
-Native assistant-ui format with all features.
-
-```ts
-import {
-  AssistantTransportEncoder,
-  AssistantTransportDecoder,
-} from "assistant-stream";
-
-const response = AssistantStream.toResponse(stream, new AssistantTransportEncoder());
-
-const stream = AssistantStream.fromResponse(response, new AssistantTransportDecoder());
-for await (const chunk of stream) {
-  console.log(chunk);
-}
-```
-
-## PlainTextEncoder
-
-Simple text-only streaming.
+The simplest possible wire format: only text deltas survive, everything else (tool calls, sources, files, reasoning, state) is dropped. Use it for a demo or a health check, not a real chat backend.
 
 ```ts
 import { PlainTextEncoder, PlainTextDecoder } from "assistant-stream";
 
-const encoder = new PlainTextEncoder();
-const stream = encoder.encode("Hello world!");
-
-const decoder = new PlainTextDecoder();
-for await (const text of decoder.decode(stream)) {
-  console.log(text);
-}
+const response = AssistantStream.toResponse(stream, new PlainTextEncoder());
 ```
+
+```ts
+const decoder = new PlainTextDecoder();
+const assistantStream = decoder.readable; // pipe a byte ReadableStream through it
+```
+
+`PlainTextDecoder` (like the other decoders) is a `TransformStream`; pipe a byte stream through it or hand it to `AssistantStream.fromResponse`.
 
 ## UIMessageStreamDecoder
 
-Optimized for UI rendering - accumulates into message state.
+Decodes the AI SDK's UI message stream protocol into `AssistantStreamChunk`s. This is the format `result.toUIMessageStreamResponse()` and `toUIMessageStream`/`createUIMessageStreamResponse` produce, and the format `AssistantChatTransport` (`useChatRuntime`, see [setup](../../setup/SKILL.md)) speaks natively through the AI SDK's own `useChat`; reach for this decoder when you want to read that same response through `assistant-stream` yourself instead, for example inside a `LocalRuntime.ChatModelAdapter` or a `useDataStreamRuntime`-style custom client.
 
 ```ts
-import { UIMessageStreamDecoder } from "assistant-stream";
+import { AssistantStream, UIMessageStreamDecoder } from "assistant-stream";
 
-const decoder = new UIMessageStreamDecoder();
+const stream = AssistantStream.fromResponse(
+  response,
+  new UIMessageStreamDecoder({
+    onData: ({ name, data, transient }) => {
+      // custom `data-*` parts the AI SDK route wrote with a UIMessageStreamWriter
+    },
+  }),
+);
 
-for await (const update of decoder.decode(stream)) {
-  // update contains full message state ready for UI
-  setMessages(update.messages);
+for await (const chunk of stream) {
+  console.log(chunk);
 }
 ```
 
-## Creating Custom Streams
+`onData` is optional; without it, non-transient data parts still surface as ordinary `data` chunks on the decoded stream (`transient` ones are still passed to `onData` when provided, but never enqueued as a chunk). The decoder requires the terminal `[DONE]` marker, same as `AssistantTransportDecoder`.
 
-### From Response
+## Writing a custom encoder or decoder
+
+Both are `ReadableWritablePair`s over `AssistantStreamChunk` on one side and `Uint8Array` on the other; an encoder additionally carries a `headers` property (copied onto the `Response` by `AssistantStream.toResponse`). Neither shape is exported by name, so a custom encoder just needs to match the structure; a plain `TransformStream` already does:
 
 ```ts
-const response = await fetch("/api/chat", { ... });
-const stream = AssistantStream.fromResponse(response, new DataStreamDecoder());
+import type { AssistantStreamChunk } from "assistant-stream";
+
+class NdjsonEncoder extends TransformStream<AssistantStreamChunk, Uint8Array> {
+  headers = new Headers({ "Content-Type": "application/x-ndjson" });
+
+  constructor() {
+    const textEncoder = new TextEncoder();
+    super({
+      transform(chunk, controller) {
+        controller.enqueue(textEncoder.encode(JSON.stringify(chunk) + "\n"));
+      },
+    });
+  }
+}
 ```
 
-## Server Response Helpers
+A decoder is the same shape without `headers`: `ReadableWritablePair<AssistantStreamChunk, Uint8Array>`, transforming in the opposite direction.
 
-Build a stream with `createAssistantStreamController` and encode it via `AssistantStream.toResponse(stream, encoder)`, or use `createAssistantStreamResponse` for the Data Stream default. See [./assistant-transport.md](./assistant-transport.md) and [./data-stream.md](./data-stream.md) for full server examples.
+## Accumulating a stream into a message
 
-## Debugging
-
-### Log Raw Stream
+Most of the time a component reads a stream chunk by chunk, but for logging, testing, or a non-streaming consumer, accumulate the whole thing into a final `AssistantMessage`:
 
 ```ts
-const response = await fetch("/api/chat", { ... });
+import { AssistantMessageStream } from "assistant-stream";
+
+const messageStream = AssistantMessageStream.fromAssistantStream(assistantStream);
+const finalMessage = await messageStream.unstable_result();
+```
+
+`AssistantMessageAccumulator` is the underlying `TransformStream<AssistantStreamChunk, AssistantMessage>` if you want the intermediate snapshots (one `AssistantMessage` per accumulated chunk) rather than only the final one. Every accumulated part is one of six `AssistantMessagePart` variants, keyed by `type`: `TextPart`, `ReasoningPart` (`unstable_summary?`), `ToolCallPart` (`toolCallId, toolName, argsText, args, state: "partial-call" | "call" | "result"`, plus `result`/`artifact`/`isError`/`modelContent` once settled), `SourcePart`, `FilePart`, and `DataPart`, all carrying an optional `parentId`.
+
+## Debugging a stream
+
+Log the raw bytes before assuming a decoder bug:
+
+```ts
+const response = await fetch("/api/chat");
 const reader = response.body?.getReader();
 const decoder = new TextDecoder();
 
@@ -103,9 +103,4 @@ while (reader) {
 }
 ```
 
-### Validate Format
-
-```ts
-const contentType = response.headers.get("Content-Type");
-console.log("Content-Type:", contentType);  // Should be text/event-stream
-```
+Check `Content-Type` against the table above rather than assuming `text/event-stream`; `DataStreamEncoder` and `PlainTextEncoder` both send `text/plain`. A stream that looks correct in the raw log but never updates the UI is usually a client-side protocol mismatch (wrong decoder, or a `protocol` override left in place on `useDataStreamRuntime` after the backend changed).
