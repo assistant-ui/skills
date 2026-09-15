@@ -1,6 +1,6 @@
 ---
 name: cloud
-description: "Adds AssistantCloud backed persistence, authorization, and telemetry to assistant-ui apps. Use when wiring cross-session thread and message history, multi-device chat, message feedback, file uploads, or auth: passing `cloud` to `useChatRuntime` from `@assistant-ui/ai-sdk`, `AISDKThreads({ cloud })` for `AuiConfig` hosts, the `useCloudChat`/`useThreads` hooks from `@assistant-ui/cloud-ai-sdk`, or `cloud` on `useLangGraphRuntime`. Covers constructing `AssistantCloud` with `authToken` (JWT), `apiKey` plus `userId`/`workspaceId` (server-side only), or `anonymous`; Clerk, Auth0, Supabase, and Firebase integrations and a backend token endpoint; the `cloud.threads`, `cloud.files`, `cloud.runs`, and `cloud.telemetry` client surface; and a custom `ThreadHistoryAdapter` on `CloudMessagePersistence`. Route here for threads that do not persist, 401s against the cloud API, or feedback buttons that do not save. For the `<ThreadList />` sidebar UI use thread-list; for the general adapter contracts use runtime."
+description: "Adds AssistantCloud backed persistence, authorization, and telemetry to assistant-ui apps. Use when wiring cross-session thread and message history, multi-device chat, message feedback, file uploads, or auth: passing `cloud` to `useChatRuntime` from `@assistant-ui/ai-sdk`, `AISDKThreads({ cloud })` for `AuiConfig` hosts, or `cloud` on `useLangGraphRuntime`. Covers constructing `AssistantCloud` with `authToken` (JWT), `apiKey` plus `userId`/`workspaceId` (server-side only), or `anonymous`; Clerk, Auth0, Supabase, and Firebase integrations and a backend token endpoint; the `cloud.threads`, `cloud.files`, `cloud.runs`, and `cloud.telemetry` client surface; and a custom `ThreadHistoryAdapter` on `CloudMessagePersistence`. Route here for threads that do not persist, 401s against the cloud API, or feedback buttons that do not save. For the `<ThreadList />` sidebar UI use thread-list; for the general adapter contracts use runtime."
 license: MIT
 ---
 
@@ -8,11 +8,11 @@ license: MIT
 
 **Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
-Assistant Cloud is a hosted service that adds thread persistence, message history, auto-generated titles, message feedback, and file uploads to any React chat UI, with or without assistant-ui's own components. One `AssistantCloud` client backs three integration paths: the full assistant-ui runtime, a standalone AI SDK hook, and LangGraph Cloud.
+Assistant Cloud is a hosted service that adds thread persistence, message history, auto-generated titles, message feedback, and file uploads to any React chat UI. One `AssistantCloud` client backs the assistant-ui runtime, `AuiConfig` thread integration, and LangGraph Cloud.
 
 ## Contents
 
-- [References](#references) | [Install](#install) | [Quick start: useChatRuntime](#quick-start-usechatruntime) | [AuiConfig hosts: AISDKThreads](#auiconfig-hosts-aisdkthreads) | [Standalone AI SDK: useCloudChat](#standalone-ai-sdk-usecloudchat) | [LangGraph](#langgraph-uselanggraphruntime) | [Message feedback](#message-feedback) | [Authentication](#authentication) | [Client API](#client-api) | [Environment variables](#environment-variables) | [Common Gotchas](#common-gotchas) | [Related Skills](#related-skills)
+- [References](#references) | [Install](#install) | [Quick start: useChatRuntime](#quick-start-usechatruntime) | [AuiConfig hosts: AISDKThreads](#auiconfig-hosts-aisdkthreads) | [Migrate from Cloud AI SDK](#migrate-from-cloud-ai-sdk) | [LangGraph](#langgraph-uselanggraphruntime) | [Message feedback](#message-feedback) | [Authentication](#authentication) | [Client API](#client-api) | [Environment variables](#environment-variables) | [Common Gotchas](#common-gotchas) | [Related Skills](#related-skills)
 
 ## References
 
@@ -80,23 +80,9 @@ const config = AuiConfig({
 });
 ```
 
-## Standalone AI SDK: useCloudChat
+## Migrate from Cloud AI SDK
 
-`useCloudChat()` from `@assistant-ui/cloud-ai-sdk` adds full persistence to a hand-rolled AI SDK UI, no assistant-ui components required. Zero-config: with no arguments it creates an anonymous cloud client from `NEXT_PUBLIC_ASSISTANT_BASE_URL` and manages threads internally.
-
-```tsx
-"use client";
-
-import { useCloudChat } from "@assistant-ui/cloud-ai-sdk";
-
-export default function Chat() {
-  const { messages, sendMessage, threads } = useCloudChat();
-  // threads.threads, threads.threadId, threads.selectThread(id | null),
-  // threads.create/delete/rename/archive/unarchive/generateTitle, threads.refresh
-}
-```
-
-Pass `{ cloud }` for an authenticated client, or `{ threads: useThreads({ cloud, includeArchived }) }` to manage the list from a separate component (a sidebar) while the chat reads the shared state. `useThreads` pages 20 threads per request and follows Cloud's cursor until the list is complete. The hook also accepts most `useChat` options (those on `ChatInit`); `experimental_throttle` and `resume` are not supported. Full parameter and return tables: [cloud-ai-sdk API reference](https://www.assistant-ui.com/docs/api-reference/integrations/cloud-ai-sdk).
+`@assistant-ui/cloud-ai-sdk` is deprecated. For new code, use the `cloud` option of `useChatRuntime` from `@assistant-ui/ai-sdk`; for an `AuiConfig` host, use `AISDKThreads({ cloud })`. See [Migrate from Cloud AI SDK](https://www.assistant-ui.com/docs/cloud/ai-sdk) for the migration details.
 
 ## LangGraph: useLangGraphRuntime
 
@@ -205,7 +191,7 @@ const { token } = await cloud.auth.tokens.create(); // server-side, API key mode
 cloud.telemetry; // { enabled: boolean, beforeReport? }
 ```
 
-`cloud.threads.create`'s `last_message_at` is required; everything else on create and update is optional. `CloudThread` fields: `id`, `title`, `last_message_at`, `created_at`, `updated_at`, `is_archived`, `external_id`, `metadata`, `project_id`, `workspace_id`. `CloudMessage` fields: `id`, `parent_id`, `height`, `format`, `content`, `created_at`, `updated_at`. `content`/`format` are opaque to the client; `useChatRuntime`, `AISDKThreads`, and `useCloudChat` all write `format: "ai-sdk/v6"` with an AI SDK `UIMessage`-shaped `content`. `cloud.projects.threads.messages.list` accepts `limit`/`after` paging that `cloud.threads.messages.list` does not. Failed requests throw `CloudAPIError` (with `.status`) from `assistant-cloud`; a malformed response throws `CloudResponseError`. Full detail, auto-save behavior, telemetry fields, and error handling: [persistence.md](./references/persistence.md).
+`cloud.threads.create`'s `last_message_at` is required; everything else on create and update is optional. `CloudThread` fields: `id`, `title`, `last_message_at`, `created_at`, `updated_at`, `is_archived`, `external_id`, `metadata`, `project_id`, `workspace_id`. `CloudMessage` fields: `id`, `parent_id`, `height`, `format`, `content`, `created_at`, `updated_at`. `content`/`format` are opaque to the client; `useChatRuntime` and `AISDKThreads` write `format: "ai-sdk/v6"` with an AI SDK `UIMessage`-shaped `content`. `cloud.projects.threads.messages.list` accepts `limit`/`after` paging that `cloud.threads.messages.list` does not. Failed requests throw `CloudAPIError` (with `.status`) from `assistant-cloud`; a malformed response throws `CloudResponseError`. Full detail, auto-save behavior, telemetry fields, and error handling: [persistence.md](./references/persistence.md).
 
 ## Environment variables
 
@@ -219,7 +205,7 @@ React Native reads `EXPO_PUBLIC_ASSISTANT_BASE_URL`; React Ink reads `ASSISTANT_
 ## Common Gotchas
 
 **Threads not persisting**
-- `cloud` must be passed to `useChatRuntime`, `AISDKThreads`, or `useCloudChat`; a thread with no messages yet is never created.
+- `cloud` must be passed to `useChatRuntime` or `AISDKThreads`; a thread with no messages yet is never created.
 - Check that `authToken` isn't silently resolving to `null`: any real request then throws a plain `Error("Authorization failed")` before it reaches the network, distinct from a `CloudAPIError` 401.
 
 **401 or "Authorization failed" against the cloud API**
