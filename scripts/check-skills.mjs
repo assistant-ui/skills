@@ -123,6 +123,9 @@ for (const file of files) {
       const name = /^name:\s*(\S+)/m.exec(fm[1])?.[1];
       if (name !== skill) report(`frontmatter name '${name}' does not match directory '${skill}'`);
       if (!/^description:\s*\S/m.test(fm[1])) report("frontmatter missing description");
+      const description = /^description:\s*(.*)$/m.exec(fm[1])?.[1] ?? "";
+      const length = description.startsWith('"') ? JSON.parse(description).length : description.length;
+      if (length > 1024) report(`frontmatter description is ${length} characters, over the 1024 the Agent Skills spec allows`);
     }
   }
 
