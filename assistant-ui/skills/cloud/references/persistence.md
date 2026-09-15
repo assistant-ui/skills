@@ -73,7 +73,7 @@ const { feedback_id, type } = await cloud.threads.messages.feedback(threadId, me
 
 ## Message format
 
-`format` and `content` are opaque to the client; the server stores whatever JSON you send and returns it unchanged. The type signature is `format: "aui/v0" | string`, but in current code the well-known value is `"ai-sdk/v6"`: `useChatRuntime`, `AISDKThreads`, and the standalone `useCloudChat` all write `format: "ai-sdk/v6"` with `content` shaped as an AI SDK `UIMessage` (`{ role, parts }`). That format string names the stored message shape, not the installed AI SDK package major version; it does not change on an AI SDK upgrade. Only a runtime that recognizes a given `format` can decode its `content` back into a message, so pick your own format string (and keep decoding it consistently) if you call `messages.create` directly instead of going through a runtime.
+`format` and `content` are opaque to the client; the server stores whatever JSON you send and returns it unchanged. The type signature is `format: "aui/v0" | string`, but in current code the well-known value is `"ai-sdk/v6"`: `useChatRuntime` and `AISDKThreads` write `format: "ai-sdk/v6"` with `content` shaped as an AI SDK `UIMessage` (`{ role, parts }`). That format string names the stored message shape, not the installed AI SDK package major version; it does not change on an AI SDK upgrade. Only a runtime that recognizes a given `format` can decode its `content` back into a message, so pick your own format string (and keep decoding it consistently) if you call `messages.create` directly instead of going through a runtime.
 
 ## Auto-save behavior
 

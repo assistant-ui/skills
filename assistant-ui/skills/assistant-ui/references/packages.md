@@ -30,7 +30,7 @@ Check the current version with `npm view <package> version`. Every published pac
 | `@assistant-ui/react-opencode` | `useOpenCodeRuntime` | OpenCode sessions, permissions, questions |
 | `@assistant-ui/react-pi` | `usePiRuntime` | Pi coding agent sessions |
 | `@assistant-ui/react-data-stream` | `useDataStreamRuntime` | AI SDK v4 data stream protocol (legacy) |
-| `@assistant-ui/cloud-ai-sdk` | `useCloudChat`, `useThreads` | AI SDK hooks backed by Assistant Cloud without assistant-ui components |
+| `@assistant-ui/cloud-ai-sdk` | Deprecated | Use the `cloud` option of `useChatRuntime` or `AISDKThreads({ cloud })`; see [Migrate from Cloud AI SDK](https://www.assistant-ui.com/docs/cloud/ai-sdk) |
 
 Claude Managed Agents, Mastra, Cloudflare Agents, and AI gateways need no adapter package; see the setup skill.
 
