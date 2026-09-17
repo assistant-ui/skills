@@ -6,7 +6,7 @@ The hook is `unstable_`, WebMCP itself is an emerging browser API, and this surf
 
 ## Browser support
 
-Chrome exposes `document.modelContext` through the [WebMCP origin trial](https://developer.chrome.com/origintrials/#/view_trial/4163014905550602241), which covers Chrome 149 to 156 and ends on 2026-11-17. On an origin with neither a trial token nor the testing flag the page has no `modelContext`, so `status` is `"unsupported"`.
+Chrome exposes `document.modelContext` through the [WebMCP origin trial](https://developer.chrome.com/origintrials/#/view_trial/4163014905550602241), which covers Chrome 149 to 156 and ends on 2026-11-17. On an origin with neither a trial token nor the testing flag Chrome provides no `modelContext`, so `status` is `"unsupported"` unless an extension injects one.
 
 - A deployed site registers its origin for the trial and serves the token with its HTML documents, as an `Origin-Trial` response header or as `<meta http-equiv="origin-trial" content="TOKEN">` in the document head.
 - Local development enables `chrome://flags/#enable-webmcp-testing` and relaunches Chrome; the flag turns the API on for every origin, `localhost` included, without a token.
