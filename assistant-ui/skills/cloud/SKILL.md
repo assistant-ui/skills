@@ -195,7 +195,6 @@ await cloud.threads.messages.feedback(threadId, messageId, { type: "positive" })
 // Files
 const { signedUrl, publicUrl, expiresAt } = await cloud.files.generatePresignedUploadUrl({ filename });
 await fetch(signedUrl, { method: "PUT", body: file });
-const { urls } = await cloud.files.pdfToImages({ file_url }); // or file_blob
 
 // Runs, projects, auth
 await cloud.runs.report(runReport); // telemetry sink; the runtime calls this for you
