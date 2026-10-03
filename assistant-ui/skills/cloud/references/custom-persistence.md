@@ -11,7 +11,7 @@
 
 ## CloudMessagePersistence
 
-Handles local-to-remote id mapping and `parent_id` chaining against `cloud.threads.messages`. It is the same class the built-in cloud runtime and `useCloudChat` use internally; importing it gives a third caller the same guarantees.
+Handles local-to-remote id mapping and `parent_id` chaining against `cloud.threads.messages`. It is the same class the built-in cloud runtime paths use internally; importing it gives a custom caller the same guarantees.
 
 ```ts
 import { CloudMessagePersistence } from "assistant-cloud";
