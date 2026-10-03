@@ -82,7 +82,7 @@ const config = AuiConfig({
 
 ## Migrate from Cloud AI SDK
 
-`@assistant-ui/cloud-ai-sdk` is deprecated. For new code, use the `cloud` option of `useChatRuntime` from `@assistant-ui/ai-sdk`; for an `AuiConfig` host, use `AISDKThreads({ cloud })`. See [Migrate from Cloud AI SDK](https://www.assistant-ui.com/docs/cloud/ai-sdk) for the migration details.
+`@assistant-ui/cloud-ai-sdk` is deprecated. For new code, use the `cloud` option of `useChatRuntime` from `@assistant-ui/ai-sdk`; for an `AuiConfig` host, use `AISDKThreads({ cloud })`. See [Migrate from Cloud AI SDK](https://www.assistant-ui.com/docs/cloud/migrate-cloud-ai-sdk) for the migration details.
 
 ## LangGraph: useLangGraphRuntime
 
