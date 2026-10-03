@@ -92,10 +92,6 @@ const { signedUrl, publicUrl, expiresAt } = await cloud.files.generatePresignedU
 });
 await fetch(signedUrl, { method: "PUT", body: file });
 // publicUrl is what you store on the message content; expiresAt bounds signedUrl's validity
-
-const { urls, message } = await cloud.files.pdfToImages({
-  file_url: publicUrl, // or file_blob: base64 string
-});
 ```
 
 `@assistant-ui/react` exports `CloudFileAttachmentAdapter`, a built-in `AttachmentAdapter` that wraps this presign-and-PUT flow so large files do not need to be inlined as data URLs; pass it through `adapters.attachments` on `useChatRuntime`. For attachment adapters backed by your own object storage instead of Cloud, see the [custom attachment uploads guide](https://www.assistant-ui.com/docs/integrations/attachments/custom-adapter), which the same presign-then-PUT shape follows against S3, R2, or GCS.

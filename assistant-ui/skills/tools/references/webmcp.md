@@ -4,6 +4,13 @@ WebMCP is a browser-native way for a page to publish tools to the agent the user
 
 The hook is `unstable_`, WebMCP itself is an emerging browser API, and this surface is exempt from the usual append-only guarantee.
 
+## Browser support
+
+Chrome exposes `document.modelContext` through the [WebMCP origin trial](https://developer.chrome.com/origintrials/#/view_trial/4163014905550602241), which covers Chrome 149 to 156 and ends at 2026-11-17 00:00 UTC. On an origin with neither a trial token nor the testing flag Chrome provides no `modelContext`, so `status` is `"unsupported"` unless an extension injects one.
+
+- A deployed site registers its origin for the trial and serves the token with its HTML documents, as an `Origin-Trial` response header or as `<meta http-equiv="origin-trial" content="TOKEN">` in the document head.
+- Local development enables `chrome://flags/#enable-webmcp-testing` and relaunches Chrome; the flag turns the API on for every origin, `localhost` included, without a token.
+
 ## Mount it
 
 Mount it once anywhere inside your provider tree.
@@ -19,7 +26,7 @@ const WebMcpTools = () => {
 };
 ```
 
-`status` is `"unsupported"` when the page has no `modelContext`, which is every browser without WebMCP today, and `"active"` once the provider is running. The check runs when the hook mounts and is not repeated, because WebMCP defines no availability event and the provider does not poll, so an extension that injects `modelContext` into an already rendered page is picked up only on the next mount.
+`status` is `"unsupported"` when the page has no `modelContext`, as described under Browser support, and `"active"` once the provider is running. The check runs when the hook mounts and is not repeated, because WebMCP defines no availability event and the provider does not poll, so an extension that injects `modelContext` into an already rendered page is picked up only on the next mount.
 
 `registeredToolNames` is the sorted list of names the provider is publishing. A name the host refuses, because the page already registered it or its tools permission is off, drops out once the refusal arrives. A name appears for the commit in which its registration is set up, so read the list as what the provider intends to have live rather than a synchronous read of the host.
 
