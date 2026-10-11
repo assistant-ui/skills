@@ -2,7 +2,7 @@
 // Usage:
 //   node scripts/check-skills.mjs --assistant-ui ../assistant-ui [--skill <name>] [--write-exports <file>]
 //   node scripts/check-skills.mjs --exports <file> [--skill <name>]
-// The checkout must be built (`pnpm build`) so packages/*/dist/index.d.ts exist.
+// The checkout must be built so package type entries exist.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -45,6 +45,12 @@ const PACKAGES = {
   "@assistant-ui/react-data-stream": "react-data-stream",
   "@assistant-ui/react-devtools": "react-devtools",
   "@assistant-ui/react-generative-ui": "react-generative-ui",
+  "@assistant-ui/generative-ui": "generative-ui",
+  "@assistant-ui/generative-ui/react": "generative-ui",
+  "@assistant-ui/generative-ui/a2ui": "generative-ui",
+  "@assistant-ui/generative-ui/slack": "generative-ui",
+  "@assistant-ui/generative-ui/teams": "generative-ui",
+  "@assistant-ui/generative-ui/spec": "generative-ui",
   "@assistant-ui/react-opencode": "react-opencode",
   "@assistant-ui/react-pi": "react-pi",
   "@assistant-ui/react-hook-form": "react-hook-form",
@@ -62,6 +68,7 @@ const PACKAGES = {
 
 const RETIRED = [
   { re: /from ["']@assistant-ui\/react-ai-sdk["']/, why: "import from @assistant-ui/ai-sdk (react-ai-sdk only re-exports it)" },
+  { re: /from ["']@assistant-ui\/react-generative-ui(?:\/[^"']*)?["']/, why: "import from @assistant-ui/generative-ui or its subpaths (react-generative-ui only re-exports it)" },
   { re: /useAui\(\s*\{/, why: "useAui() takes no config; build one with AuiConfig({...}) and pass it to AuiProvider or AssistantRuntimeProvider" },
   { re: /<AuiProvider[^>]*\svalue=/, why: "AuiProvider value= is deprecated; use extends= plus config=" },
   { re: /<AssistantRuntimeProvider[^>]*\saui=/, why: "AssistantRuntimeProvider aui= was replaced by config=" },
@@ -81,9 +88,23 @@ function loadExports() {
   const ts = ts5 ? require(path.join(store, ts5, "node_modules", "typescript")) : require("typescript");
   if (typeof ts.createProgram !== "function") throw new Error("a TypeScript 5.x install with the compiler API is required; the checkout only exposes the native port");
   const out = {};
+  const typesEntry = (entry) => {
+    if (typeof entry === "string") return entry.endsWith(".d.ts") ? entry : undefined;
+    if (!entry || typeof entry !== "object") return undefined;
+    return typesEntry(entry.types) ?? typesEntry(entry.default);
+  };
   for (const [pkg, dir] of Object.entries(PACKAGES)) {
-    const file = path.join(auiRoot, "packages", dir.replace("/resumable", ""), "dist", dir.endsWith("/resumable") ? "resumable/index.d.ts" : "index.d.ts");
-    if (!fs.existsSync(file)) {
+    const packageDir = path.join(auiRoot, "packages", dir.replace("/resumable", ""));
+    const packageJsonPath = path.join(packageDir, "package.json");
+    if (!fs.existsSync(packageJsonPath)) {
+      out[pkg] = null;
+      continue;
+    }
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+    const subpath = pkg === packageJson.name ? "." : `.${pkg.slice(packageJson.name.length)}`;
+    const typePath = typesEntry(packageJson.exports?.[subpath]);
+    const file = typePath ? path.join(packageDir, typePath) : undefined;
+    if (!file || !fs.existsSync(file)) {
       out[pkg] = null;
       continue;
     }
