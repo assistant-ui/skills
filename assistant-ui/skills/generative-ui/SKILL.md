@@ -8,7 +8,7 @@ license: MIT
 
 **Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
-Generative UI inverts the usual tool-rendering relationship. Instead of one hand-written component per tool call, you ship a vocabulary of components and let something assemble a tree from it: either the model, through the `present` tool, or your backend, through a message part or a LangGraph event. `@assistant-ui/generative-ui` ships a default vocabulary of 29 components (cards, facts, tables, charts, forms, controls) plus converters that turn the same tree into Slack Block Kit, a Microsoft Teams Adaptive Card, or an A2UI surface, so a composition built once can render in the browser and outside it.
+Generative UI inverts the usual tool-rendering relationship. Instead of one hand-written component per tool call, you ship a vocabulary of components and let something assemble a tree from it: either the model, through the `present` tool, or your backend, through a message part or a LangGraph event. `@assistant-ui/generative-ui` ships a default vocabulary of 29 components (cards, facts, tables, charts, forms, controls) plus converters that turn the same tree into Slack Block Kit or a Microsoft Teams Adaptive Card, and one that turns an A2UI surface into it, so a composition built once can render in the browser and outside it.
 
 ## References
 
@@ -30,7 +30,7 @@ Two questions separate the patterns: does the **model** compose the layout or do
 | LangGraph data UI | `makeAssistantDataUI` + `ui_message` | LangGraph agents emitting UI on the LangGraph stream, see [assistant-ui.com/docs/runtimes/langgraph/generative-ui](https://www.assistant-ui.com/docs/runtimes/langgraph/generative-ui) |
 | OpenUI | `@openuidev/assistant-ui`, third party | Already invested in the OpenUI ecosystem and its component kit |
 
-The first two are tool-driven, so the model decides when UI appears; the LangGraph row is backend-driven, so your agent does. `present` and the generative UI primitive both take a JSON component tree, but in non-interchangeable shapes, see [Spec shape differences](./references/renderers.md#spec-shape-differences). A tree built for `present` is also the shape the Slack, Teams, and A2UI converters accept.
+The first two are tool-driven, so the model decides when UI appears; the LangGraph row is backend-driven, so your agent does. `present` and the generative UI primitive both take a JSON component tree, but in non-interchangeable shapes, see [Spec shape differences](./references/renderers.md#spec-shape-differences). A tree built for `present` is also the shape the Slack and Teams converters accept and the A2UI converter produces.
 
 ## Quick start
 

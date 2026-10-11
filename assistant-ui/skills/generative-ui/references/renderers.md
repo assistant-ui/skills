@@ -141,7 +141,7 @@ The allowlist bounds **which** components render, with no `eval` and no dynamic 
 | Producer | The model, calling the `present` tool | Your backend, emitting a `generative-ui` part |
 | Converters | Slack and Teams accept this shape; A2UI produces it | None |
 
-Import `GenerativeUINode` from `@assistant-ui/generative-ui/react` for the React renderer, or `UINode` from the React-free `@assistant-ui/generative-ui` root for converter input. The primitive has its own `GenerativeUINode` in `@assistant-ui/react`. A tree built for `present` is what the Slack and Teams converters below, and the A2UI converter in [a2ui-openui.md](./a2ui-openui.md), accept; a primitive-shaped tree has no converter.
+Import `GenerativeUINode` from `@assistant-ui/generative-ui/react` for the React renderer, or `UINode` from the React-free `@assistant-ui/generative-ui` root for converter input. The primitive has its own `GenerativeUINode` in `@assistant-ui/react`. A tree built for `present` is what the Slack and Teams converters below accept and what the A2UI converter in [a2ui-openui.md](./a2ui-openui.md) produces; a primitive-shaped tree has no converter.
 
 ## Slack
 
