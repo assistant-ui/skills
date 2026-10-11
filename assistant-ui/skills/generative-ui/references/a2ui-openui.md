@@ -57,7 +57,7 @@ Register the `present` frontend tool as in the main quick start; incoming surfac
 import {
   JSONGenerativeUI,
   defaultGenerativeUILibrary,
-} from "@assistant-ui/react-generative-ui";
+} from "@assistant-ui/generative-ui/react";
 
 const generative = new JSONGenerativeUI({ library: defaultGenerativeUILibrary });
 
@@ -77,7 +77,7 @@ import {
   JSONGenerativeUI,
   createActionRegistry,
   defaultGenerativeUILibrary,
-} from "@assistant-ui/react-generative-ui";
+} from "@assistant-ui/generative-ui/react";
 
 function useA2uiToolkit() {
   const sendA2uiAction = useAgUiSendA2uiAction();

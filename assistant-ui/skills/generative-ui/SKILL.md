@@ -1,6 +1,6 @@
 ---
 name: generative-ui
-description: "Lets the model compose interfaces at runtime from a component vocabulary instead of one hand-written component per tool, and covers every generative UI pattern in the framework. Use for the model-driven present tool: JSONGenerativeUI, defaultGenerativeUILibrary, and present({ display }) from @assistant-ui/react-generative-ui, registered through AuiConfig({ tools: Tools({ toolkit }) }). Also covers the backend-driven MessagePrimitive.GenerativeUI primitive and its component allowlist, the Slack Block Kit and Microsoft Teams Adaptive Card renderers and their action decoders, A2UI surfaces over AG-UI, and the third-party OpenUI integration. Route here when the model should design its own layout rather than fill one you wrote, when an unknown $type or component name throws or silently renders nothing, or when a generative UI tree needs to post to Slack or Teams or paint an A2UI surface. For a widget tied to one tool call you already know about, use tool-ui in the tools skill instead."
+description: "Lets the model compose interfaces at runtime from a component vocabulary instead of one hand-written component per tool, and covers every generative UI pattern in the framework. Use for the model-driven present tool: JSONGenerativeUI, defaultGenerativeUILibrary, and present({ display }) from @assistant-ui/generative-ui/react, registered through AuiConfig({ tools: Tools({ toolkit }) }). Also covers the backend-driven MessagePrimitive.GenerativeUI primitive and its component allowlist, the Slack Block Kit and Microsoft Teams Adaptive Card renderers and their action decoders, A2UI surfaces over AG-UI, and the third-party OpenUI integration. Route here when the model should design its own layout rather than fill one you wrote, when an unknown _type or component name throws or silently renders nothing, or when a generative UI tree needs to post to Slack or Teams or paint an A2UI surface. For a widget tied to one tool call you already know about, use tool-ui in the tools skill instead."
 license: MIT
 ---
 
@@ -8,12 +8,12 @@ license: MIT
 
 **Always consult [assistant-ui.com/llms.txt](https://www.assistant-ui.com/llms.txt) for the latest API.**
 
-Generative UI inverts the usual tool-rendering relationship. Instead of one hand-written component per tool call, you ship a vocabulary of components and let something assemble a tree from it: either the model, through the `present` tool, or your backend, through a message part or a LangGraph event. `@assistant-ui/react-generative-ui` ships a default vocabulary of 27 components (cards, facts, tables, charts, forms, controls) plus converters that turn the same tree into Slack Block Kit, a Microsoft Teams Adaptive Card, or an A2UI surface, so a composition built once can render in the browser and outside it.
+Generative UI inverts the usual tool-rendering relationship. Instead of one hand-written component per tool call, you ship a vocabulary of components and let something assemble a tree from it: either the model, through the `present` tool, or your backend, through a message part or a LangGraph event. `@assistant-ui/generative-ui` ships a default vocabulary of 29 components (cards, facts, tables, charts, forms, controls) plus converters that turn the same tree into Slack Block Kit, a Microsoft Teams Adaptive Card, or an A2UI surface, so a composition built once can render in the browser and outside it.
 
 ## References
 
-- [./references/vocabulary.md](./references/vocabulary.md) -- the 27 default components and how to add your own with `defineGenerativeComponents`
-- [./references/actions.md](./references/actions.md) -- `$action` dispatch, `createActionRegistry`, and the `$input` shapes interactive components send back
+- [./references/vocabulary.md](./references/vocabulary.md) -- the 29 default components and how to add your own with `defineGenerativeComponents`
+- [./references/actions.md](./references/actions.md) -- `_action` dispatch, `createActionRegistry`, and the `$input` shapes interactive components send back
 - [./references/renderers.md](./references/renderers.md) -- `MessagePrimitive.GenerativeUI` and its allowlist, the Slack and Teams converters, and why the two spec shapes do not interchange
 - [./references/a2ui-openui.md](./references/a2ui-openui.md) -- A2UI surfaces over AG-UI and the third-party OpenUI integration
 - [./references/tokens.md](./references/tokens.md) -- the shared token arrays and how to restyle or override the vocabulary
@@ -36,8 +36,10 @@ The first two are tool-driven, so the model decides when UI appears; the LangGra
 
 Install the package, add the styled element, and enable the `"use generative"` compiler for your framework:
 
+`zod` is an optional peer dependency imported by the `/react` entry, so install it with the package.
+
 ```bash
-npm install @assistant-ui/react-generative-ui
+npm install @assistant-ui/generative-ui zod
 npx assistant-ui@latest add generative-ui
 ```
 
@@ -60,7 +62,7 @@ import { defineToolkit } from "@assistant-ui/react";
 import {
   JSONGenerativeUI,
   defaultGenerativeUILibrary,
-} from "@assistant-ui/react-generative-ui";
+} from "@assistant-ui/generative-ui/react";
 
 const generative = new JSONGenerativeUI({
   library: defaultGenerativeUILibrary,
@@ -135,12 +137,12 @@ export default withAui({ ...yourConfig, aui: { backendless: true } });
 
 ## Style it
 
-`npx assistant-ui@latest add generative-ui`, run above, installs the shipped stylesheet plus `components/assistant-ui/elements/generative-ui.tsx`, which exports `styledGenerativeUILibrary`: the same 27 components with a real markdown renderer swapped in for the default plain-text one. It is a `"use client"` module, so wiring it into a `"use generative"` toolkit file follows the client-module rule in the gotchas below; see [tokens.md](./references/tokens.md) for the exact override pattern, the `data-aui` styling hooks, and the token arrays.
+`npx assistant-ui@latest add generative-ui`, run above, installs the shipped stylesheet plus `components/assistant-ui/elements/generative-ui.tsx`, which exports `styledGenerativeUILibrary`: the same 29 components with a real markdown renderer swapped in for the default plain-text one. It is a `"use client"` module, so wiring it into a `"use generative"` toolkit file follows the client-module rule in the gotchas below; see [tokens.md](./references/tokens.md) for the exact override pattern, the `data-aui` styling hooks, and the token arrays.
 
 ## Beyond present
 
 - Extend the vocabulary with your own components, or read back a model-produced tree for display: [vocabulary.md](./references/vocabulary.md).
-- Let rendered nodes call back into your app through `$action`: [actions.md](./references/actions.md).
+- Let rendered nodes call back into your app through `_action`: [actions.md](./references/actions.md).
 - Render a `generative-ui` message part your backend already emits, with `MessagePrimitive.GenerativeUI` and a consumer-provided allowlist: [renderers.md](./references/renderers.md).
 - Post a tree to Slack or Microsoft Teams, or render an A2UI surface over AG-UI, or wire the third-party OpenUI integration: [renderers.md](./references/renderers.md) and [a2ui-openui.md](./references/a2ui-openui.md).
 
@@ -159,7 +161,7 @@ export default withAui({ ...yourConfig, aui: { backendless: true } });
 - The default shadcn `Thread` does not wire `MessagePrimitive.GenerativeUI`. Opt in explicitly in your message renderer; see [renderers.md](./references/renderers.md).
 
 **Unknown component name: silent drop versus thrown error**
-- The `present` tool path drops an unrecognized `$type` and warns in development. The generative UI primitive throws a typed `GenerativeUIRenderError` unless you pass `Fallback`. Neither boundary constrains the props those components receive; validate `href`/`src` values yourself and never forward agent-supplied props into `dangerouslySetInnerHTML`.
+- The `present` tool path drops an unrecognized `_type` and warns in development. The generative UI primitive throws a typed `GenerativeUIRenderError` unless you pass `Fallback`. Neither boundary constrains the props those components receive; validate `href`/`src` values yourself and never forward agent-supplied props into `dangerouslySetInnerHTML`.
 
 **Slack or Teams output does not match the browser**
 - Conversion is total but lossy: read the returned `warnings` array. Only a `$type` tree built for `present` converts; the primitive's `{ component, props }` shape has no Slack, Teams, or A2UI converter.

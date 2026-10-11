@@ -1,6 +1,6 @@
 # Generative UI Renderers
 
-`MessagePrimitive.GenerativeUI` renders UI a backend describes directly, as a `generative-ui` message part, against a consumer-provided component allowlist. Everything else here converts a `present`-shaped tree to a target outside the browser: `@assistant-ui/react-generative-ui/slack` to Block Kit, `/teams` to an Adaptive Card. Both subpaths are React-free, so a server action, queue worker, or webhook handler imports them without pulling React into the bundle.
+`MessagePrimitive.GenerativeUI` renders UI a backend describes directly, as a `generative-ui` message part, against a consumer-provided component allowlist. Everything else here converts a `present`-shaped tree to a target outside the browser: `@assistant-ui/generative-ui/slack` to Block Kit, `/teams` to an Adaptive Card. Both subpaths are React-free, so a server action, queue worker, or webhook handler imports them without pulling React into the bundle.
 
 ## Contents
 
@@ -132,16 +132,16 @@ The allowlist bounds **which** components render, with no `eval` and no dynamic 
 
 ## Spec shape differences
 
-`present` and `MessagePrimitive.GenerativeUI` both render a JSON component tree, and both packages happen to export a type named `GenerativeUINode`, but the two shapes are not interchangeable and the two `GenerativeUINode` types are not the same type:
+`present` and `MessagePrimitive.GenerativeUI` both render a JSON component tree, but their tree types describe different shapes:
 
-| | `present` (`@assistant-ui/react-generative-ui`) | Primitive (`@assistant-ui/react`) |
+| | `present` (`@assistant-ui/generative-ui/react`) | Primitive (`@assistant-ui/react`) |
 |---|---|---|
 | Discriminator | `$type` (flat, sits alongside props) | `component` (nested inside the node) |
 | Props | Every other key on the node itself | A separate `props` object |
 | Producer | The model, calling the `present` tool | Your backend, emitting a `generative-ui` part |
-| Converters | Slack, Teams, A2UI all accept this shape | None |
+| Converters | Slack and Teams accept this shape; A2UI produces it | None |
 
-Import `GenerativeUINode` from the package that matches the pattern you are using. A tree built for `present` is what the Slack and Teams converters below, and the A2UI converter in [a2ui-openui.md](./a2ui-openui.md), accept; a primitive-shaped tree has no converter.
+Import `GenerativeUINode` from `@assistant-ui/generative-ui/react` for the React renderer, or `UINode` from the React-free `@assistant-ui/generative-ui` root for converter input. The primitive has its own `GenerativeUINode` in `@assistant-ui/react`. A tree built for `present` is what the Slack and Teams converters below, and the A2UI converter in [a2ui-openui.md](./a2ui-openui.md), accept; a primitive-shaped tree has no converter.
 
 ## Slack
 
@@ -149,7 +149,7 @@ Import `GenerativeUINode` from the package that matches the pattern you are usin
 
 ```ts
 import { WebClient } from "@slack/web-api";
-import { toSlackBlocks } from "@assistant-ui/react-generative-ui/slack";
+import { toSlackBlocks } from "@assistant-ui/generative-ui/slack";
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
@@ -233,7 +233,7 @@ Outbound, `$action.type` becomes the element's `action_id` and the remaining key
 Inbound, Slack posts a [`block_actions` payload](https://docs.slack.dev/reference/interaction-payloads/block_actions-payload) to your request URL. `decodeBlockAction` rebuilds the action, with the user's selection under `$input`:
 
 ```ts
-import { decodeBlockAction } from "@assistant-ui/react-generative-ui/slack";
+import { decodeBlockAction } from "@assistant-ui/generative-ui/slack";
 
 const action = decodeBlockAction(payload.actions[0]);
 // { type: "approve_order", orderId: "48213", $input: "…" }
@@ -250,7 +250,7 @@ Posting a tree needs only a bot token with `chat:write`. Buttons additionally ne
 `toAdaptiveCard(node)` converts a `present`-shaped tree into an [Adaptive Card](https://adaptivecards.io/explorer/); `toTeamsAttachments(node)` wraps the same conversion in the bot-framework attachment envelope, which is the form a carousel needs.
 
 ```ts
-import { toAdaptiveCard } from "@assistant-ui/react-generative-ui/teams";
+import { toAdaptiveCard } from "@assistant-ui/generative-ui/teams";
 
 const { card, warnings } = toAdaptiveCard({
   $type: "Card",
@@ -341,7 +341,7 @@ A root-level `Carousel` yields one attachment per `Card` child, `attachmentLayou
 Outbound, `$action` rides inside the submit payload's reserved `aui` key, so it never collides with input values and is not string-serialized the way Slack's button `value` is. Inbound, a bot receives the merged object as `activity.value`:
 
 ```ts
-import { decodeSubmitData } from "@assistant-ui/react-generative-ui/teams";
+import { decodeSubmitData } from "@assistant-ui/generative-ui/teams";
 
 const action = decodeSubmitData(context.activity.value);
 // { type: "approve_order", orderId: "48213", $input: { quantity: "2" } }

@@ -11,7 +11,7 @@ The default vocabulary renders semantic HTML tagged with `data-aui` and `data-au
 
 ## Token arrays
 
-`@assistant-ui/react-generative-ui` exports these as `readonly` arrays, each paired with a type alias of its union (`TextSize`, `Color`, and so on), so a component's zod schema can validate against the same enum the model sees in its tool description.
+`@assistant-ui/generative-ui` exports these as `readonly` arrays, each paired with a type alias of its union (`TextSize`, `Color`, and so on), so a component's zod schema can validate against the same enum the model sees in its tool description.
 
 | Export | Values | Used by |
 |---|---|---|
@@ -38,7 +38,7 @@ import {
   BUTTON_STYLES,
   ALERT_TONES,
   ICON_NAMES,
-} from "@assistant-ui/react-generative-ui";
+} from "@assistant-ui/generative-ui";
 ```
 
 ## Restyling one component
@@ -61,7 +61,7 @@ A component's variant and size props surface as `data-aui-<prop>` attributes on 
 Outside a `"use generative"` file, pass it directly:
 
 ```tsx
-import { JSONGenerativeUI } from "@assistant-ui/react-generative-ui";
+import { JSONGenerativeUI } from "@assistant-ui/generative-ui/react";
 import { styledGenerativeUILibrary } from "@/components/assistant-ui/elements/generative-ui";
 
 const generative = new JSONGenerativeUI({ library: styledGenerativeUILibrary });
@@ -76,7 +76,7 @@ import {
   JSONGenerativeUI,
   defaultGenerativeUILibrary,
   defineGenerativeComponents,
-} from "@assistant-ui/react-generative-ui";
+} from "@assistant-ui/generative-ui/react";
 import { styledGenerativeUILibrary } from "@/components/assistant-ui/elements/generative-ui";
 
 const markdown = defaultGenerativeUILibrary.Markdown!;
