@@ -624,12 +624,12 @@ import { MermaidDiagram } from "@/components/assistant-ui/elements/mermaid-diagr
 npx assistant-ui@latest add generative-ui
 ```
 
-Import from `@/components/assistant-ui/elements/generative-ui` (no `.aui` suffix). The runtime side is `JSONGenerativeUI` from `@assistant-ui/react-generative-ui`: `new JSONGenerativeUI({ library, actions? })` builds a tool's parameter schema from the library's Zod `properties`; `.present(options?)` (`{ display?: "standalone" }`) returns a frontend tool whose `render` draws the model's `{ $type, ...props }` tree through the library, and `.promptUser()` returns the same rendering as a human in the loop tool. It needs `defineToolkit` and `Tools({ toolkit })` registration like any other tool; `styledGenerativeUILibrary`, the catalog styled `GenerativeUILibrary`, is exported from the local file for both the runtime and standalone paths.
+Import from `@/components/assistant-ui/elements/generative-ui` (no `.aui` suffix). The runtime side is `JSONGenerativeUI` from `@assistant-ui/generative-ui/react`: `new JSONGenerativeUI({ library, actions? })` builds a tool's parameter schema from the library's Zod `properties`; `.present(options?)` (`{ display?: "standalone" }`) returns a frontend tool whose `render` draws the model's `{ _type, ...props }` tree through the library, and `.promptUser()` returns the same rendering as a human in the loop tool. It needs `defineToolkit` and `Tools({ toolkit })` registration like any other tool; `styledGenerativeUILibrary`, the catalog styled `GenerativeUILibrary`, is exported from the local file for both the runtime and standalone paths.
 
 ```tsx
 import { AssistantRuntimeProvider, AuiConfig, Tools } from "@assistant-ui/react";
 import { useChatRuntime } from "@assistant-ui/ai-sdk";
-import { JSONGenerativeUI } from "@assistant-ui/react-generative-ui";
+import { JSONGenerativeUI } from "@assistant-ui/generative-ui/react";
 import { defineToolkit } from "@assistant-ui/react";
 import { styledGenerativeUILibrary } from "@/components/assistant-ui/elements/generative-ui";
 

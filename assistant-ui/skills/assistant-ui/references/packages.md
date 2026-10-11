@@ -52,13 +52,15 @@ Claude Managed Agents, Mastra, Cloudflare Agents, and AI gateways need no adapte
 | `@assistant-ui/react-markdown` | `MarkdownTextPrimitive`, math delimiter helpers, `unstable_memoizeMarkdownComponents` |
 | `@assistant-ui/react-streamdown` | `StreamdownTextPrimitive` with built-in Shiki, KaTeX, Mermaid, block streaming |
 | `@assistant-ui/react-syntax-highlighter` | Prism-based highlighter adapters |
-| `@assistant-ui/react-generative-ui` | `JSONGenerativeUI`, the default component vocabulary, Slack and Teams renderers, A2UI |
+| `@assistant-ui/generative-ui` | React-free tree types and tokens; `/react` exports `JSONGenerativeUI` and the default component vocabulary; `/slack`, `/teams`, and `/a2ui` export converters |
 | `@assistant-ui/react-lexical` | Lexical composer input with directive chips (mentions, slash commands) |
 | `@assistant-ui/react-hook-form` | `useAssistantForm` for React Hook Form |
 | `safe-content-frame` | Sandboxed iframe for untrusted HTML (used by MCP Apps and artifacts) |
 | `heat-graph` | Headless activity heatmap |
 | `tw-shimmer` | Tailwind v4 shimmer plugin used by the elements |
 | `tw-glass` | Tailwind v4 glass refraction plugin |
+
+Existing imports from `@assistant-ui/react-generative-ui` keep working because that shell re-exports `@assistant-ui/generative-ui`.
 
 ## Tooling and integrations
 
