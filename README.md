@@ -44,6 +44,20 @@ node scripts/check-skills.mjs --assistant-ui ../assistant-ui
 
 Run `pnpm build` in the checkout first so `packages/*/dist/index.d.ts` exist.
 
+## ChatGPT and Codex
+
+The same `assistant-ui/` plugin directory carries a Codex manifest (`assistant-ui/.codex-plugin/plugin.json`), so ChatGPT and Codex read the skills that Claude Code reads. The plugin is skills only: it declares no MCP server, because ChatGPT limits any plugin that does to the desktop app.
+
+A workspace admin can import it from GitHub under **Admin > Plugins > Add > Import marketplace** with this repository as the Source and an empty Path. The marketplace file is `.agents/plugins/marketplace.json`.
+
+To submit it to the ChatGPT plugin directory, zip the plugin directory's contents and upload the file at [platform.openai.com/plugins](https://platform.openai.com/plugins):
+
+```bash
+cd assistant-ui && zip -r ../assistant-ui-plugin.zip . -x '*.DS_Store'
+```
+
+Publishing needs an organization owner, or a member with Apps Management Write, on a verified developer identity. A change to the manifest or a skill needs a new ZIP and a new review.
+
 ## Links
 
 - [Documentation](https://assistant-ui.com/docs)
