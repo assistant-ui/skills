@@ -6,7 +6,7 @@ The hook is `unstable_`, WebMCP itself is an emerging browser API, and this surf
 
 ## Browser support
 
-Chrome exposes `document.modelContext` behind the `chrome://flags/#enable-webmcp-testing` flag; enabling it and relaunching Chrome turns the API on for every origin, `localhost` included. The [WebMCP origin trial](https://developer.chrome.com/origintrials/#/view_trial/4163014905550602241) covers Chrome 149 to 156 only, so from Chrome 157 a deployed site cannot turn the API on for its visitors. Without the flag Chrome provides no `modelContext`, so `status` is `"unsupported"` unless an extension injects one.
+Chrome exposes `document.modelContext` behind the `chrome://flags/#enable-webmcp-testing` flag; enabling it and relaunching Chrome turns the API on for every origin, `localhost` included. The [WebMCP origin trial](https://developer.chrome.com/origintrials/#/view_trial/4163014905550602241) covers Chrome 149 to 156 only, so from Chrome 157 a deployed site cannot turn the API on for its visitors. On Chrome 157 and later without the flag, Chrome provides no `modelContext`, so `status` is `"unsupported"` unless an extension injects one.
 
 ## Mount it
 
