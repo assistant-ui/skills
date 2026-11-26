@@ -171,11 +171,13 @@ const thread = await cloud.threads.get(threadId);
 const { thread_id } = await cloud.threads.create({ last_message_at: new Date(), title, external_id, metadata });
 await cloud.threads.update(threadId, { title, last_message_at, metadata, is_archived });
 await cloud.threads.delete(threadId);
+const { moved } = await cloud.threads.claim({ refresh_token }); // after sign-in: move an anonymous visitor's threads here (readAnonymousRefreshToken from assistant-cloud)
 
 // Messages (parent_id and format are required on create; update touches content only)
-const { messages } = await cloud.threads.messages.list(threadId, { format: "ai-sdk/v6" });
+const { messages, has_more, next_cursor } = await cloud.threads.messages.list(threadId, { format: "ai-sdk/v6", limit: 50, after: cursor });
 const { message_id } = await cloud.threads.messages.create(threadId, { parent_id, format, content });
 await cloud.threads.messages.update(threadId, messageId, { content });
+await cloud.threads.messages.delete(threadId, messageIds); // 1 to 200 ids; 404 when none matched
 await cloud.threads.messages.feedback(threadId, messageId, { type: "positive" });
 
 // Files
@@ -190,7 +192,7 @@ const { token } = await cloud.auth.tokens.create(); // server-side, API key mode
 cloud.telemetry; // { enabled: boolean, beforeReport? }
 ```
 
-`cloud.threads.create`'s `last_message_at` is required; everything else on create and update is optional. `CloudThread` fields: `id`, `title`, `last_message_at`, `created_at`, `updated_at`, `is_archived`, `external_id`, `metadata`, `project_id`, `workspace_id`. `CloudMessage` fields: `id`, `parent_id`, `height`, `format`, `content`, `created_at`, `updated_at`. `content`/`format` are opaque to the client; `useChatRuntime` and `AISDKThreads` write `format: "ai-sdk/v6"` with an AI SDK `UIMessage`-shaped `content`. `cloud.projects.threads.messages.list` accepts `limit`/`after` paging that `cloud.threads.messages.list` does not. Failed requests throw `CloudAPIError` (with `.status`) from `assistant-cloud`; a malformed response throws `CloudResponseError`. Full detail, auto-save behavior, telemetry fields, and error handling: [persistence.md](./references/persistence.md).
+`cloud.threads.create`'s `last_message_at` is required; everything else on create and update is optional. `CloudThread` fields: `id`, `title`, `last_message_at`, `created_at`, `updated_at`, `is_archived`, `external_id`, `metadata`, `project_id`, `workspace_id`. `CloudMessage` fields: `id`, `parent_id`, `height`, `format`, `content`, `created_at`, `updated_at`, `external_id`. `content`/`format` are opaque to the client; `useChatRuntime` and `AISDKThreads` write `format: "ai-sdk/v6"` with an AI SDK `UIMessage`-shaped `content`. Both message lists, `cloud.threads.messages.list` and `cloud.projects.threads.messages.list`, page with `limit`/`after`. A page can end before `limit`, so keep fetching while `has_more` is true and pass `next_cursor` as `after`. Failed requests throw `CloudAPIError` (with `.status`) from `assistant-cloud`; a malformed response throws `CloudResponseError`. Full detail, auto-save behavior, telemetry fields, and error handling: [persistence.md](./references/persistence.md).
 
 ## Environment variables
 
