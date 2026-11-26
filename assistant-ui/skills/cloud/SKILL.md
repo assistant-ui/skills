@@ -171,6 +171,7 @@ const thread = await cloud.threads.get(threadId);
 const { thread_id } = await cloud.threads.create({ last_message_at: new Date(), title, external_id, metadata });
 await cloud.threads.update(threadId, { title, last_message_at, metadata, is_archived });
 await cloud.threads.delete(threadId);
+const { moved } = await cloud.threads.claim({ refresh_token }); // after sign-in: move an anonymous visitor's threads here (readAnonymousRefreshToken from assistant-cloud)
 
 // Messages (parent_id and format are required on create; update touches content only)
 const { messages, has_more, next_cursor } = await cloud.threads.messages.list(threadId, { format: "ai-sdk/v6", limit: 50, after: cursor });
