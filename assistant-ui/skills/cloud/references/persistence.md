@@ -50,8 +50,10 @@ await cloud.threads.delete(threadId);
 `messages` is a property on `cloud.threads`; every method takes `threadId` as its first argument.
 
 ```ts
-const { messages } = await cloud.threads.messages.list(threadId, {
+const { messages, has_more, next_cursor } = await cloud.threads.messages.list(threadId, {
   format: "ai-sdk/v6", // optional filter; omit to get every format
+  limit: 50, // optional page size
+  after: cursor, // optional: the previous page's next_cursor
 });
 
 const { message_id } = await cloud.threads.messages.create(threadId, {
@@ -64,12 +66,14 @@ await cloud.threads.messages.update(threadId, messageId, {
   content: { role: "user", parts: [{ type: "text", text: "Edited" }] }, // the only field update accepts
 });
 
+await cloud.threads.messages.delete(threadId, [messageId]); // 1 to 200 ids; 404 when none matched
+
 const { feedback_id, type } = await cloud.threads.messages.feedback(threadId, messageId, {
   type: "positive", // or "negative"
 });
 ```
 
-`list` accepts only `{ format? }`; there is no `limit`/`after` paging on the per-thread message endpoint (see [Project-wide listing](#project-wide-listing) for the paginated variant). `CloudMessage` fields: `id`, `parent_id` (`string | null`), `height`, `format`, `content`, `created_at`, `updated_at`.
+`list` accepts `{ format?, limit?, after? }`. A page can end before `limit`, so keep fetching while `has_more` is true and pass `next_cursor` as `after`; servers that predate paging leave both fields out. `CloudMessage` fields: `id`, `parent_id` (`string | null`), `height`, `format`, `content`, `created_at`, `updated_at`, `external_id` (`string | null`).
 
 ## Message format
 
@@ -98,7 +102,7 @@ await fetch(signedUrl, { method: "PUT", body: file });
 
 ## Project-wide listing
 
-`cloud.projects.threads` lists across the whole project rather than one workspace; typically used server-side with API key auth for admin views. Unlike `cloud.threads.messages.list`, its message list supports cursor paging.
+`cloud.projects.threads` lists across the whole project rather than one workspace; typically used server-side with API key auth for admin views. Its message list pages the same way as `cloud.threads.messages.list`.
 
 ```ts
 const { threads } = await cloud.projects.threads.list({ is_archived: false, limit: 50, after: cursor });
