@@ -1,0 +1,15 @@
+{
+  "name": "assistant-ui-skills",
+  "interface": {
+    "displayName": "assistant-ui skills"
+  },
+  "plugins": [
+    {
+      "name": "assistant-ui",
+      "source": {
+        "source": "local",
+        "path": "./assistant-ui"
+      }
+    }
+  ]
+}
