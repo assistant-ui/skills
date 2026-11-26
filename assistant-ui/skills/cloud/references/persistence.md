@@ -41,9 +41,16 @@ await cloud.threads.update(threadId, {
 });
 
 await cloud.threads.delete(threadId);
+
+// After sign-in, move an anonymous visitor's threads into the signed-in workspace.
+// readAnonymousRefreshToken comes from assistant-cloud and returns null when there is no stored session.
+const refreshToken = readAnonymousRefreshToken(baseUrl);
+if (refreshToken) {
+  const { moved } = await cloud.threads.claim({ refresh_token: refreshToken });
+}
 ```
 
-`CloudThread` fields: `id`, `title` (empty string when unset, never `null`), `last_message_at`, `created_at`, `updated_at`, `is_archived`, `external_id` (`string | null`), `metadata` (`unknown`, whatever you stored), `project_id`, `workspace_id`. `title`, `last_message_at`, `metadata`, and `is_archived` are all optional on `update`; nothing is required.
+`claim` runs on a client signed in as a different identity from the anonymous one; an API key client can make the same call from your server for the user's workspace. `CloudThread` fields: `id`, `title` (empty string when unset, never `null`), `last_message_at`, `created_at`, `updated_at`, `is_archived`, `external_id` (`string | null`), `metadata` (`unknown`, whatever you stored), `project_id`, `workspace_id`. `title`, `last_message_at`, `metadata`, and `is_archived` are all optional on `update`; nothing is required.
 
 ## Message API
 
