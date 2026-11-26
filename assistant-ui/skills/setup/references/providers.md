@@ -8,7 +8,7 @@ Wiring guides that layer on top of an existing runtime (usually the [AI SDK runt
 
 ## LLM gateways
 
-OpenAI-compatible proxies that add catalog routing, fallback, or BYOK in front of the model call. All three below speak OpenAI's API, so the integration is a `baseURL` swap on `createOpenAI`:
+OpenAI-compatible proxies that add catalog routing, fallback, or BYOK in front of the model call. All four below speak OpenAI's API, so the integration is a `baseURL` swap on `createOpenAI`:
 
 ```ts title="app/api/chat/route.ts"
 import { createOpenAI } from "@ai-sdk/openai";
@@ -28,6 +28,7 @@ export async function POST(req: Request) {
 | [OpenRouter](https://openrouter.ai/) | `https://openrouter.ai/api/v1` | `Authorization: Bearer <key>` | A single bill across 100+ `vendor/model` ids |
 | [Portkey](https://portkey.ai/) | `https://api.portkey.ai/v1` | `x-portkey-api-key` | Config-driven cross-provider fallback and caching |
 | [LiteLLM Proxy](https://docs.litellm.ai/docs/simple_proxy) | Self-hosted | `Authorization: Bearer <virtual key>` | Self-host requirement, or per-tenant BYOK metering |
+| [Bifrost](https://docs.getbifrost.ai/) | Self-hosted, `http://<host>:8080/openai` | `Authorization: Bearer <virtual key>`; with gateway auth on, `Authorization: Basic <gateway credentials>` plus `x-bf-vk: <virtual key>` | Open-source Go gateway: failover, per-key budgets and rate limits |
 
 For pure request logging rather than routing, see Helicone under [observability](../../observability/SKILL.md) instead; a gateway and an observability proxy are not mutually exclusive (Helicone in front of OpenRouter is a common stack). Every gateway key is a write capability against your billing account; keep it server-side.
 
